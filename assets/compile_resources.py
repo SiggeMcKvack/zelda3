@@ -798,9 +798,11 @@ extern MemBlk FindInAssetArray(int asset, int idx);
   if print_header:
     print('#define kAssets_Sig %s' % ", ".join((str(a) for a in assets_sig)))
 
-  hdr = assets_sig + b'\x00' * 32 + struct.pack('II', len(all_data), len(key_sig))
+  # Use explicit little-endian byte order for cross-platform compatibility
+  hdr = assets_sig + b'\x00' * 32 + struct.pack('<II', len(all_data), len(key_sig))
 
-  encoded_sizes = array.array('I', [len(i) for i in all_data])
+  # Use explicit little-endian packing instead of platform-dependent array.array
+  encoded_sizes = struct.pack(f'<{len(all_data)}I', *[len(i) for i in all_data])
 
   file_data = hdr + encoded_sizes + key_sig
 
@@ -809,7 +811,14 @@ extern MemBlk FindInAssetArray(int asset, int idx);
       file_data += b'\0'
     file_data += v
 
-  open('../zelda3_assets.dat', 'wb').write(file_data)
+  # Use absolute path for better cross-platform compatibility
+  output_path = os.path.join(os.path.dirname(__file__), '..', 'zelda3_assets.dat')
+  output_path = os.path.normpath(output_path)
+
+  with open(output_path, 'wb') as f:
+    f.write(file_data)
+
+  print(f"Wrote {len(file_data):,} bytes to {output_path}")
 
 def main(args):
   print_all(args)
