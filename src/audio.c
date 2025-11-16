@@ -85,13 +85,16 @@ static const uint8 kMsuDeluxe_Entrance_Songs[] = {
 
 // Remap an track number into a potentially different track number (used for msu deluxe)
 static uint8 RemapMsuDeluxeTrack(MsuPlayer *mp, uint8 track) {
-  if (!(mp->enabled & kMsuEnabled_MsuDeluxe) || track >= sizeof(kIsMusicOwOrDungeon))
+  if (!(mp->enabled & kMsuEnabled_MsuDeluxe) || track >= countof(kIsMusicOwOrDungeon))
     return track;
   switch (kIsMusicOwOrDungeon[track]) {
   case 1:
-    return BYTE(overworld_area_index) < sizeof(kMsuDeluxe_OW_Songs) ? kMsuDeluxe_OW_Songs[BYTE(overworld_area_index)] : track;
+    return BYTE(overworld_area_index) < countof(kMsuDeluxe_OW_Songs) ?
+           kMsuDeluxe_OW_Songs[BYTE(overworld_area_index)] : track;
   case 2:
-    if (which_entrance >= sizeof(kMsuDeluxe_Entrance_Songs) || kMsuDeluxe_Entrance_Songs[which_entrance] == 242)
+    // Explicit bounds check: which_entrance can be 0-255 but array has 133 elements
+    if (which_entrance >= countof(kMsuDeluxe_Entrance_Songs) ||
+        kMsuDeluxe_Entrance_Songs[which_entrance] == 242)
       return track;
     return kMsuDeluxe_Entrance_Songs[which_entrance];
   default:
@@ -121,7 +124,9 @@ uint8 ZeldaGetEntranceMusicTrack(int i) {
 
   // For some entrances the original performs a fade out, while msu deluxe has new tracks.
   if (mp->state != kMsuState_Idle && mp->enabled & kMsuEnabled_MsuDeluxe) {
-    if (rv == 242 && kMsuDeluxe_Entrance_Songs[which_entrance] != 242)
+    // Bounds check before array access
+    if (rv == 242 && which_entrance < countof(kMsuDeluxe_Entrance_Songs) &&
+        kMsuDeluxe_Entrance_Songs[which_entrance] != 242)
       rv = 16;
   }
 

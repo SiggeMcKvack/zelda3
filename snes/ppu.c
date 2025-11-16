@@ -1546,3 +1546,20 @@ void ppu_write(Ppu* ppu, uint8_t adr, uint8_t val) {
   }
 }
 
+void PpuGetFrameBuffer(Ppu *ppu, uint8_t **buffer_out, int *width_out, int *height_out, int *pitch_out) {
+  if (!ppu || !ppu->renderBuffer) {
+    if (buffer_out) *buffer_out = NULL;
+    if (width_out) *width_out = 0;
+    if (height_out) *height_out = 0;
+    if (pitch_out) *pitch_out = 0;
+    return;
+  }
+
+  // Return the full buffer - caller will need to account for extraLeftRight offset
+  // when reading individual pixels
+  if (buffer_out) *buffer_out = ppu->renderBuffer;
+  if (width_out) *width_out = 256;
+  if (height_out) *height_out = (ppu->renderFlags & kPpuRenderFlags_Height240) ? 240 : 224;
+  if (pitch_out) *pitch_out = ppu->renderPitch;
+}
+

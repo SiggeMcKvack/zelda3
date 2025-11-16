@@ -50,7 +50,9 @@ static void ParseTextures(GlslShader *gs, char *value) {
   GlslTexture **nextp = &gs->first_texture;
   for (int num = 0; (id = NextDelim(&value, ';')) != NULL && num < kGlslMaxTextures; num++) {
     GlslTexture *t = calloc(sizeof(GlslTexture), 1);
+    if (!t) Die("calloc failed: GlslTexture");
     t->id = strdup(id);
+    if (!t->id) Die("strdup failed: texture id");
     t->wrap_mode = GL_CLAMP_TO_BORDER;
     t->filter = GL_NEAREST;
     *nextp = t;
@@ -85,8 +87,10 @@ static GlslParam *GlslShader_GetParam(GlslShader *gs, const char *id) {
     if (!strcmp((*pp)->id, id))
       return *pp;
   GlslParam *p = (GlslParam *)calloc(1, sizeof(GlslParam));
+  if (!p) Die("calloc failed: GlslParam");
   *pp = p;
   p->id = strdup(id);
+  if (!p->id) Die("strdup failed: parameter id");
   return p;
 }
 
@@ -107,11 +111,17 @@ static bool ParseParameterKeyValue(GlslShader *gs, const char *key, const char *
   return false;
 }
 
-static void GlslShader_InitializePasses(GlslShader *gs, int passes) {
+static bool GlslShader_InitializePasses(GlslShader *gs, int passes) {
   gs->n_pass = passes;
   gs->pass = (GlslPass *)calloc(gs->n_pass + 1, sizeof(GlslPass));
+  if (!gs->pass) {
+    fprintf(stderr, "Failed to allocate memory for %d shader passes\n", passes);
+    gs->n_pass = 0;
+    return false;
+  }
   for (int i = 0; i < gs->n_pass; i++)
     GlslPass_Initialize(gs->pass + i + 1);
+  return true;
 }
 
 static bool GlslShader_ReadPresetFile(GlslShader *gs, const char *filename) {
@@ -139,7 +149,8 @@ static bool GlslShader_ReadPresetFile(GlslShader *gs, const char *filename) {
       int passes = strtoul(value, NULL, 10);
       if (passes < 1 || passes > kGlslMaxPasses)
         break;
-      GlslShader_InitializePasses(gs, passes);
+      if (!GlslShader_InitializePasses(gs, passes))
+        break;
       continue;
     }
     if ((pass = ParseConfigKeyPass(gs, line, "filter_linear")) != NULL)
@@ -363,8 +374,13 @@ GlslShader *GlslShader_CreateFromFile(const char *filename, bool opengl_es) {
     return gs;
 
   if (IsGlslFilename(filename)) {
-    GlslShader_InitializePasses(gs, 1);
+    if (!GlslShader_InitializePasses(gs, 1))
+      goto FAIL;
     gs->pass[1].filename = strdup(filename);
+    if (!gs->pass[1].filename) {
+      fprintf(stderr, "Failed to allocate memory for shader filename\n");
+      goto FAIL;
+    }
     filename = "";
   } else {
     if (!GlslShader_ReadPresetFile(gs, filename)) {
@@ -458,13 +474,21 @@ FAIL:
 }
 
 void GlslShader_Destroy(GlslShader *gs) {
-  for (GlslPass *p = gs->pass + 1, *p_end = p + gs->n_pass; p < p_end; p++) {
-    glDeleteProgram(p->gl_program);
-    glDeleteTextures(1, &p->gl_texture);
-    glDeleteFramebuffers(1, &p->gl_fbo);
-    free(p->filename);
+  if (!gs)
+    return;
+
+  // Clean up passes (safe even if pass is NULL due to early failure)
+  if (gs->pass) {
+    for (GlslPass *p = gs->pass + 1, *p_end = p + gs->n_pass; p < p_end; p++) {
+      glDeleteProgram(p->gl_program);
+      glDeleteTextures(1, &p->gl_texture);
+      glDeleteFramebuffers(1, &p->gl_fbo);
+      free(p->filename);
+    }
+    free(gs->pass);
   }
-  free(gs->pass);
+
+  // Clean up textures
   GlslTexture *t;
   while ((t = gs->first_texture) != NULL) {
     gs->first_texture = t->next;
@@ -473,12 +497,16 @@ void GlslShader_Destroy(GlslShader *gs) {
     free(t->filename);
     free(t);
   }
+
+  // Clean up parameters
   GlslParam *pp;
   while ((pp = gs->first_param) != NULL) {
     gs->first_param = pp->next;
     free(pp->id);
     free(pp);
   }
+
+  // Clean up frame textures and VBO
   for (int i = 0; i < 8; i++)
     glDeleteTextures(1, &gs->prev_frame[i].gl_texture);
   glDeleteBuffers(1, &gs->gl_vbo);

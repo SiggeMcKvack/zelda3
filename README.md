@@ -86,20 +86,35 @@ python3 -m pip install -r requirements.txt
 * macOS: `brew install sdl2` (you can get homebrew [here](https://brew.sh/))
 
 ## Compiling on Linux/MacOS
-1. Place your US ROM file named `zelda3.sfc` in `zelda3`
-2. Compile
+1. Place your US ROM file named `zelda3.sfc` in the root directory
+2. Extract assets:
 ```sh
-make
+python3 assets/restool.py --extract-from-rom
 ```
+3. Compile with CMake:
+```sh
+mkdir build && cd build
+cmake ..
+cmake --build . -j$(nproc)
+```
+
 <details>
 <summary>
-Advanced make usage ...
+Advanced CMake usage ...
 </summary>
 
 ```sh
-make -j$(nproc) # run on all core
-make clean all  # clear gen+obj and rebuild
-CC=clang make   # specify compiler
+# Debug build
+cmake .. -DCMAKE_BUILD_TYPE=Debug
+
+# Use specific compiler
+cmake .. -DCMAKE_C_COMPILER=clang
+
+# Enable warnings as errors
+cmake .. -DENABLE_WERROR=ON
+
+# Clean build
+cd .. && rm -rf build
 ```
 </details>
 
@@ -109,7 +124,7 @@ You need [DevKitPro](https://devkitpro.org/wiki/Getting_Started) and [Atmosphere
 
 ```sh
 (dkp-)pacman -S git switch-dev switch-sdl2 switch-tools
-cd platform/switch
+cd src/platform/switch
 make # Add -j$(nproc) to build using all cores ( Optional )
 # You can test the build directly onto the switch ( Optional )
 nxlink -s zelda3.nro
