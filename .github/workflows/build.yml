@@ -1,0 +1,165 @@
+name: Build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build-ubuntu:
+    name: Ubuntu Latest
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          libsdl2-dev \
+          python3 \
+          python3-pip \
+          libopenal-dev
+
+    - name: Extract assets
+      run: |
+        # Skip asset extraction in CI - would need ROM
+        # Users must extract assets locally
+        echo "Skipping asset extraction (requires ROM)"
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build build -j$(nproc)
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: zelda3-ubuntu
+        path: |
+          build/zelda3
+          build/*.so
+        if-no-files-found: ignore
+
+  build-arch:
+    name: Arch Linux
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        pacman -Syu --noconfirm
+        pacman -S --noconfirm \
+          base-devel \
+          cmake \
+          sdl2 \
+          python \
+          openal
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      run: cmake --build build -j$(nproc)
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: zelda3-arch
+        path: |
+          build/zelda3
+          build/*.so
+        if-no-files-found: ignore
+
+  build-windows:
+    name: Windows Latest
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgGitCommitId: 'c8696863d371ab7f46e213d8f5ca923c4aef2a00'
+
+    - name: Install dependencies
+      run: |
+        vcpkg install sdl2:x64-windows openal-soft:x64-windows
+
+    - name: Configure CMake
+      run: |
+        cmake -B build `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+
+    - name: Build
+      run: cmake --build build --config Release -j
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: zelda3-windows
+        path: |
+          build/Release/zelda3.exe
+          build/Release/*.dll
+        if-no-files-found: ignore
+
+  build-macos:
+    name: macOS Universal
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        brew install sdl2 openal-soft cmake
+
+    - name: Configure CMake (arm64)
+      run: |
+        cmake -B build-arm64 \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_OSX_ARCHITECTURES=arm64
+
+    - name: Build arm64
+      run: cmake --build build-arm64 -j$(sysctl -n hw.ncpu)
+
+    - name: Configure CMake (x86_64)
+      run: |
+        cmake -B build-x86_64 \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_OSX_ARCHITECTURES=x86_64
+
+    - name: Build x86_64
+      run: cmake --build build-x86_64 -j$(sysctl -n hw.ncpu)
+
+    - name: Create universal binary
+      run: |
+        mkdir -p build-universal
+        lipo -create \
+          build-arm64/zelda3 \
+          build-x86_64/zelda3 \
+          -output build-universal/zelda3
+
+        # Verify universal binary
+        lipo -info build-universal/zelda3
+        file build-universal/zelda3
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: zelda3-macos-universal
+        path: |
+          build-universal/zelda3
+          build-universal/*.dylib
+        if-no-files-found: ignore
