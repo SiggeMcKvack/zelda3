@@ -110,17 +110,22 @@ link_x_coord = new_x;
 - Widescreen offset: `kPpuExtraLeftRight` from `types.h`
 
 ### Platform-Specific Code
-Use conditional compilation:
+Use semantic macros from `src/platform_detect.h`:
 ```c
-#ifdef _WIN32
+#include "platform_detect.h"
+
+#ifdef PLATFORM_WINDOWS
   // Windows code
-#elif defined(__APPLE__)
+#elif defined(PLATFORM_MACOS)
   // macOS code
-#elif defined(__SWITCH__)
+#elif defined(PLATFORM_SWITCH)
   // Switch code
-#else
-  // Linux/generic
+#elif defined(PLATFORM_LINUX)
+  // Linux code
 #endif
+
+// Also available: COMPILER_MSVC, COMPILER_GCC, COMPILER_CLANG
+//                 ARCH_X64, ARCH_ARM64, etc.
 ```
 
 Platform-specific files go in `src/platform/<name>/`
@@ -133,6 +138,9 @@ Platform-specific files go in `src/platform/<name>/`
 - Config options: `src/config.c`, `src/config.h`
 - Feature flags: `src/features.h`
 - Type definitions: `src/types.h`
+- Platform detection: `src/platform_detect.h`
+- Math utilities: `src/math_util.h`
+- Dynamic arrays: `src/dynamic_array.h`
 - Constants: Typically in module header files
 
 **When adding files:**
@@ -140,6 +148,8 @@ Platform-specific files go in `src/platform/<name>/`
 - SNES emulation: `snes/`
 - Platform code: `src/platform/<name>/`
 - Logging: Use `src/logging.h` for errors/warnings
+- File I/O: Use `Platform_ReadWholeFile()` from `src/platform.h`
+- Memory: Use `DYNARR_*` macros from `src/dynamic_array.h` for growable arrays
 - CMake auto-detects `.c` files via `file(GLOB ...)`
 
 **Logging:**
