@@ -38,3 +38,4 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 install_manifest.txt
+.claude/settings.local.json
