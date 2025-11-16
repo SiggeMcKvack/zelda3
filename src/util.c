@@ -1,4 +1,5 @@
 #include "util.h"
+#include "dynamic_array.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -36,24 +37,6 @@ const char *StringStartsWithNoCase(const char *a, const char *b) {
     if (aa != bb)
       return NULL;
   }
-}
-
-uint8 *ReadWholeFile(const char *name, size_t *length) {
-  FILE *f = fopen(name, "rb");
-  if (f == NULL)
-    return NULL;
-  fseek(f, 0, SEEK_END);
-  size_t size = ftell(f);
-  rewind(f);
-  uint8 *buffer = (uint8 *)malloc(size + 1);
-  if (!buffer) Die("malloc failed");
-  // Always zero terminate so this function can be used also for strings.
-  buffer[size] = 0;
-  if (fread(buffer, 1, size, f) != size)
-    Die("fread failed");
-  fclose(f);
-  if (length) *length = size;
-  return buffer;
 }
 
 char *NextLineStripComments(char **s) {
@@ -149,9 +132,9 @@ void ByteArray_Resize(ByteArray *arr, size_t new_size) {
   if (new_size > arr->capacity) {
     size_t minsize = arr->capacity + (arr->capacity >> 1) + 8;
     arr->capacity = new_size < minsize ? minsize : new_size;
-    void *data = realloc(arr->data, arr->capacity);
-    if (!data) Die("memory allocation failed");
-    arr->data = data;
+    DYNARR_REALLOC(arr->data, arr->capacity, {
+      Die("memory allocation failed");
+    });
   }
 }
 

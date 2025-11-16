@@ -3,6 +3,7 @@
 #include "glsl_shader.h"
 #include "util.h"
 #include "config.h"
+#include "platform.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
@@ -125,7 +126,7 @@ static bool GlslShader_InitializePasses(GlslShader *gs, int passes) {
 }
 
 static bool GlslShader_ReadPresetFile(GlslShader *gs, const char *filename) {
-  char *data = (char *)ReadWholeFile(filename, NULL), *data_org = data, *line;
+  char *data = (char *)Platform_ReadWholeFile(filename, NULL), *data_org = data, *line;
   GlslPass *pass;
   if (data == NULL)
     return false;
@@ -193,7 +194,7 @@ static bool GlslShader_ReadPresetFile(GlslShader *gs, const char *filename) {
 }
 
 void GlslShader_ReadShaderFile(GlslShader *gs, const char *filename, ByteArray *result) {
-  char *data = (char *)ReadWholeFile(filename, NULL), *data_org = data, *line;
+  char *data = (char *)Platform_ReadWholeFile(filename, NULL), *data_org = data, *line;
   if (data == NULL) {
     fprintf(stderr, "Unable to read file '%s'\n", filename);
     return;

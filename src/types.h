@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include "platform_detect.h"
+#include "math_util.h"
 
 // Build time config options
 enum {
@@ -27,7 +29,7 @@ typedef unsigned int uint;
 #define sign16(x) ((x) & 0x8000)
 #define load24(x) ((*(uint32*)&(x))&0xffffff)
 
-#ifdef _MSC_VER
+#ifdef COMPILER_MSVC
 #define countof _countof
 #define NORETURN __declspec(noreturn)
 #define FORCEINLINE __forceinline
@@ -45,12 +47,8 @@ typedef unsigned int uint;
 #define kDebugFlag 0
 #endif
 
-static FORCEINLINE uint16 abs16(uint16 t) { return sign16(t) ? -t : t; }
-static FORCEINLINE uint8 abs8(uint8 t) { return sign8(t) ? -t : t; }
-static FORCEINLINE int IntMin(int a, int b) { return a < b ? a : b; }
-static FORCEINLINE int IntMax(int a, int b) { return a > b ? a : b; }
-static FORCEINLINE uint UintMin(uint a, uint b) { return a < b ? a : b; }
-static FORCEINLINE uint UintMax(uint a, uint b) { return a > b ? a : b; }
+// Math utilities now in math_util.h (included above)
+// Kept here for compatibility: abs8, abs16, IntMin, IntMax, UintMin, UintMax
 
 // windows.h defines this too
 #ifdef HIBYTE
