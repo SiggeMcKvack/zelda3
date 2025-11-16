@@ -365,6 +365,33 @@ static bool IsGlslFilename(const char *filename) {
   return len >= 5 && memcmp(filename + len - 5, ".glsl", 5) == 0;
 }
 
+static void GlslShader_LoadTextures(GlslShader *gs, const char *base_filename) {
+  for (GlslTexture *t = gs->first_texture; t; t = t->next) {
+    glGenTextures(1, &t->gl_texture);
+    glBindTexture(GL_TEXTURE_2D, t->gl_texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, t->wrap_mode);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, t->wrap_mode);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, t->filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, t->mipmap ?
+                    (t->filter == GL_LINEAR ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_NEAREST) : t->filter);
+    if (t->filename) {
+      char *new_filename = ReplaceFilenameWithNewPath(base_filename, t->filename);
+      int imw, imh, imn;
+      unsigned char *data = stbi_load(new_filename, &imw, &imh, &imn, 0);
+      if (!data) {
+        fprintf(stderr, "Unable to read PNG '%s'\n", new_filename);
+      } else {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, imw, imh, 0,
+                     (imn == 4) ? GL_RGBA : (imn == 3) ? GL_RGB : GL_LUMINANCE, GL_UNSIGNED_BYTE, data);
+      }
+      free(data);
+      free(new_filename);
+    }
+    if (t->mipmap)
+      glGenerateMipmap(GL_TEXTURE_2D);
+  }
+}
+
 GlslShader *GlslShader_CreateFromFile(const char *filename, bool opengl_es) {
   char buffer[256];
   GLint link_status;
@@ -423,30 +450,7 @@ GlslShader *GlslShader_CreateFromFile(const char *filename, bool opengl_es) {
     glGenFramebuffers(1, &p->gl_fbo);
     glGenTextures(1, &p->gl_texture);
   }
-  for (GlslTexture *t = gs->first_texture; t; t = t->next) {
-    glGenTextures(1, &t->gl_texture);
-    glBindTexture(GL_TEXTURE_2D, t->gl_texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, t->wrap_mode);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, t->wrap_mode);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, t->filter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, t->mipmap ? 
-                    (t->filter == GL_LINEAR ? GL_LINEAR_MIPMAP_LINEAR : GL_NEAREST_MIPMAP_NEAREST) : t->filter);
-    if (t->filename) {
-      char *new_filename = ReplaceFilenameWithNewPath(filename, t->filename);
-      int imw, imh, imn;
-      unsigned char *data = stbi_load(new_filename, &imw, &imh, &imn, 0);
-      if (!data) {
-        fprintf(stderr, "Unable to read PNG '%s'\n", new_filename);
-      } else {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, imw, imh, 0, 
-                     (imn == 4) ? GL_RGBA : (imn == 3) ? GL_RGB : GL_LUMINANCE, GL_UNSIGNED_BYTE, data);
-      }
-      free(data);
-      free(new_filename);
-    }
-    if (t->mipmap)
-      glGenerateMipmap(GL_TEXTURE_2D);
-  }
+  GlslShader_LoadTextures(gs, filename);
   for (GlslParam *p = gs->first_param; p; p = p->next)
     p->value = (p->value < p->min) ? p->min : (p->value > p->max) ? p->max : p->value;
 

@@ -7,6 +7,7 @@
 #include "third_party/opus-1.3.1-stripped/opus.h"
 #include "config.h"
 #include "assets.h"
+#include "platform.h"
 
 // This needs to hold a lot more things than with just PCM
 typedef struct MsuPlayerResumeInfo {
@@ -27,7 +28,7 @@ enum {
 };
 
 typedef struct MsuPlayer {
-  FILE *f;
+  PlatformFile *f;
   uint32 buffer_size, buffer_pos;
   uint32 preskip, samples_until_repeat;
   uint32 total_samples_in_file, repeat_position;
@@ -164,7 +165,7 @@ void ZeldaPlayMsuAudioTrack(uint8 music_ctrl) {
 
 static void MsuPlayer_CloseFile(MsuPlayer *mp) {
   if (mp->f)
-    fclose(mp->f);
+    Platform_CloseFile(mp->f);
   opus_decoder_destroy(mp->opus);
   mp->opus = NULL;
   mp->f = NULL;
@@ -200,11 +201,10 @@ static void MsuPlayer_Open(MsuPlayer *mp, int orig_track, bool resume_from_snaps
   char fname[256], buf[8];
   snprintf(fname, sizeof(fname), "%s%d.%s", g_config.msu_path ? g_config.msu_path : "", actual_track, mp->enabled & kMsuEnabled_Opuz ? "opuz" : "pcm");
   printf("Loading MSU %s\n", fname);
-  mp->f = fopen(fname, "rb");
+  mp->f = Platform_OpenFile(fname, "rb");
   if (mp->f == NULL)
     goto READ_ERROR;
-  setvbuf(mp->f, NULL, _IOFBF, 16384);
-  if (fread(buf, 1, 8, mp->f) != 8) READ_ERROR: {
+  if (Platform_ReadFile(buf, 1, 8, mp->f) != 8) READ_ERROR: {
     fprintf(stderr, "Unable to read MSU file %s\n", fname);
     MsuPlayer_CloseFile(mp);
     return;
@@ -231,12 +231,12 @@ static void MsuPlayer_Open(MsuPlayer *mp, int orig_track, bool resume_from_snaps
     if (!mp->opus)
       goto READ_ERROR;
     if (mp->state == kMsuState_Resuming)
-      fseek(mp->f, mp->cur_file_offs, SEEK_SET);
+      Platform_SeekFile(mp->f, mp->cur_file_offs, SEEK_SET);
   } else if (file_tag == (('1' << 24) | ('U' << 16) | ('S' << 8) | 'M')) {
-    fseek(mp->f, 0, SEEK_END);
-    mp->total_samples_in_file = (ftell(mp->f) - 8) / 4;
+    Platform_SeekFile(mp->f, 0, SEEK_END);
+    mp->total_samples_in_file = (Platform_TellFile(mp->f) - 8) / 4;
     mp->samples_until_repeat = mp->total_samples_in_file - mp->cur_file_offs;
-    fseek(mp->f, mp->cur_file_offs * 4 + 8, SEEK_SET);
+    Platform_SeekFile(mp->f, mp->cur_file_offs * 4 + 8, SEEK_SET);
   } else {
     goto READ_ERROR;
   }
@@ -299,9 +299,9 @@ void MsuPlayer_Mix(MsuPlayer *mp, int16 *audio_buffer, int audio_samples) {
             return;
           }
           opus_decoder_ctl(mp->opus, OPUS_RESET_STATE);
-          fseek(mp->f, mp->range_cur, SEEK_SET);
+          Platform_SeekFile(mp->f, mp->range_cur, SEEK_SET);
           uint8 *file_data = (uint8 *)mp->buffer;
-          if (fread(file_data, 1, 10, mp->f) != 10) READ_ERROR: {
+          if (Platform_ReadFile(file_data, 1, 10, mp->f) != 10) READ_ERROR: {
             fprintf(stderr, "MSU read/decode error!\n");
             zelda_apu_write(APUI00, mp->resume_info.orig_track);
             MsuPlayer_CloseFile(mp);
@@ -319,19 +319,19 @@ void MsuPlayer_Mix(MsuPlayer *mp, int16 *audio_buffer, int audio_samples) {
           mp->cur_file_offs = file_offs;
           mp->resume_info.range_repeat = mp->range_repeat;
           mp->resume_info.range_cur = mp->range_cur;
-          fseek(mp->f, file_offs, SEEK_SET);
+          Platform_SeekFile(mp->f, file_offs, SEEK_SET);
         }
         assert(mp->samples_until_repeat != 0);
         for (;;) {
           uint8 *file_data = (uint8 *)mp->buffer;
           *(uint64 *)file_data = 0;
-          if (fread(file_data, 1, 2, mp->f) != 2)
+          if (Platform_ReadFile(file_data, 1, 2, mp->f) != 2)
             goto READ_ERROR;
           int size = *(uint16 *)file_data & 0x7fff;
           if (size > 1275)
             goto READ_ERROR;
           int n = (*(uint16 *)file_data >> 15);
-          if (fread(&file_data[2], 1, size, mp->f) != size)
+          if (Platform_ReadFile(&file_data[2], 1, size, mp->f) != size)
             goto READ_ERROR;
           // Verify if the snapshot matches the file on disk.
           uint64 initial_file_data = *(uint64 *)file_data;
@@ -360,10 +360,10 @@ void MsuPlayer_Mix(MsuPlayer *mp, int16 *audio_buffer, int audio_samples) {
           if (mp->samples_until_repeat == 0)
             goto READ_ERROR; // impossible to make progress
           mp->cur_file_offs = mp->repeat_position;
-          fseek(mp->f, mp->cur_file_offs * 4 + 8, SEEK_SET);
+          Platform_SeekFile(mp->f, mp->cur_file_offs * 4 + 8, SEEK_SET);
         }
         r = UintMin(960, mp->samples_until_repeat);
-        if (fread(mp->buffer, 4, r, mp->f) != r)
+        if (Platform_ReadFile(mp->buffer, 4, r, mp->f) != r)
           goto READ_ERROR;
         mp->resume_info.offset = mp->cur_file_offs;
         mp->cur_file_offs += r;

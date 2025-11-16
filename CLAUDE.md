@@ -16,7 +16,6 @@ Zelda3 is a reverse-engineered C reimplementation of The Legend of Zelda: A Link
 - **[BUILDING.md](BUILDING.md)** - Build instructions, dependencies, troubleshooting
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed code architecture, modules, patterns
 - **[CHANGELOG.md](CHANGELOG.md)** - Recent changes, Android port integration
-- **[REFACTORING_TODO.md](REFACTORING_TODO.md)** - Ongoing code quality improvements, security fixes
 
 ## Quick Start for Development
 
@@ -213,12 +212,11 @@ cmake .. -DCMAKE_C_COMPILER=clang
 
 ## Recent Changes
 
-**Code quality improvements (2025):**
-- Security fixes: Buffer overflow prevention, integer overflow checks
-- Memory safety: Bounds validation, resource leak fixes, proper cleanup
-- Logging system: Simple stderr-based with color support
-- Error handling: Graceful degradation instead of crashes
-- See [REFACTORING_TODO.md](REFACTORING_TODO.md) for details
+**Code quality improvements (November 2025):**
+- **Refactoring:** Config section handlers, magic number extraction, shader cleanup
+- **Platform consistency:** MSU audio now uses Platform_* API
+- **Utility headers:** platform_detect.h, math_util.h, dynamic_array.h, logging.h
+- **Compatibility:** Original SNES bugs preserved, fixes gated behind feature flags
 
 **Major update: Android port integration (2024)**
 - CMake build system

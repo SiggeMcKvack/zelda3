@@ -14,6 +14,9 @@ enum {
   kKeyMod_Alt = 0x400,
   kKeyMod_Shift = 0x800,
   kKeyMod_Ctrl = 0x1000,
+  kSnesBaseWidth = 256,
+  kSnesBaseHeight = 224,
+  kSnesExtendedHeight = 240,
 };
 
 Config g_config;
@@ -347,174 +350,199 @@ static bool ParseBoolBit(const char *value, uint32 *data, uint32 mask) {
   return true;
 }
 
-static bool HandleIniConfig(int section, const char *key, char *value) {
-  if (section == 0) {
-    for (int i = 0; i < countof(kKeyNameId); i++) {
-      if (StringEqualsNoCase(key, kKeyNameId[i].name)) {
-        has_keynameid[i] = true;
-        ParseKeyArray(value, kKeyNameId[i].id, kKeyNameId[i].size);
-        return true;
-      }
-    }
-  } else if (section == 5) {
-    for (int i = 0; i < countof(kKeyNameId); i++) {
-      if (StringEqualsNoCase(key, kKeyNameId[i].name)) {
-        if (i == 1)
-          has_joypad_controls = true;
-        ParseGamepadArray(value, kKeyNameId[i].id, kKeyNameId[i].size);
-        return true;
-      }
-    }
-  } else if (section == 1) {
-    if (StringEqualsNoCase(key, "WindowSize")) {
-      char *s;
-      if (StringEqualsNoCase(value, "Auto")){
-        g_config.window_width  = 0;
-        g_config.window_height = 0;
-        return true;
-      }
-      while ((s = NextDelim(&value, 'x')) != NULL) {
-        if(g_config.window_width == 0) {
-          g_config.window_width = atoi(s);
-        } else {
-          g_config.window_height = atoi(s);
-          return true;
-        }
-      }
-    } else if (StringEqualsNoCase(key, "EnhancedMode7")) {
-      return ParseBool(value, &g_config.enhanced_mode7);
-    } else if (StringEqualsNoCase(key, "NewRenderer")) {
-      return ParseBool(value, &g_config.new_renderer);
-    } else if (StringEqualsNoCase(key, "IgnoreAspectRatio")) {
-      return ParseBool(value, &g_config.ignore_aspect_ratio);
-    } else if (StringEqualsNoCase(key, "Fullscreen")) {
-      g_config.fullscreen = (uint8)strtol(value, (char**)NULL, 10);
+static bool HandleKeyMapConfig(const char *key, char *value) {
+  for (int i = 0; i < countof(kKeyNameId); i++) {
+    if (StringEqualsNoCase(key, kKeyNameId[i].name)) {
+      has_keynameid[i] = true;
+      ParseKeyArray(value, kKeyNameId[i].id, kKeyNameId[i].size);
       return true;
-    } else if (StringEqualsNoCase(key, "WindowScale")) {
-      g_config.window_scale = (uint8)strtol(value, (char**)NULL, 10);
-      return true;
-    } else if (StringEqualsNoCase(key, "OutputMethod")) {
-      g_config.output_method = StringEqualsNoCase(value, "SDL-Software") ? kOutputMethod_SDLSoftware :
-                               StringEqualsNoCase(value, "OpenGL") ? kOutputMethod_OpenGL : 
-                               StringEqualsNoCase(value, "OpenGL ES") ? kOutputMethod_OpenGL_ES :
-                                                                        kOutputMethod_SDL;
-      return true;
-    } else if (StringEqualsNoCase(key, "LinearFiltering")) {
-      return ParseBool(value, &g_config.linear_filtering);
-    } else if (StringEqualsNoCase(key, "NoSpriteLimits")) {
-      return ParseBool(value, &g_config.no_sprite_limits);
-    } else if (StringEqualsNoCase(key, "LinkGraphics")) {
-      g_config.link_graphics = value;
-      return true;
-    } else if (StringEqualsNoCase(key, "Shader")) {
-      g_config.shader = *value ? value : NULL;
-      return true;
-    } else if (StringEqualsNoCase(key, "DimFlashes")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_DimFlashes);
-    }
-  } else if (section == 2) {
-    if (StringEqualsNoCase(key, "EnableAudio")) {
-      return ParseBool(value, &g_config.enable_audio);
-    } else if (StringEqualsNoCase(key, "AudioFreq")) {
-      g_config.audio_freq = (uint16)strtol(value, (char**)NULL, 10);
-      return true;
-    } else if (StringEqualsNoCase(key, "AudioChannels")) {
-      g_config.audio_channels = (uint8)strtol(value, (char**)NULL, 10);
-      return true;
-    } else if (StringEqualsNoCase(key, "AudioSamples")) {
-      g_config.audio_samples = (uint16)strtol(value, (char**)NULL, 10);
-      return true;
-    } else if (StringEqualsNoCase(key, "EnableMSU")) {
-        if (StringEqualsNoCase(value, "opuz"))
-        g_config.enable_msu = kMsuEnabled_Opuz;
-      else if (StringEqualsNoCase(value, "deluxe"))
-        g_config.enable_msu = kMsuEnabled_MsuDeluxe;
-      else if (StringEqualsNoCase(value, "deluxe-opuz"))
-        g_config.enable_msu = kMsuEnabled_MsuDeluxe | kMsuEnabled_Opuz;
-      else 
-        return ParseBool(value, (bool*)&g_config.enable_msu);
-      return true;
-    } else if (StringEqualsNoCase(key, "MSUPath")) {
-      g_config.msu_path = value;
-      return true;
-    } else if (StringEqualsNoCase(key, "MSUVolume")) {
-      g_config.msuvolume = atoi(value);
-      return true;
-    } else if (StringEqualsNoCase(key, "ResumeMSU")) {
-      return ParseBool(value, &g_config.resume_msu);
-    }
-  } else if (section == 3) {
-    if (StringEqualsNoCase(key, "Autosave")) {
-      g_config.autosave = (bool)strtol(value, (char**)NULL, 10);
-      return true;
-    } else if (StringEqualsNoCase(key, "ExtendedAspectRatio")) {
-      const char* s;
-      int h = 224;
-      bool nospr = false, novis = false;
-      // todo: make it not depend on the order
-      while ((s = NextDelim(&value, ',')) != NULL) {
-        if (strcmp(s, "extend_y") == 0)
-          h = 240, g_config.extend_y = true;
-        else if (strcmp(s, "16:9") == 0)
-          g_config.extended_aspect_ratio = (h * 16 / 9 - 256) / 2;
-        else if (strcmp(s, "16:10") == 0)
-          g_config.extended_aspect_ratio = (h * 16 / 10 - 256) / 2;
-        else if (strcmp(s, "18:9") == 0)
-          g_config.extended_aspect_ratio = (h * 18 / 9 - 256) / 2;
-        else if (strcmp(s, "4:3") == 0)
-          g_config.extended_aspect_ratio = 0;
-        else if (strcmp(s, "unchanged_sprites") == 0)
-          nospr = true;
-        else if (strcmp(s, "no_visual_fixes") == 0)
-          novis = true;
-        else
-          return false;
-      }
-      if (g_config.extended_aspect_ratio && !nospr)
-        g_config.features0 |= kFeatures0_ExtendScreen64;
-      if (g_config.extended_aspect_ratio && !novis)
-        g_config.features0 |= kFeatures0_WidescreenVisualFixes;
-      return true;
-    } else if (StringEqualsNoCase(key, "DisplayPerfInTitle")) {
-      return ParseBool(value, &g_config.display_perf_title);
-    } else if (StringEqualsNoCase(key, "DisableFrameDelay")) {
-      return ParseBool(value, &g_config.disable_frame_delay);
-    } else if (StringEqualsNoCase(key, "Language")) {
-      g_config.language = value;
-      return true;
-    }
-  } else if (section == 4) {
-    if (StringEqualsNoCase(key, "ItemSwitchLR")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_SwitchLR);
-    } else if (StringEqualsNoCase(key, "ItemSwitchLRLimit")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_SwitchLRLimit);
-    } else if (StringEqualsNoCase(key, "TurnWhileDashing")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_TurnWhileDashing);
-    } else if (StringEqualsNoCase(key, "MirrorToDarkworld")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_MirrorToDarkworld);
-    } else if (StringEqualsNoCase(key, "CollectItemsWithSword")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_CollectItemsWithSword);
-    } else if (StringEqualsNoCase(key, "BreakPotsWithSword")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_BreakPotsWithSword);
-    } else if (StringEqualsNoCase(key, "DisableLowHealthBeep")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_DisableLowHealthBeep);
-    } else if (StringEqualsNoCase(key, "SkipIntroOnKeypress")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_SkipIntroOnKeypress);
-    } else if (StringEqualsNoCase(key, "ShowMaxItemsInYellow")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_ShowMaxItemsInYellow);
-    } else if (StringEqualsNoCase(key, "MoreActiveBombs")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_MoreActiveBombs);
-    } else if (StringEqualsNoCase(key, "CarryMoreRupees")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_CarryMoreRupees);
-    } else if (StringEqualsNoCase(key, "MiscBugFixes")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_MiscBugFixes);
-    } else if (StringEqualsNoCase(key, "GameChangingBugFixes")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_GameChangingBugFixes);
-    } else if (StringEqualsNoCase(key, "CancelBirdTravel")) {
-      return ParseBoolBit(value, &g_config.features0, kFeatures0_CancelBirdTravel);
     }
   }
   return false;
+}
+
+static bool HandleGamepadMapConfig(const char *key, char *value) {
+  for (int i = 0; i < countof(kKeyNameId); i++) {
+    if (StringEqualsNoCase(key, kKeyNameId[i].name)) {
+      if (i == 1)
+        has_joypad_controls = true;
+      ParseGamepadArray(value, kKeyNameId[i].id, kKeyNameId[i].size);
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool HandleGraphicsConfig(const char *key, char *value) {
+  if (StringEqualsNoCase(key, "WindowSize")) {
+    char *s;
+    if (StringEqualsNoCase(value, "Auto")){
+      g_config.window_width  = 0;
+      g_config.window_height = 0;
+      return true;
+    }
+    while ((s = NextDelim(&value, 'x')) != NULL) {
+      if(g_config.window_width == 0) {
+        g_config.window_width = atoi(s);
+      } else {
+        g_config.window_height = atoi(s);
+        return true;
+      }
+    }
+  } else if (StringEqualsNoCase(key, "EnhancedMode7")) {
+    return ParseBool(value, &g_config.enhanced_mode7);
+  } else if (StringEqualsNoCase(key, "NewRenderer")) {
+    return ParseBool(value, &g_config.new_renderer);
+  } else if (StringEqualsNoCase(key, "IgnoreAspectRatio")) {
+    return ParseBool(value, &g_config.ignore_aspect_ratio);
+  } else if (StringEqualsNoCase(key, "Fullscreen")) {
+    g_config.fullscreen = (uint8)strtol(value, (char**)NULL, 10);
+    return true;
+  } else if (StringEqualsNoCase(key, "WindowScale")) {
+    g_config.window_scale = (uint8)strtol(value, (char**)NULL, 10);
+    return true;
+  } else if (StringEqualsNoCase(key, "OutputMethod")) {
+    g_config.output_method = StringEqualsNoCase(value, "SDL-Software") ? kOutputMethod_SDLSoftware :
+                             StringEqualsNoCase(value, "OpenGL") ? kOutputMethod_OpenGL :
+                             StringEqualsNoCase(value, "OpenGL ES") ? kOutputMethod_OpenGL_ES :
+                                                                      kOutputMethod_SDL;
+    return true;
+  } else if (StringEqualsNoCase(key, "LinearFiltering")) {
+    return ParseBool(value, &g_config.linear_filtering);
+  } else if (StringEqualsNoCase(key, "NoSpriteLimits")) {
+    return ParseBool(value, &g_config.no_sprite_limits);
+  } else if (StringEqualsNoCase(key, "LinkGraphics")) {
+    g_config.link_graphics = value;
+    return true;
+  } else if (StringEqualsNoCase(key, "Shader")) {
+    g_config.shader = *value ? value : NULL;
+    return true;
+  } else if (StringEqualsNoCase(key, "DimFlashes")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_DimFlashes);
+  }
+  return false;
+}
+
+static bool HandleSoundConfig(const char *key, char *value) {
+  if (StringEqualsNoCase(key, "EnableAudio")) {
+    return ParseBool(value, &g_config.enable_audio);
+  } else if (StringEqualsNoCase(key, "AudioFreq")) {
+    g_config.audio_freq = (uint16)strtol(value, (char**)NULL, 10);
+    return true;
+  } else if (StringEqualsNoCase(key, "AudioChannels")) {
+    g_config.audio_channels = (uint8)strtol(value, (char**)NULL, 10);
+    return true;
+  } else if (StringEqualsNoCase(key, "AudioSamples")) {
+    g_config.audio_samples = (uint16)strtol(value, (char**)NULL, 10);
+    return true;
+  } else if (StringEqualsNoCase(key, "EnableMSU")) {
+      if (StringEqualsNoCase(value, "opuz"))
+      g_config.enable_msu = kMsuEnabled_Opuz;
+    else if (StringEqualsNoCase(value, "deluxe"))
+      g_config.enable_msu = kMsuEnabled_MsuDeluxe;
+    else if (StringEqualsNoCase(value, "deluxe-opuz"))
+      g_config.enable_msu = kMsuEnabled_MsuDeluxe | kMsuEnabled_Opuz;
+    else
+      return ParseBool(value, (bool*)&g_config.enable_msu);
+    return true;
+  } else if (StringEqualsNoCase(key, "MSUPath")) {
+    g_config.msu_path = value;
+    return true;
+  } else if (StringEqualsNoCase(key, "MSUVolume")) {
+    g_config.msuvolume = atoi(value);
+    return true;
+  } else if (StringEqualsNoCase(key, "ResumeMSU")) {
+    return ParseBool(value, &g_config.resume_msu);
+  }
+  return false;
+}
+
+static bool HandleGeneralConfig(const char *key, char *value) {
+  if (StringEqualsNoCase(key, "Autosave")) {
+    g_config.autosave = (bool)strtol(value, (char**)NULL, 10);
+    return true;
+  } else if (StringEqualsNoCase(key, "ExtendedAspectRatio")) {
+    const char* s;
+    int h = kSnesBaseHeight;
+    bool nospr = false, novis = false;
+    // todo: make it not depend on the order
+    while ((s = NextDelim(&value, ',')) != NULL) {
+      if (strcmp(s, "extend_y") == 0)
+        h = kSnesExtendedHeight, g_config.extend_y = true;
+      else if (strcmp(s, "16:9") == 0)
+        g_config.extended_aspect_ratio = (h * 16 / 9 - kSnesBaseWidth) / 2;
+      else if (strcmp(s, "16:10") == 0)
+        g_config.extended_aspect_ratio = (h * 16 / 10 - kSnesBaseWidth) / 2;
+      else if (strcmp(s, "18:9") == 0)
+        g_config.extended_aspect_ratio = (h * 18 / 9 - kSnesBaseWidth) / 2;
+      else if (strcmp(s, "4:3") == 0)
+        g_config.extended_aspect_ratio = 0;
+      else if (strcmp(s, "unchanged_sprites") == 0)
+        nospr = true;
+      else if (strcmp(s, "no_visual_fixes") == 0)
+        novis = true;
+      else
+        return false;
+    }
+    if (g_config.extended_aspect_ratio && !nospr)
+      g_config.features0 |= kFeatures0_ExtendScreen64;
+    if (g_config.extended_aspect_ratio && !novis)
+      g_config.features0 |= kFeatures0_WidescreenVisualFixes;
+    return true;
+  } else if (StringEqualsNoCase(key, "DisplayPerfInTitle")) {
+    return ParseBool(value, &g_config.display_perf_title);
+  } else if (StringEqualsNoCase(key, "DisableFrameDelay")) {
+    return ParseBool(value, &g_config.disable_frame_delay);
+  } else if (StringEqualsNoCase(key, "Language")) {
+    g_config.language = value;
+    return true;
+  }
+  return false;
+}
+
+static bool HandleFeaturesConfig(const char *key, char *value) {
+  if (StringEqualsNoCase(key, "ItemSwitchLR")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_SwitchLR);
+  } else if (StringEqualsNoCase(key, "ItemSwitchLRLimit")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_SwitchLRLimit);
+  } else if (StringEqualsNoCase(key, "TurnWhileDashing")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_TurnWhileDashing);
+  } else if (StringEqualsNoCase(key, "MirrorToDarkworld")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_MirrorToDarkworld);
+  } else if (StringEqualsNoCase(key, "CollectItemsWithSword")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_CollectItemsWithSword);
+  } else if (StringEqualsNoCase(key, "BreakPotsWithSword")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_BreakPotsWithSword);
+  } else if (StringEqualsNoCase(key, "DisableLowHealthBeep")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_DisableLowHealthBeep);
+  } else if (StringEqualsNoCase(key, "SkipIntroOnKeypress")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_SkipIntroOnKeypress);
+  } else if (StringEqualsNoCase(key, "ShowMaxItemsInYellow")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_ShowMaxItemsInYellow);
+  } else if (StringEqualsNoCase(key, "MoreActiveBombs")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_MoreActiveBombs);
+  } else if (StringEqualsNoCase(key, "CarryMoreRupees")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_CarryMoreRupees);
+  } else if (StringEqualsNoCase(key, "MiscBugFixes")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_MiscBugFixes);
+  } else if (StringEqualsNoCase(key, "GameChangingBugFixes")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_GameChangingBugFixes);
+  } else if (StringEqualsNoCase(key, "CancelBirdTravel")) {
+    return ParseBoolBit(value, &g_config.features0, kFeatures0_CancelBirdTravel);
+  }
+  return false;
+}
+
+static bool HandleIniConfig(int section, const char *key, char *value) {
+  switch (section) {
+    case 0: return HandleKeyMapConfig(key, value);
+    case 1: return HandleGraphicsConfig(key, value);
+    case 2: return HandleSoundConfig(key, value);
+    case 3: return HandleGeneralConfig(key, value);
+    case 4: return HandleFeaturesConfig(key, value);
+    case 5: return HandleGamepadMapConfig(key, value);
+    default: return false;
+  }
 }
 
 static bool ParseOneConfigFile(const char *filename, int depth) {
