@@ -4,7 +4,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <SDL.h>
-#ifdef _WIN32
+
+#include "platform_detect.h"
+
+#ifdef PLATFORM_WINDOWS
 #include "platform/win32/volume_control.h"
 #include <direct.h>
 #else
@@ -27,6 +30,7 @@
 #include "load_gfx.h"
 #include "util.h"
 #include "audio.h"
+#include "platform.h"
 
 static bool g_run_without_emu = 0;
 
@@ -70,7 +74,7 @@ static uint32 g_gamepad_modifiers;
 static uint16 g_gamepad_last_cmd[kGamepadBtn_Count];
 
 void NORETURN Die(const char *error) {
-#if defined(NDEBUG) && defined(_WIN32)
+#if defined(NDEBUG) && defined(PLATFORM_WINDOWS)
   SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, kWindowTitle, error, NULL);
 #endif
   fprintf(stderr, "Error: %s\n", error);
@@ -384,7 +388,7 @@ int main(int argc, char** argv) {
   if (argc >= 1 && !g_run_without_emu)
     LoadRom(argv[0]);
 
-#if defined(_WIN32)
+#ifdef PLATFORM_WINDOWS
   _mkdir("saves");
 #else
   mkdir("saves", 0755);
@@ -640,7 +644,7 @@ static void HandleCommand_Locked(uint32 j, bool pressed) {
       // On Linux/macOS, SDL_RenderPresent may not be called more than once per frame
       // without causing visual artifacts or crashes. A proper fix would require
       // rendering the dim overlay in the main render loop instead of here.
-#ifdef _WIN32
+#ifdef PLATFORM_WINDOWS
       if (g_paused) {
         SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
         SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 159);
@@ -721,27 +725,6 @@ static void HandleVolumeAdjustment(int volume_adjustment) {
 #endif
 }
 
-// Approximates atan2(y, x) normalized to the [0,4) range
-// with a maximum error of 0.1620 degrees
-// normalized_atan(x) ~ (b x + x^2) / (1 + 2 b x + x^2)
-static float ApproximateAtan2(float y, float x) {
-  uint32 sign_mask = 0x80000000;
-  float b = 0.596227f;
-  // Extract the sign bits
-  uint32 ux_s = sign_mask & *(uint32 *)&x;
-  uint32 uy_s = sign_mask & *(uint32 *)&y;
-  // Determine the quadrant offset
-  float q = (float)((~ux_s & uy_s) >> 29 | ux_s >> 30);
-  // Calculate the arctangent in the first quadrant
-  float bxy_a = b * x * y;
-  if (bxy_a < 0.0f) bxy_a = -bxy_a;  // avoid fabs
-  float num = bxy_a + y * y;
-  float atan_1q = num / (x * x + bxy_a + num + 0.000001f);
-  // Translate it to the proper quadrant
-  uint32_t uatan_2q = (ux_s ^ uy_s) | *(uint32 *)&atan_1q;
-  return q + *(float *)&uatan_2q;
-}
-
 static void HandleGamepadAxisInput(int gamepad_id, int axis, int value) {
   static int last_gamepad_id, last_x, last_y;
   if (axis == SDL_CONTROLLER_AXIS_LEFTX || axis == SDL_CONTROLLER_AXIS_LEFTY) {
@@ -784,7 +767,7 @@ static void HandleGamepadAxisInput(int gamepad_id, int axis, int value) {
 
 static bool LoadRom(const char *filename) {
   size_t length = 0;
-  uint8 *file = ReadWholeFile(filename, &length);
+  uint8 *file = Platform_ReadWholeFile(filename, &length);
   if(!file) Die("Failed to read file");
   bool result = EmuInitialize(file, length);
   free(file);
@@ -816,7 +799,7 @@ static void LoadLinkGraphics() {
   if (g_config.link_graphics) {
     fprintf(stderr, "Loading Link Graphics: %s\n", g_config.link_graphics);
     size_t length = 0;
-    uint8 *file = ReadWholeFile(g_config.link_graphics, &length);
+    uint8 *file = Platform_ReadWholeFile(g_config.link_graphics, &length);
     if (file == NULL || !ParseLinkGraphics(file, length))
       Die("Unable to load file");
     free(file);
@@ -829,14 +812,14 @@ uint32 g_asset_sizes[kNumberOfAssets];
 
 static void LoadAssets() {
   size_t length = 0;
-  uint8 *data = ReadWholeFile("zelda3_assets.dat", &length);
+  uint8 *data = Platform_ReadWholeFile("zelda3_assets.dat", &length);
   if (!data) {
     size_t bps_length, bps_src_length;
     uint8 *bps, *bps_src;
-    bps = ReadWholeFile("zelda3_assets.bps", &bps_length);
+    bps = Platform_ReadWholeFile("zelda3_assets.bps", &bps_length);
     if (!bps)
       Die("Failed to read zelda3_assets.dat. Please see the README for information about how you get this file.");
-    bps_src = ReadWholeFile("zelda3.sfc", &bps_src_length);
+    bps_src = Platform_ReadWholeFile("zelda3.sfc", &bps_src_length);
     if (!bps_src)
       Die("Missing file: zelda3.sfc");
     data = ApplyBps(bps_src, bps_src_length, bps, bps_length, &length);
@@ -878,7 +861,7 @@ static void SwitchDirectory() {
   size_t pos = strlen(buf);
 
   // Use platform-appropriate path separator
-#ifdef _WIN32
+#ifdef PLATFORM_WINDOWS
   const char *path_sep = "\\";
   const char *ini_file = "\\zelda3.ini";
 #else

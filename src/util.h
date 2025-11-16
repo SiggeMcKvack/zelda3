@@ -23,7 +23,6 @@ void ByteArray_Destroy(ByteArray *arr);
 void ByteArray_AppendData(ByteArray *arr, const uint8 *data, size_t data_size);
 void ByteArray_AppendByte(ByteArray *arr, uint8 v);
 
-uint8 *ReadWholeFile(const char *name, size_t *length);
 char *NextDelim(char **s, int sep);
 char *NextLineStripComments(char **s);
 char *NextPossiblyQuotedString(char **s);

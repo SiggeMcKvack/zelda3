@@ -1,10 +1,11 @@
 #include "logging.h"
+#include "platform_detect.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 
-#ifdef _WIN32
+#ifdef PLATFORM_WINDOWS
   #include <io.h>
   #define isatty _isatty
   #define fileno _fileno

@@ -6,6 +6,8 @@
 #include "features.h"
 #include "util.h"
 #include "logging.h"
+#include "platform.h"
+#include "dynamic_array.h"
 
 enum {
   kKeyMod_ScanCode = 0x200,
@@ -80,12 +82,10 @@ static bool KeyMapHash_Add(uint16 key, uint16 cmd) {
       LogError("Config: Too many key bindings (%d), ignoring extras", keymap_hash_size);
       return false;
     }
-    KeyMapHashEnt *new_hash = realloc(keymap_hash, sizeof(KeyMapHashEnt) * (keymap_hash_size + 256));
-    if (!new_hash) {
+    DYNARR_GROW_STEP(keymap_hash, keymap_hash_size, 256, {
       LogError("Config: Failed to allocate memory for key bindings");
       return false;
-    }
-    keymap_hash = new_hash;
+    });
   }
   int i = keymap_hash_size++;
   KeyMapHashEnt *ent = &keymap_hash[i];
@@ -168,19 +168,13 @@ static GamepadMapEnt *joymap_ents;
 static int joymap_size;
 static bool has_joypad_controls;
 
-static int CountBits32(uint32 n) {
-  int count = 0;
-  for (; n != 0; count++)
-    n &= (n - 1);
-  return count;
-}
-
 void GamepadMap_Add(int button, uint32 modifiers, uint16 cmd) {
   if ((joymap_size & 0xff) == 0) {
     if (joymap_size > 1000)
       Die("Too many joypad keys");
-    joymap_ents = realloc(joymap_ents, sizeof(GamepadMapEnt) * (joymap_size + 64));
-    if (!joymap_ents) Die("realloc failure");
+    DYNARR_GROW_STEP(joymap_ents, joymap_size, 64, {
+      Die("realloc failure");
+    });
   }
   uint16 *p = &joymap_first[button];
   // Insert it as early as possible but before after any entry with more modifiers.
@@ -524,7 +518,7 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
 }
 
 static bool ParseOneConfigFile(const char *filename, int depth) {
-  char *filedata = (char*)ReadWholeFile(filename, NULL), *p;
+  char *filedata = (char*)Platform_ReadWholeFile(filename, NULL), *p;
   if (!filedata)
     return false;
   
