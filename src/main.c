@@ -17,6 +17,7 @@
 
 #include "types.h"
 #include "variables.h"
+#include "logging.h"
 
 #include "zelda_rtl.h"
 #include "zelda_cpu_infra.h"
@@ -279,6 +280,10 @@ void OpenGLRenderer_Create(struct RendererFuncs *funcs, bool use_opengl_es);
 #undef main
 int main(int argc, char** argv) {
   argc--, argv++;
+
+  // Initialize logging system early
+  InitializeLogging();
+
   const char *config_file = NULL;
   if (argc >= 2 && strcmp(argv[0], "--config") == 0) {
     config_file = argv[1];
@@ -511,6 +516,10 @@ int main(int argc, char** argv) {
 
   SDL_DestroyWindow(window);
   SDL_Quit();
+
+  // Clean up config memory
+  Config_Shutdown();
+
   //SaveConfigFile();
   return 0;
 }
@@ -627,7 +636,10 @@ static void HandleCommand_Locked(uint32 j, bool pressed) {
     case kKeys_PauseDimmed:
       g_paused = !g_paused;
       // SDL_RenderPresent may not be called more than once per frame.
-      // Seems to work on Windows still. Temporary measure until it's fixed.
+      // FIXME: Pause dimming only works on Windows due to SDL_RenderPresent limitation
+      // On Linux/macOS, SDL_RenderPresent may not be called more than once per frame
+      // without causing visual artifacts or crashes. A proper fix would require
+      // rendering the dim overlay in the main render loop instead of here.
 #ifdef _WIN32
       if (g_paused) {
         SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
@@ -635,6 +647,9 @@ static void HandleCommand_Locked(uint32 j, bool pressed) {
         SDL_RenderFillRect(g_renderer, NULL);
         SDL_RenderPresent(g_renderer);
       }
+#else
+      // On non-Windows platforms, pause dimming is not supported in this code path
+      // Users will see paused state but without screen dimming effect
 #endif
       break;
     case kKeys_ReplayTurbo: g_replay_turbo = !g_replay_turbo; break;
@@ -753,8 +768,12 @@ static void HandleGamepadAxisInput(int gamepad_id, int axis, int value) {
         1 << 6,           // 6 = left
         1 << 6 | 1 << 4,  // 7 = left, up
       };
-      uint8 angle = (uint8)(int)(ApproximateAtan2(last_y, last_x) * 64.0f + 0.5f);
-      buttons = kSegmentToButtons[(uint8)(angle + 16 + 64) >> 5];
+      // ApproximateAtan2 returns [0,4), multiply by 64 gives [0,256)
+      // Clamp to ensure safe array access after conversion
+      float angle_f = ApproximateAtan2(last_y, last_x) * 64.0f + 0.5f;
+      uint8 angle = (angle_f < 0.0f) ? 0 : (angle_f > 255.0f) ? 255 : (uint8)(int)angle_f;
+      uint8 index = (uint8)(angle + 16 + 64) >> 5;  // Results in 0-7 for 8 directions
+      buttons = kSegmentToButtons[index];
     }
     g_gamepad_buttons = buttons;
   } else if ((axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT || axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)) {
@@ -858,8 +877,17 @@ static void SwitchDirectory() {
     return;
   size_t pos = strlen(buf);
 
+  // Use platform-appropriate path separator
+#ifdef _WIN32
+  const char *path_sep = "\\";
+  const char *ini_file = "\\zelda3.ini";
+#else
+  const char *path_sep = "/";
+  const char *ini_file = "/zelda3.ini";
+#endif
+
   for (int step = 0; pos != 0 && step < 3; step++) {
-    memcpy(buf + pos, "/zelda3.ini", 12);
+    strcpy(buf + pos, ini_file);
     FILE *f = fopen(buf, "rb");
     if (f) {
       fclose(f);
@@ -872,6 +900,7 @@ static void SwitchDirectory() {
       return;
     }
     pos--;
+    // Accept both separators when scanning backwards for cross-platform paths
     while (pos != 0 && buf[pos] != '/' && buf[pos] != '\\')
       pos--;
   }

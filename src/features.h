@@ -46,6 +46,10 @@ enum {
   kFeatures0_SwitchLRLimit = 32768,
 
   kFeatures0_DimFlashes = 65536,
+
+  kFeatures0_Pokemode = 131072,
+
+  kFeatures0_PrincessZeldaHelps = 262144,
 };
 
 #define enhanced_features0 (*(uint32*)(g_ram+0x64c))

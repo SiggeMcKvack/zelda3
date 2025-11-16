@@ -104,7 +104,16 @@ enum {
 };
 
 extern Config g_config;
+extern const uint8 kDefaultGamepadCmds[];
 
 void ParseConfigFile(const char *filename);
+void Config_Shutdown(void);
 int FindCmdForSdlKey(SDL_Keycode code, SDL_Keymod mod);
 int FindCmdForGamepadButton(int button, uint32 modifiers);
+
+// Gamepad binding API
+void GamepadMap_Add(int button, uint32 modifiers, uint16 cmd);
+void GamepadMap_Clear(void);
+int GamepadMap_GetBindingForCommand(int cmd, uint32 *modifiers_out);
+const char* FindCmdName(int cmd);
+int ParseGamepadButtonName(const char **value);

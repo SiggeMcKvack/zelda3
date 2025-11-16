@@ -249,32 +249,48 @@ uint8 *ApplyBps(const uint8 *src, size_t src_size_in,
     uint32 length = (cmd >> 2) + 1;
     switch (cmd & 3) {
     case 0:
+      // Bounds check: prevent buffer overflow from malicious BPS patches
+      if (outputOffset > dst_size - length || outputOffset > src_size - length)
+        goto FAIL;
       while(length--) {
         dst[outputOffset] = src[outputOffset];
         outputOffset++;
       }
       break;
     case 1:
+      // Bounds check: validate destination offset
+      if (outputOffset > dst_size - length)
+        goto FAIL;
       while (length--)
         dst[outputOffset++] = *bps++;
       break;
     case 2:
       cmd = BpsDecodeInt(&bps);
       sourceRelativeOffset += (cmd & 1 ? -1 : +1) * (cmd >> 1);
+      // Bounds check: validate both source and destination offsets
+      if (outputOffset > dst_size - length || sourceRelativeOffset > src_size - length)
+        goto FAIL;
       while (length--)
         dst[outputOffset++] = src[sourceRelativeOffset++];
       break;
     default:
       cmd = BpsDecodeInt(&bps);
       targetRelativeOffset += (cmd & 1 ? -1 : +1) * (cmd >> 1);
+      // Bounds check: validate both target read and destination write
+      if (outputOffset > dst_size - length || targetRelativeOffset > dst_size - length)
+        goto FAIL;
       while(length--)
         dst[outputOffset++] = dst[targetRelativeOffset++];
       break;
     }
   }
   if (dst_size != outputOffset)
-    return NULL;
+    goto FAIL;
   if (crc32(dst, dst_size) != *(uint32 *)(bps_end + 4))
-    return NULL;
+    goto FAIL;
   return dst;
+
+FAIL:
+  free(dst);
+  return NULL;
 }

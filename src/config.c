@@ -5,6 +5,7 @@
 #include <SDL.h>
 #include "features.h"
 #include "util.h"
+#include "logging.h"
 
 enum {
   kKeyMod_ScanCode = 0x200,
@@ -73,9 +74,18 @@ static bool has_keynameid[countof(kKeyNameId)];
 
 static bool KeyMapHash_Add(uint16 key, uint16 cmd) {
   if ((keymap_hash_size & 0xff) == 0) {
-    if (keymap_hash_size > 10000)
-      Die("Too many keys");
-    keymap_hash = realloc(keymap_hash, sizeof(KeyMapHashEnt) * (keymap_hash_size + 256));
+    // Prevent excessive memory allocation from malformed configs
+    // 10000 key bindings is unreasonable (normal configs have <100)
+    if (keymap_hash_size >= 10000) {
+      LogError("Config: Too many key bindings (%d), ignoring extras", keymap_hash_size);
+      return false;
+    }
+    KeyMapHashEnt *new_hash = realloc(keymap_hash, sizeof(KeyMapHashEnt) * (keymap_hash_size + 256));
+    if (!new_hash) {
+      LogError("Config: Failed to allocate memory for key bindings");
+      return false;
+    }
+    keymap_hash = new_hash;
   }
   int i = keymap_hash_size++;
   KeyMapHashEnt *ent = &keymap_hash[i];
@@ -140,11 +150,11 @@ static void ParseKeyArray(char *value, int cmd, int size) {
     }
     SDL_Keycode key = SDL_GetKeyFromName(s);
     if (key == SDLK_UNKNOWN) {
-      fprintf(stderr, "Unknown key: '%s'\n", s);
+      LogWarn("Config: Unknown key: '%s'", s);
       continue;
     }
     if (!KeyMapHash_Add(key_with_mod | REMAP_SDL_KEYCODE(key), cmd))
-      fprintf(stderr, "Duplicate key: '%s'\n", s);
+      LogWarn("Config: Duplicate key: '%s'", s);
   }
 }
 
@@ -165,7 +175,7 @@ static int CountBits32(uint32 n) {
   return count;
 }
 
-static void GamepadMap_Add(int button, uint32 modifiers, uint16 cmd) {
+void GamepadMap_Add(int button, uint32 modifiers, uint16 cmd) {
   if ((joymap_size & 0xff) == 0) {
     if (joymap_size > 1000)
       Die("Too many joypad keys");
@@ -195,7 +205,27 @@ int FindCmdForGamepadButton(int button, uint32 modifiers) {
   return 0;
 }
 
-static int ParseGamepadButtonName(const char **value) {
+void GamepadMap_Clear(void) {
+  joymap_size = 0;
+  for (int i = 0; i < kGamepadBtn_Count; i++) {
+    joymap_first[i] = 0;
+  }
+}
+
+int GamepadMap_GetBindingForCommand(int cmd, uint32 *modifiers_out) {
+  for (int button = 0; button < kGamepadBtn_Count; button++) {
+    for (int e = joymap_first[button]; e != 0; e = joymap_ents[e - 1].next) {
+      GamepadMapEnt *ent = &joymap_ents[e - 1];
+      if (ent->cmd == cmd) {
+        if (modifiers_out) *modifiers_out = ent->modifiers;
+        return button;
+      }
+    }
+  }
+  return -1;
+}
+
+int ParseGamepadButtonName(const char **value) {
   const char *s = *value;
   // Longest substring first
   static const char *const kGamepadKeyNames[] = {
@@ -218,7 +248,20 @@ static int ParseGamepadButtonName(const char **value) {
   return kGamepadBtn_Invalid;
 }
 
-static const uint8 kDefaultGamepadCmds[] = {
+const char* FindCmdName(int cmd) {
+  // Skip index 0 ("Null" with size 65535) - check it last
+  for (size_t i = 1; i < countof(kKeyNameId); i++) {
+    int start = kKeyNameId[i].id;
+    int size = kKeyNameId[i].size;
+    if (cmd >= start && cmd < start + size) {
+      return kKeyNameId[i].name;
+    }
+  }
+  // Fall back to "Null" if not found
+  return "Null";
+}
+
+const uint8 kDefaultGamepadCmds[] = {
   kGamepadBtn_DpadUp, kGamepadBtn_DpadDown, kGamepadBtn_DpadLeft, kGamepadBtn_DpadRight, kGamepadBtn_Back, kGamepadBtn_Start,
   kGamepadBtn_B, kGamepadBtn_A, kGamepadBtn_Y, kGamepadBtn_X, kGamepadBtn_L1, kGamepadBtn_R1,
 };
@@ -234,7 +277,7 @@ static void ParseGamepadArray(char *value, int cmd, int size) {
     for (;;) {
       int button = ParseGamepadButtonName(&ss);
       if (button == kGamepadBtn_Invalid) BAD: {
-        fprintf(stderr, "Unknown gamepad button: '%s'\n", s);
+        LogWarn("Config: Unknown gamepad button: '%s'", s);
         break;
       }
       while (*ss == ' ' || *ss == '\t') ss++;
@@ -494,23 +537,23 @@ static bool ParseOneConfigFile(const char *filename, int depth) {
     if (*p == '[') {
       section = GetIniSection(p);
       if (section < 0)
-        fprintf(stderr, "%s:%d: Invalid .ini section %s\n", filename, lineno, p);
+        LogError("%s:%d: Invalid .ini section %s", filename, lineno, p);
     } else if (*p == '!' && SkipPrefix(p + 1, "include ")) {
       char *tt = p + 8;
       char *new_filename = ReplaceFilenameWithNewPath(filename, NextPossiblyQuotedString(&tt));
       if (depth > 10 || !ParseOneConfigFile(new_filename, depth + 1))
-        fprintf(stderr, "Warning: Unable to read %s\n", new_filename);
+        LogWarn("Config: Unable to read %s", new_filename);
       free(new_filename);
     } else if (section == -2) {
-      fprintf(stderr, "%s:%d: Expecting [section]\n", filename, lineno);
+      LogError("%s:%d: Expecting [section]", filename, lineno);
     } else {
       char *v = SplitKeyValue(p);
       if (v == NULL) {
-        fprintf(stderr, "%s:%d: Expecting 'key=value'\n", filename, lineno);
+        LogError("%s:%d: Expecting 'key=value'", filename, lineno);
         continue;
       }
       if (section >= 0 && !HandleIniConfig(section, p, v))
-        fprintf(stderr, "%s:%d: Can't parse '%s'\n", filename, lineno, p);
+        LogError("%s:%d: Can't parse '%s'", filename, lineno, p);
     }
   }
   return true;
@@ -523,7 +566,23 @@ void ParseConfigFile(const char *filename) {
     if (filename == NULL)
       filename = "zelda3.ini";
     if (!ParseOneConfigFile(filename, 0))
-      fprintf(stderr, "Warning: Unable to read config file %s\n", filename);
+      LogWarn("Config: Unable to read config file %s", filename);
   }
   RegisterDefaultKeys();
+}
+
+void Config_Shutdown(void) {
+  // Free the memory buffer allocated during config parsing
+  // memory_buffer holds string pointers for various config fields
+  free(g_config.memory_buffer);
+  g_config.memory_buffer = NULL;
+
+  // Free dynamically allocated hash tables
+  free(keymap_hash);
+  keymap_hash = NULL;
+  keymap_hash_size = 0;
+
+  free(joymap_ents);
+  joymap_ents = NULL;
+  joymap_size = 0;
 }

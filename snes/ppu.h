@@ -143,4 +143,9 @@ int PpuGetCurrentRenderScale(Ppu *ppu, uint32_t render_flags);
 void PpuSetMode7PerspectiveCorrection(Ppu *ppu, int low, int high);
 void PpuSetExtraSideSpace(Ppu *ppu, int left, int right, int bottom);
 
+// Get current frame buffer as RGBA data (256x224 resolution)
+// Returns pointer to render buffer if available, NULL otherwise
+// Buffer format: RGBA, 4 bytes per pixel, pitch may vary
+void PpuGetFrameBuffer(Ppu *ppu, uint8_t **buffer_out, int *width_out, int *height_out, int *pitch_out);
+
 #endif  // ZELDA3_SNES_PPU_H_

@@ -18,10 +18,8 @@
 /saves/sram.bak
 /zelda3
 __pycache__
-/src/*.o
 /*.exe
 /*.out
-/snes/*.o
 /msu/
 /tmp/
 /zelda3_assets.dat
@@ -31,3 +29,11 @@ __pycache__
 /sprites-gfx
 /glsl-shaders
 /token.txt
+
+# CMake build directory
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt

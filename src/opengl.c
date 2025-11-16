@@ -2,6 +2,7 @@
 #include <SDL.h>
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include "types.h"
 #include "util.h"
 #include "glsl_shader.h"
@@ -179,12 +180,30 @@ static void OpenGLRenderer_Destroy() {
 }
 
 static void OpenGLRenderer_BeginDraw(int width, int height, uint8 **pixels, int *pitch) {
-  int size = width * height;
+  // Check for integer overflow: width * height * 4
+  // Maximum safe dimensions: sqrt(SIZE_MAX / 4) ≈ 2^31 on 64-bit, 2^15 on 32-bit
+  if (width < 0 || height < 0 ||
+      (size_t)width > SIZE_MAX / (size_t)height ||
+      (size_t)width * (size_t)height > SIZE_MAX / 4) {
+    fprintf(stderr, "OpenGL: Invalid screen dimensions %dx%d, overflow risk\n", width, height);
+    *pixels = NULL;
+    *pitch = 0;
+    return;
+  }
+
+  size_t size = (size_t)width * (size_t)height;
 
   if (size > g_screen_buffer_size) {
     g_screen_buffer_size = size;
     free(g_screen_buffer);
     g_screen_buffer = malloc(size * 4);
+    if (!g_screen_buffer) {
+      fprintf(stderr, "OpenGL: Failed to allocate %zu bytes for screen buffer\n", size * 4);
+      g_screen_buffer_size = 0;
+      *pixels = NULL;
+      *pitch = 0;
+      return;
+    }
   }
 
   g_draw_width = width;
@@ -208,7 +227,7 @@ static void OpenGLRenderer_EndDraw() {
   }
 
   int viewport_x = (drawable_width - viewport_width) >> 1;
-  int viewport_y = (viewport_height - viewport_height) >> 1;
+  int viewport_y = (drawable_height - viewport_height) >> 1;
 
   glBindTexture(GL_TEXTURE_2D, g_texture.gl_texture);
   if (g_draw_width == g_texture.width && g_draw_height == g_texture.height) {
@@ -220,9 +239,9 @@ static void OpenGLRenderer_EndDraw() {
     g_texture.width = g_draw_width;
     g_texture.height = g_draw_height;
     if (!g_opengl_es)
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, g_draw_width, g_draw_height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, g_screen_buffer);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_BGRA, g_draw_width, g_draw_height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, g_screen_buffer);
     else
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, g_draw_width, g_draw_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, g_screen_buffer);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_BGRA, g_draw_width, g_draw_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, g_screen_buffer);
   }
 
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
