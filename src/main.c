@@ -52,8 +52,21 @@ enum {
   kDefaultFullscreen = 0,
   kMaxWindowScale = 10,
   kDefaultFreq = 44100,
+  kMinAudioFreq = 11025,
+  kMaxAudioFreq = 48000,
   kDefaultChannels = 2,
   kDefaultSamples = 2048,
+  kGamepadDeadzone = 10000,
+  kGamepadDeadzoneSquared = 10000 * 10000,
+  kGamepadSwitchThreshold = 16000,
+  kTriggerPressThreshold = 12000,
+  kTriggerReleaseThreshold = 16000,
+  kAngleSegmentShift = 5,  // >> 5 divides by 32 for 8 segments
+  kAngleSegmentOffset = 16 + 64,
+};
+
+enum {
+  kAngleSegments = 64,  // Multiply atan2 result by this for quantization
 };
 
 static const char kWindowTitle[] = "The Legend of Zelda: A Link to the Past";
@@ -324,7 +337,7 @@ int main(int argc, char** argv) {
   g_current_window_scale = (g_config.window_scale == 0) ? 2 : IntMin(g_config.window_scale, kMaxWindowScale);
 
   // audio_freq: Use common sampling rates (see user config file. values higher than 48000 are not supported.)
-  if (g_config.audio_freq < 11025 || g_config.audio_freq > 48000)
+  if (g_config.audio_freq < kMinAudioFreq || g_config.audio_freq > kMaxAudioFreq)
     g_config.audio_freq = kDefaultFreq;
 
   // Currently, the SPC/DSP implementation only supports up to stereo.
@@ -730,14 +743,14 @@ static void HandleGamepadAxisInput(int gamepad_id, int axis, int value) {
   if (axis == SDL_CONTROLLER_AXIS_LEFTX || axis == SDL_CONTROLLER_AXIS_LEFTY) {
     // ignore other gamepads unless they have a big input
     if (last_gamepad_id != gamepad_id) {
-      if (value > -16000 && value < 16000)
+      if (value > -kGamepadSwitchThreshold && value < kGamepadSwitchThreshold)
         return;
       last_gamepad_id = gamepad_id;
       last_x = last_y = 0;
     }
     *(axis == SDL_CONTROLLER_AXIS_LEFTX ? &last_x : &last_y) = value;
     int buttons = 0;
-    if (last_x * last_x + last_y * last_y >= 10000 * 10000) {
+    if (last_x * last_x + last_y * last_y >= kGamepadDeadzoneSquared) {
       // in the non deadzone part, divide the circle into eight 45 degree
       // segments rotated by 22.5 degrees that control which direction to move.
       // todo: do this without floats?
@@ -751,17 +764,17 @@ static void HandleGamepadAxisInput(int gamepad_id, int axis, int value) {
         1 << 6,           // 6 = left
         1 << 6 | 1 << 4,  // 7 = left, up
       };
-      // ApproximateAtan2 returns [0,4), multiply by 64 gives [0,256)
+      // ApproximateAtan2 returns [0,4), multiply by kAngleSegments gives [0,256)
       // Clamp to ensure safe array access after conversion
-      float angle_f = ApproximateAtan2(last_y, last_x) * 64.0f + 0.5f;
+      float angle_f = ApproximateAtan2(last_y, last_x) * (float)kAngleSegments + 0.5f;
       uint8 angle = (angle_f < 0.0f) ? 0 : (angle_f > 255.0f) ? 255 : (uint8)(int)angle_f;
-      uint8 index = (uint8)(angle + 16 + 64) >> 5;  // Results in 0-7 for 8 directions
+      uint8 index = (uint8)(angle + kAngleSegmentOffset) >> kAngleSegmentShift;  // Results in 0-7 for 8 directions
       buttons = kSegmentToButtons[index];
     }
     g_gamepad_buttons = buttons;
   } else if ((axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT || axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)) {
-    if (value < 12000 || value >= 16000)  // hysteresis
-      HandleGamepadInput(axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT ? kGamepadBtn_L2 : kGamepadBtn_R2, value >= 12000);
+    if (value < kTriggerPressThreshold || value >= kTriggerReleaseThreshold)  // hysteresis
+      HandleGamepadInput(axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT ? kGamepadBtn_L2 : kGamepadBtn_R2, value >= kTriggerPressThreshold);
   }
 }
 
