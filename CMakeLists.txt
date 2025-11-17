@@ -74,6 +74,7 @@ if(MSVC)
         _CRT_SECURE_NO_WARNINGS
         _CRT_NONSTDC_NO_DEPRECATE
         OPUS_BUILD=1
+        DISABLE_PTR_CHECK=1
     )
 else()
     target_compile_options(zelda3 PRIVATE
