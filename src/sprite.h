@@ -47,7 +47,7 @@ enum {
   kCheckDamageFromPlayer_Ne = 2,
 };
 
-static inline void SetOamHelper0(OamEnt *oam, uint16 x, uint16 y, uint8 charnum, uint8 flags, uint8 big) {
+static FORCEINLINE void SetOamHelper0(OamEnt *oam, uint16 x, uint16 y, uint8 charnum, uint8 flags, uint8 big) {
   oam->x = x;
   oam->y = (uint16)(y + 0x10) < 0x100 ? y : 0xf0;
   oam->charnum = charnum;
@@ -55,7 +55,7 @@ static inline void SetOamHelper0(OamEnt *oam, uint16 x, uint16 y, uint8 charnum,
   bytewise_extended_oam[oam - oam_buf] = big | (x >> 8 & 1);
 }
 
-static inline void SetOamHelper1(OamEnt *oam, uint16 x, uint8 y, uint8 charnum, uint8 flags, uint8 big) {
+static FORCEINLINE void SetOamHelper1(OamEnt *oam, uint16 x, uint8 y, uint8 charnum, uint8 flags, uint8 big) {
   oam->x = x;
   oam->y = y;
   oam->charnum = charnum;
@@ -63,7 +63,7 @@ static inline void SetOamHelper1(OamEnt *oam, uint16 x, uint8 y, uint8 charnum, 
   bytewise_extended_oam[oam - oam_buf] = big | (x >> 8 & 1);
 }
 
-static inline void SetOamPlain(OamEnt *oam, uint8 x, uint8 y, uint8 charnum, uint8 flags, uint8 big) {
+static FORCEINLINE void SetOamPlain(OamEnt *oam, uint8 x, uint8 y, uint8 charnum, uint8 flags, uint8 big) {
   oam->x = x;
   oam->y = y;
   oam->charnum = charnum;

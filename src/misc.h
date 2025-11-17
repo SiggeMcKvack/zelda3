@@ -12,18 +12,18 @@
 
 
 
-static inline OamEnt *GetOamCurPtr() {
+static FORCEINLINE OamEnt *GetOamCurPtr() {
   return (OamEnt *)&g_ram[oam_cur_ptr];
 }
 
-static inline int FindInByteArray(const uint8 *data, uint8 lookfor, size_t size) {
+static FORCEINLINE int FindInByteArray(const uint8 *data, uint8 lookfor, size_t size) {
   for (size_t i = size; i--;)
     if (data[i] == lookfor)
       return (int)i;
   return -1;
 }
 
-static inline int FindInWordArray(const uint16 *data, uint16 lookfor, size_t size) {
+static FORCEINLINE int FindInWordArray(const uint16 *data, uint16 lookfor, size_t size) {
   for (size_t i = size; i--;)
     if (data[i] == lookfor)
       return (int)i;

@@ -62,7 +62,7 @@ typedef unsigned int uint;
 #define XY(x, y) ((y)*64+(x))
 
 #ifndef swap16
-static inline uint16 swap16(uint16 v) { return (v << 8) | (v >> 8); }
+static FORCEINLINE uint16 swap16(uint16 v) { return (v << 8) | (v >> 8); }
 #endif
 
 typedef struct Point16U {
