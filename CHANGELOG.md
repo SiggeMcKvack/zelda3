@@ -4,6 +4,46 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## Recent Updates (November 2025)
 
+### Build System Modernization & Windows Compatibility
+
+**Major Changes:** Switched from vendored Opus to system library, fixed Windows build failures
+
+After 25+ failed build attempts over multiple sessions, root cause identified and fixed: RAM macro names (R10, R12, R14, R16, R18, R20) in `src/variables.h` collided with Windows x64 register names used in `setjmp.h`. When `audio.c` included `variables.h` before Windows headers, the macros polluted preprocessor state, causing parsing failures when `setjmp.h` was later included via SDL → `intrin.h`.
+
+**Opus Library Migration:**
+- Removed vendored `third_party/opus-1.3.1-stripped/` (-924KB, 74 files)
+- Switched to system-installed Opus library via pkg-config
+- Added `cmake/FindOpus.cmake` module for cross-platform detection
+- Updated all CI platforms: apt (Ubuntu), pacman (Arch), vcpkg (Windows), brew (macOS)
+- Updated BUILDING.md with Opus installation instructions
+
+**Windows Build Fixes:**
+- Renamed R10/R12/R14/R16/R18/R20 → g_r10/g_r12/g_r14/g_r16/g_r18/g_r20 (8 files, 192 replacements)
+- Follows existing `g_` prefix convention (g_ram, g_zenv, etc.)
+- Avoids collision with Windows x64 register names (R8-R15)
+- Used Clang-CL for diagnosis (clearer error messages than MSVC)
+- Removed experimental workarounds (DISABLE_PTR_CHECK, /Zc:preprocessor flags)
+
+**CI/CD Improvements:**
+- Updated vcpkg action to v11.5
+- All 10 build jobs passing: Ubuntu Debug/Release, Arch Debug/Release, Windows Debug/Release, macOS ARM64 Debug/Release, macOS x86_64 Debug/Release
+- Added Opus dependency to all platform workflows
+
+**Files Modified:**
+- `CMakeLists.txt` - Switched to find_package(Opus), removed vendored sources
+- `src/audio.c` - Changed include from vendored to `<opus/opus.h>`
+- `src/variables.h` - Renamed R* macros to g_r* (lines 1424-1429)
+- `src/{player,dungeon,zelda_cpu_infra,tile_detect,overworld,ending,ancilla}.c` - Updated macro usage
+- `.github/workflows/build.yml` - Added Opus deps for all platforms, vcpkg@v11.5
+- `cmake/FindOpus.cmake` - New pkg-config based module
+- `BUILDING.md` - Added Opus installation instructions
+
+**Technical Notes:**
+- Opus used only for MSU1 audio decoding (custom OPUZ format with savestate resume)
+- No encoding, 4 functions used: opus_decoder_create, opus_decode, opus_decoder_ctl, opus_decoder_destroy
+- System library adds ~200KB to binary vs 924KB vendored source
+- Build time slightly faster without vendored compilation
+
 ### Pokemode & PrincessZeldaHelps Features
 
 **New Experimental Features:** Pokemon-style monster capture and Zelda companion mode
