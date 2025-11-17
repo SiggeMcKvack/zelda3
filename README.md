@@ -40,29 +40,27 @@ Option 2: Building it yourself
 
 Visit Wiki for more info on building the project: https://github.com/snesrev/zelda3/wiki
 
-## Installing Python & libraries on Windows (required for asset extraction steps)
-1. Download [Python](https://www.python.org/ftp/python/3.11.1/python-3.11.1-amd64.exe) installer and install with "Add to PATH" checkbox checked
-2. Open the command prompt
-3. Type `python -m pip install --upgrade pip pillow pyyaml` and hit enter
-4. Close the command prompt
+## Building on Windows
 
-## Compiling on Windows with TCC (1mb Tiny C Compiler)
-1. Download the project by clicking "Code > Download ZIP" on the github page
-2. Extract the ZIP to your hard drive
-3. Place the USA rom named `zelda3.sfc` in the root directory.
-4. Double-click `extract_assets.bat` in the main dir to create `zelda3_assets.dat` in that same dir
-5. Download [TCC](https://github.com/FitzRoyX/tinycc/releases/download/tcc_20221020/tcc_20221020.zip) and extract to the "\third_party" subfolder
-6. Download [SDL2](https://github.com/libsdl-org/SDL/releases/download/release-2.26.3/SDL2-devel-2.26.3-VC.zip) and extract to the "\third_party" subfolder
-7. Double-click `run_with_tcc.bat` in the main dir to create `zelda3.exe` in that same dir
-8. Configure with `zelda3.ini` in the main dir
+See [BUILDING.md](BUILDING.md) for detailed build instructions using CMake.
 
-## Compiling on Windows with Visual Studio (4.5gb IDE and compiler)
-Same Steps 1-4 above<br/>
-8. Double-click `Zelda3.sln`<br/>
-9. Install the **Desktop development with C++** workload with the VS Installer if you don't have it already (it should prompt you to do this).<br/>
-10. Change "debug" to "release" in the top dropdown<br/>
-12. Choose "build > build Zelda3" in the menu to create `zelda3.exe` in the "/bin/release" subfolder<br/>
-13. Configure with `zelda3.ini` in the main dir<br/>
+**Quick start:**
+1. Install [Python](https://www.python.org/downloads/) with "Add to PATH" checked
+2. Install dependencies: `python -m pip install -r requirements.txt`
+3. Place your US ROM file named `zelda3.sfc` in the root directory
+4. Extract assets: `python assets/restool.py --extract-from-rom` (or use `extract_assets.bat`)
+5. Build with CMake:
+   ```cmd
+   mkdir build
+   cd build
+   cmake ..
+   cmake --build . --config Release
+   ```
+
+For Visual Studio IDE support, CMake can generate project files:
+```cmd
+cmake .. -G "Visual Studio 17 2022"
+```
 
 ## Installing libraries on Linux/MacOS
 1. Open a terminal
