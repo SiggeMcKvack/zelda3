@@ -3552,7 +3552,7 @@ void CreatePyramidHole() {  // 9bc2a7
   nmi_load_bg_from_vram = 1;
 }
 
-// Strange return value in Carry/R14
+// Strange return value in Carry/g_r14
 uint16 Overworld_RevealSecret(uint16 pos) {  // 9bc8a4
   BYTE(dung_secrets_unk1) = 0;
 

@@ -158,7 +158,7 @@ void HandleNudgingInADoor(int8 speed) {  // 87d667
 
   TileDetection_Execute(x0, y0, 1);
 
-  if (((R14 | detection_of_ledge_tiles_horiz_uphoriz) & 3) == 0) {
+  if (((g_r14 | detection_of_ledge_tiles_horiz_uphoriz) & 3) == 0) {
     if (((tiledetect_vertical_ledge | detection_of_unknown_tile_types) & 0x33) == 0)
       return;
   }
@@ -207,8 +207,8 @@ void TileDetect_SwordSwingDeepInDoor(uint8 dw) {  // 87d73e
 }
 
 void TileDetect_ResetState() {  // 87d798
-  R12 = 0;
-  R14 = 0;
+  g_r12 = 0;
+  g_r14 = 0;
   tiledetect_diagonal_tile = 0;
   tiledetect_stair_tile = 0;
   tiledetect_pit_tile = 0;
@@ -265,24 +265,24 @@ void TileDetect_ExecuteInner(uint8 tile, uint16 offs, uint16 bits, bool is_indoo
     break;
   case 0x01: case 0x02: case 0x03:  // TileBehavior_StandardCollision
   case 0x26: case 0x43:
-    R14 |= bits;
+    g_r14 |= bits;
     break;
   case 0x6c: case 0x6d: case 0x6e: case 0x6f:
     if (is_indoors)
-      R14 |= bits;
+      g_r14 |= bits;
     else
       tiledetect_normal_tiles |= bits;
     break;
   case 0x04:
     if (is_indoors) {
-      R14 |= bits;
+      g_r14 |= bits;
     } else {
       tiledetect_thick_grass |= bits;
     }
     break;
   case 0x0b:
     if (is_indoors) {
-      R14 |= bits;
+      g_r14 |= bits;
     } else {
       index_of_interacting_tile = tile;
       tiledetect_deepwater |= bits << 4;
@@ -311,12 +311,12 @@ void TileDetect_ExecuteInner(uint8 tile, uint16 offs, uint16 bits, bool is_indoo
     tiledetect_icy_floor |= bits << 4;
     break;
   case 0x10: case 0x11: case 0x12: case 0x13:  // TileBehavior_Slope
-    R12 |= bits;
+    g_r12 |= bits;
     tiledetect_diag_state = word_87DC55[tile & 3];
     break;
   case 0x18: case 0x19: case 0x1a: case 0x1b:  // TileBehavior_SlopeOuter
     tiledetect_diagonal_tile |= bits;
-    R12 |= bits;
+    g_r12 |= bits;
     tiledetect_diag_state = word_87DC55[tile & 3];
     break;
   case 0x1c:  // TileBehavior_OverlayMask_1C
@@ -340,7 +340,7 @@ void TileDetect_ExecuteInner(uint8 tile, uint16 offs, uint16 bits, bool is_indoo
     tiledetect_stair_tile |= bits;
     break;
   case 0x27:  // TileBehavior_Hookshottables
-    R14 |= bits;
+    g_r14 |= bits;
     tiledetect_misc_tiles |= bits;
     break;
   case 0x28:  // TileBehavior_Ledge_North
@@ -375,11 +375,11 @@ void TileDetect_ExecuteInner(uint8 tile, uint16 offs, uint16 bits, bool is_indoo
     if (!flag_block_link_menu && !(dung_savegame_state_bits & 0x8000))
       bitfield_spike_cactus_tiles |= bits;
     else
-      R14 |= bits;
+      g_r14 |= bits;
     break;
   case 0x46:  // TileBehavior_HylianPlaque
     tiledetect_spike_floor_and_tile_triggers |= bits;
-    R14 |= bits;
+    g_r14 |= bits;
     break;
   case 0x48: case 0x4a:  // TileBehavior_DiggableGround
     tiledetect_destruction_aftermath |= bits;
@@ -396,7 +396,7 @@ void TileDetect_ExecuteInner(uint8 tile, uint16 offs, uint16 bits, bool is_indoo
           bitmask_for_dashable_tiles |= bits << 4;
         tiledetect_read_something |= bits;
         interacting_with_liftable_tile_x2 = i * 2;
-        R14 |= bits;
+        g_r14 |= bits;
         tiledetect_misc_tiles |= bits;
         break;
       }
@@ -404,20 +404,20 @@ void TileDetect_ExecuteInner(uint8 tile, uint16 offs, uint16 bits, bool is_indoo
     break;
   }
   case 0x57:  // TileBehavior_BonkRocks
-    R14 |= bits;
+    g_r14 |= bits;
     bitmask_for_dashable_tiles |= bits << 4;
     break;
   case 0x58: case 0x59: case 0x5a: case 0x5b: case 0x5c: case 0x5d:  // TileBehavior_Chest
     tiledetect_misc_tiles |= bits;
     index_of_interacting_tile = tile;
     if (dung_chest_locations[tile - 0x58] >= 0x8000) {
-      R14 |= bits;
+      g_r14 |= bits;
       tiledetect_key_lock_gravestones |= bits << 4;
       if (bits & 2)
         tiledetect_tile_type = tile;
     } else {
       tiledetect_chest |= bits;  // small key lock
-      R14 |= bits;
+      g_r14 |= bits;
     }
     break;
   case 0x60:  // TileBehavior_RupeeTile
@@ -435,10 +435,10 @@ void TileDetect_ExecuteInner(uint8 tile, uint16 offs, uint16 bits, bool is_indoo
     tiledetect_misc_tiles |= bits;
     index_of_interacting_tile = tile;
     tiledetect_chest |= bits;  // small key lock
-    R14 |= bits;
+    g_r14 |= bits;
     break;
   case 0x67:  // TileBehavior_CrystalPeg_Up
-    R14 |= bits;
+    g_r14 |= bits;
     tiledetect_misc_tiles |= bits;
     bitfield_spike_cactus_tiles |= bits << 4;
     break;
@@ -457,55 +457,55 @@ void TileDetect_ExecuteInner(uint8 tile, uint16 offs, uint16 bits, bool is_indoo
   case 0x70: case 0x71: case 0x72: case 0x73: case 0x74: case 0x75: case 0x76: case 0x77: case 0x78: case 0x79: case 0x7a: case 0x7b: case 0x7c: case 0x7d: case 0x7e: case 0x7f:  // TileBehavior_ManipulablyReplaced
     if (bits & 2)
       tiledetect_var2 |= 1 << (tile & 0xf);
-    R14 |= bits;
+    g_r14 |= bits;
     tiledetect_misc_tiles |= bits;
     break;
   case 0x80: case 0x81: case 0x84: case 0x85: case 0x86: case 0x87: case 0x88: case 0x89: case 0x8a: case 0x8b: case 0x8c: case 0x8d:  // TileHandlerIndoor_80
-    R14 |= bits << 4;
+    g_r14 |= bits << 4;
     tiledetect_var1 = 2 * (tile & 1);
     break;
   case 0x82: case 0x83:  // TileHandlerIndoor_82
-    R14 |= (bits << 4) | (bits << 8);
+    g_r14 |= (bits << 4) | (bits << 8);
     tiledetect_var1 = 2 * (tile & 1);
     break;
   case 0x8e: case 0x8f:  // TileBehavior_Entrance
-    R14 |= bits << 4;
+    g_r14 |= bits << 4;
     bitmask_for_dashable_tiles |= bits;
     tiledetect_var1 = 0;
     break;
   case 0x90: case 0x91: case 0x92: case 0x93: case 0x94: case 0x95: case 0x96: case 0x97:  // TileBehavior_LayerToggleShutterDoor
     room_transitioning_flags = 1;
-    R14 |= (bits << 4) | (bits << 8);
+    g_r14 |= (bits << 4) | (bits << 8);
     tiledetect_var1 = 2 * (tile & 1);
     break;
   case 0x98: case 0x99: case 0x9a: case 0x9b: case 0x9c: case 0x9d: case 0x9e: case 0x9f: case 0xa8: case 0xa9: case 0xaa: case 0xab: case 0xac: case 0xad: case 0xae: case 0xaf:  // TileBehavior_LayerAndDungeonToggleShutterDoor
     room_transitioning_flags = 3;
-    R14 |= (bits << 4) | (bits << 8);
+    g_r14 |= (bits << 4) | (bits << 8);
     tiledetect_var1 = 2 * (tile & 1);
     break;
   case 0xa0: case 0xa1: case 0xa4: case 0xa5:  // TileBehavior_DungeonToggleManualDoor
     room_transitioning_flags = 2;
-    R14 |= bits << 4;
+    g_r14 |= bits << 4;
     tiledetect_var1 = 2 * (tile & 1);
     break;
   case 0xa2: case 0xa3:  // TileBehavior_DungeonToggleShutterDoor
     room_transitioning_flags = 2;
-    R14 |= (bits << 4) | (bits << 8);
+    g_r14 |= (bits << 4) | (bits << 8);
     tiledetect_var1 = 2 * (tile & 1);
     break;
   case 0xc0: case 0xc1: case 0xc2: case 0xc3: case 0xc4: case 0xc5: case 0xc6: case 0xc7: case 0xc8: case 0xc9: case 0xca: case 0xcb: case 0xcc: case 0xcd: case 0xce: case 0xcf:  // TileBehavior_LightableTorch
-    R14 |= bits;
+    g_r14 |= bits;
     tiledetect_misc_tiles |= bits;
     break;
   case 0xf0: case 0xf1: case 0xf2: case 0xf3: case 0xf4: case 0xf5: case 0xf6: case 0xf7: case 0xf8: case 0xf9: case 0xfa: case 0xfb: case 0xfc: case 0xfd: case 0xfe: case 0xff:  // TileBehavior_FlaggableDoor
-    R14 |= bits;
+    g_r14 |= bits;
     tiledetect_misc_tiles |= bits << 4;
     break;
 
   case 0x42:  // TileBehavior_GraveStone
     if (!is_indoors) {
       tiledetect_key_lock_gravestones |= bits;
-      R14 |= bits;
+      g_r14 |= bits;
     }
     break;
   case 0x4c: case 0x4d:  // TileBehavior_UnusedCornerType

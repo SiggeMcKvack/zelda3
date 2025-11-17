@@ -150,8 +150,8 @@ void Intro_SetupScreen() {  // 828000
   for (int i = 0; i < 17; i++)
     g_zenv.vram[0x27f0 + i] = 0;
 
-  R16 = 0x1ffe;
-  R18 = 0x1bfe;
+  g_r16 = 0x1ffe;
+  g_r18 = 0x1bfe;
 }
 
 void Intro_LoadTextPointersAndPalettes() {  // 828116
@@ -206,7 +206,7 @@ void Credits_LoadScene_Overworld_Overlay() {  // 828697
 void Credits_LoadScene_Overworld_LoadMap() {  // 8286a5
   Overworld_LoadAndBuildScreen();
   Credits_PrepAndLoadSprites();
-  R16 = 0;
+  g_r16 = 0;
   subsubmodule_index = 0;
 }
 
@@ -253,7 +253,7 @@ void Credits_LoadScene_Dungeon() {  // 8286fd
   palette_sp6r_indoors = 10;
   Dungeon_LoadPalettes();
   BGMODE_copy = 9;
-  R16 = 0;
+  g_r16 = 0;
   INIDISP_copy = 0;
   submodule_index++;
   Credits_PrepAndLoadSprites();
@@ -416,7 +416,7 @@ void Module19_TriforceRoom() {  // 829fec
     dialogue_message_index = 0x173;
     Main_ShowTextMessage();
     RenderText();
-    BYTE(R16) = 0x80;
+    BYTE(g_r16) = 0x80;
     main_module_index = 25;
     subsubmodule_index++;
     break;
@@ -450,7 +450,7 @@ void Module19_TriforceRoom() {  // 829fec
     break;
   case 12:  //
     AdvancePolyhedral();
-    if (!--BYTE(R16)) {
+    if (!--BYTE(g_r16)) {
       Palette_AnimGetMasterSword2();
       submodule_index++;
     }
@@ -556,14 +556,14 @@ void Intro_Init_Continue() {  // 8cc170
 }
 
 void Intro_Clear1kbBlocksOfWRAM() {  // 8cc1a0
-  uint16 i = R16;
+  uint16 i = g_r16;
   uint8 *dst = (uint8 *)&g_ram[0x2000];
   do {
     for (int j = 0; j < 15; j++)
       WORD(dst[i + j * 0x2000]) = 0;
-  } while ((i -= 2) != R18);
-  R16 = i;
-  R18 = i - 0x400;
+  } while ((i -= 2) != g_r18);
+  g_r16 = i;
+  g_r18 = i - 0x400;
 }
 
 void Intro_InitializeMemory_darken() {  // 8cc1f5
@@ -580,8 +580,8 @@ void Intro_InitializeMemory_darken() {  // 8cc1f5
   BYTE(overworld_screen_index) = 0;
   palette_main_indoors = 0;
   overworld_palette_aux3_bp7_lo = 0;
-  R16 = 0;
-  R18 = 0;
+  g_r16 = 0;
+  g_r18 = 0;
   darkening_or_lightening_screen = 2;
   palette_filter_countdown = 31;
   mosaic_target_level = 0;
@@ -1421,7 +1421,7 @@ void Credits_ScrollScene_Overworld() {  // 8e9958
   int i = submodule_index >> 1;
 
   link_x_vel = link_y_vel = 0;
-  if (R16 >= 0x40 && !(R16 & 1)) {
+  if (g_r16 >= 0x40 && !(g_r16 & 1)) {
     if (BG2VOFS_copy2 != kEnding1_TargetScrollY[i])
       link_y_vel = kEnding1_Yvel[i];
     if (BG2HOFS_copy2 != kEnding1_TargetScrollX[i])
@@ -1438,7 +1438,7 @@ void Credits_ScrollScene_Dungeon() {  // 8e99c5
       sprite_delay_main[k]--;
 
   int i = submodule_index >> 1;
-  if (R16 >= 0x40 && !(R16 & 1)) {
+  if (g_r16 >= 0x40 && !(g_r16 & 1)) {
     if (BG2VOFS_copy2 != kEnding1_TargetScrollY[i])
       BG2VOFS_copy2 += kEnding1_Yvel[i];
     if (BG2HOFS_copy2 != kEnding1_TargetScrollX[i])
@@ -1548,7 +1548,7 @@ void Credits_HandleSceneFade() {  // 8e9a2a
     do {
       sprite_oam_flags[k] = (sprite_x_vel[k] - 1) >> 1 & 0x40 ^ 0x71;
       sprite_graphics[k] = frame_counter >> 3 & 1;
-      if (R16 >= kEnding_Case4_Ctr[k] && !sprite_delay_main[k]) {
+      if (g_r16 >= kEnding_Case4_Ctr[k] && !sprite_delay_main[k]) {
         uint8 a = kEnding_Case4_DelayVel[sprite_A[k]];
         sprite_delay_main[k] = a & 0xf8;
         sprite_y_vel[k] = kEnding_Case4_XYvel[(a & 7) + 2];
@@ -1565,14 +1565,14 @@ void Credits_HandleSceneFade() {  // 8e9a2a
     static const uint8 kEnding_Case5_Tab0[2] = { 0, 4 };
     static const uint16 kEnding_Case5_Tab1[2] = { 0xa, 0x224 };
     static const uint8 kEnding_Case5_Tab2[2] = { 10, 14 };
-    if (R16 == 0x200)
+    if (g_r16 == 0x200)
       sound_effect_1 = 1;
-    else if (R16 == 0x208)
+    else if (g_r16 == 0x208)
       sound_effect_1 = 0x2c;
-    if ((uint16)(R16 - 0x208) < 0x30)
-      Credits_SpriteDraw_AddSparkle(2, 10, R16 - 0x208); // wtf x,y
+    if ((uint16)(g_r16 - 0x208) < 0x30)
+      Credits_SpriteDraw_AddSparkle(2, 10, g_r16 - 0x208); // wtf x,y
     k = 3;
-    if (R16 >= 0x200)
+    if (g_r16 >= 0x200)
       sprite_graphics[k] = 1;
     sprite_oam_flags[k] = 0x31;
     Credits_SpriteDraw_Single(k, 4, 8);
@@ -1602,8 +1602,8 @@ void Credits_HandleSceneFade() {  // 8e9a2a
       sprite_type[k] = kEnding_Case6_SprType[k];
       Oam_AllocateFromRegionA(kEnding_Case6_OamSize[k]);
       sprite_ai_state[k] = kEnding_Case6_State[k];
-      j = (R16 >= 0x26f) ? k + 3 : k;
-      if (R16 == 0x26f)
+      j = (g_r16 >= 0x26f) ? k + 3 : k;
+      if (g_r16 == 0x26f)
         sound_effect_2 = 0x21;
       sprite_graphics[k] = kEnding_Case6_Gfx[j];
       sprite_oam_flags[k] = 0x33;
@@ -1622,7 +1622,7 @@ void Credits_HandleSceneFade() {  // 8e9a2a
     if (!(frame_counter & 15))
       sprite_graphics[k] ^= 1;
     SpriteActive_Main(k);
-    if (R16 >= 0x180) {
+    if (g_r16 >= 0x180) {
       sprite_y_vel[k] = 4;
       if (sprite_y_lo[k] != 0x7c)
         Sprite_MoveXY(k);
@@ -1635,7 +1635,7 @@ void Credits_HandleSceneFade() {  // 8e9a2a
     if (!sprite_delay_main[k]) {
       static const int8 kEnding_Case7_Gfx[2] = { 1, -1 };
       sprite_delay_main[k] = 4;
-      sprite_graphics[k] = sprite_graphics[k] + kEnding_Case7_Gfx[R16 >> 9 & 1] & 7;
+      sprite_graphics[k] = sprite_graphics[k] + kEnding_Case7_Gfx[g_r16 >> 9 & 1] & 7;
     }
     SpriteActive_Main(k);
     break;
@@ -1645,7 +1645,7 @@ void Credits_HandleSceneFade() {  // 8e9a2a
     Oam_AllocateFromRegionA(0x2c);
     sprite_oam_flags[k] = 0x3b;
     Sprite_Get16BitCoords(k);
-    sprite_graphics[k] = R16 < 0x1c0 ? R16 >> 5 & 1 : 2;
+    sprite_graphics[k] = g_r16 < 0x1c0 ? g_r16 >> 5 & 1 : 2;
     SpriteActive_Main(k);
     break;
   case 9:
@@ -1719,13 +1719,13 @@ void Credits_HandleSceneFade() {  // 8e9a2a
     break;
   }
   case 11:
-    if (R16 >= 0x170) {
+    if (g_r16 >= 0x170) {
       for (int k = 4; k != 6; k++) {
         Credits_SpriteDraw_Single(k, 1, 0x3e);
       }
       k = 0;
       sprite_oam_flags[k] = 0x39;
-      if (R16 < 0x1c0) {
+      if (g_r16 < 0x1c0) {
         sprite_graphics[k] = 2;
       } else if (sprite_delay_main[k] == 0) {
         sprite_delay_main[k] = 0x20;
@@ -1796,7 +1796,7 @@ void Credits_HandleSceneFade() {  // 8e9a2a
     break;
   case 13:
     k = 0;
-    if (R16 == 0x200)
+    if (g_r16 == 0x200)
       sprite_x_vel[k] = -4;
     sprite_graphics[k] = frame_counter >> 4 & 1;
     if (sprite_x_lo[k] == 56) {
@@ -1887,15 +1887,15 @@ void Credits_HandleSceneFade() {  // 8e9a2a
   }
 
   k = submodule_index >> 1;
-  if (R16 >= kEnding1_3_Tab0[k]) {
-    if (!(R16 & 1) && !--INIDISP_copy)
+  if (g_r16 >= kEnding1_3_Tab0[k]) {
+    if (!(g_r16 & 1) && !--INIDISP_copy)
       submodule_index++;
     else
-      R16++;
+      g_r16++;
   } else {
-    if (!(R16 & 1) && INIDISP_copy != 15)
+    if (!(g_r16 & 1) && INIDISP_copy != 15)
       INIDISP_copy++;
-    R16++;
+    g_r16++;
   }
   BG2HOFS_copy = BG2HOFS_copy2;
   BG2VOFS_copy = BG2VOFS_copy2;
@@ -2443,8 +2443,8 @@ void EndSequence_32() {  // 8ebc6d
   main_palette_buffer[0] = 0;
   TM_copy = 0x16;
   TS_copy = 0;
-  R16 = 0x6800;
-  R18 = 0;
+  g_r16 = 0x6800;
+  g_r18 = 0;
   ending_which_dung = 0;
   BG2VOFS_copy2 = -0x48;
   BG2HOFS_copy2 = 0x90;
@@ -2498,12 +2498,12 @@ void Credits_FadeColorAndBeginAnimating() {  // 8ebd8b
     room_bounds_y.b0 = room_bounds_y.a0 >> 1;
     room_bounds_y.b1 = room_bounds_y.a1 >> 1;
     if (BG3VOFS_copy2 == 3288) {
-      R16 = 0x80;
+      g_r16 = 0x80;
       submodule_index++;
     } else {
       BG3VOFS_copy2++;
       if ((BG3VOFS_copy2 & 7) == 0) {
-        R18 = BG3VOFS_copy2 >> 3;
+        g_r18 = BG3VOFS_copy2 >> 3;
         Credits_AddNextAttribution();
       }
     }
@@ -2521,15 +2521,15 @@ void Credits_AddNextAttribution() {  // 8ebe24
 
   uint16 *dst = vram_upload_data + (vram_upload_offset >> 1);
 
-  dst[0] = swap16(R16);
+  dst[0] = swap16(g_r16);
   dst[1] = 0x3e40;
   dst[2] = kEnding_MapData[159];
   dst += 3;
 
-  if (R18 < 394) {
-    const uint8 *src = &kEnding_Credits_Text[kEnding_Credits_Offs[R18]];
+  if (g_r18 < 394) {
+    const uint8 *src = &kEnding_Credits_Text[kEnding_Credits_Offs[g_r18]];
     if (*src != 0xff) {
-      *dst++ = swap16(R16 + *src++);
+      *dst++ = swap16(g_r16 + *src++);
       int n = *src++;
       *dst++ = swap16(n);
       n = (n + 1) >> 1;
@@ -2538,11 +2538,11 @@ void Credits_AddNextAttribution() {  // 8ebe24
       } while (--n);
     }
 
-    if ((ending_which_dung & 1) || R18 * 2 == kEnding_Digits_ScrollY[ending_which_dung >> 1]) {
+    if ((ending_which_dung & 1) || g_r18 * 2 == kEnding_Digits_ScrollY[ending_which_dung >> 1]) {
       int t = kEnding_Credits_DigitChar[ending_which_dung & 1];
       WORD(g_ram[0xce]) = t;
 
-      dst[0] = swap16(R16 + 0x19);
+      dst[0] = swap16(g_r16 + 0x19);
       dst[1] = 0x500;
 
       uint16 deaths = deaths_per_palace[kEnding_Func9_Tab2[ending_which_dung >> 1]];
@@ -2557,9 +2557,9 @@ void Credits_AddNextAttribution() {  // 8ebe24
     }
   }
 
-  R16 += 0x20;
-  if (!(R16 & 0x3ff))
-    R16 = (R16 & 0x6800) ^ 0x800;
+  g_r16 += 0x20;
+  if (!(g_r16 & 0x3ff))
+    g_r16 = (g_r16 & 0x6800) ^ 0x800;
   vram_upload_offset = (char *)dst - (char *)vram_upload_data;
   BYTE(*dst) = 0xff;
   nmi_load_bg_from_vram = 1;
@@ -2597,28 +2597,28 @@ void Credits_BrightenTriangles() {  // 8ec37c
 }
 
 void Credits_StopCreditsScroll() {  // 8ec391
-  if (!--BYTE(R16)) {
+  if (!--BYTE(g_r16)) {
     darkening_or_lightening_screen = 0;
     palette_filter_countdown = 0;
     WORD(mosaic_target_level) = 0x1f;
     submodule_index++;
-    R16 = 0xc0;
-    R18 = 0;
+    g_r16 = 0xc0;
+    g_r18 = 0;
   }
   Credits_AnimateTheTriangles();
 }
 
 void Credits_FadeAndDisperseTriangles() {  // 8ec3b8
-  BYTE(R16)--;
-  if (!BYTE(R18)) {
+  BYTE(g_r16)--;
+  if (!BYTE(g_r18)) {
     ApplyPaletteFilter_bounce();
     if (BYTE(palette_filter_countdown)) {
       Credits_AnimateTheTriangles();
       return;
     }
-    BYTE(R18)++;
+    BYTE(g_r18)++;
   }
-  if (BYTE(R16)) {
+  if (BYTE(g_r16)) {
     Credits_AnimateTheTriangles();
     return;
   }

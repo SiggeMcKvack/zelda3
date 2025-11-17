@@ -4613,7 +4613,7 @@ void RoomTag_GanonDoor(int tagidx) {  // 81c767
     link_force_hold_sword_up = 1;
     button_mask_b_y = 0;
     button_b_frames = 0;
-    R16 = 0x364;
+    g_r16 = 0x364;
   }
 }
 
@@ -5522,8 +5522,8 @@ uint8 Dungeon_LiftAndReplaceLiftable(Point16U *pt) {  // 81d9ec
   pt->x = x;
   pt->y = y;
 
-  R16 = y;
-  R18 = x;
+  g_r16 = y;
+  g_r18 = x;
 
   x &= 0x1f8;
   y &= 0x1f8;
@@ -7750,8 +7750,8 @@ void Module07_1A_RoomDraw_OpenTriforceDoor_bounce() {  // 829916
   static const uint16 kOpenGanonDoor_Tab[4] = { 0x2556, 0x2596, 0x25d6, 0x2616 };
 
   flag_is_link_immobilized = 1;
-  if (R16 != 0) {
-    if (--BYTE(R16) || --HIBYTE(R16))
+  if (g_r16 != 0) {
+    if (--BYTE(g_r16) || --HIBYTE(g_r16))
       return;
     sound_effect_ambient = 21;
     link_force_hold_sword_up = 0;

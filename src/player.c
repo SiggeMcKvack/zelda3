@@ -2162,7 +2162,7 @@ void Link_CheckForSwordSwing() {  // 879cd9
       return;
     if (is_standing_in_doorway) {
       TileDetect_SwordSwingDeepInDoor(is_standing_in_doorway);
-      if ((R14 & 0x30) == 0x30)
+      if ((g_r14 & 0x30) == 0x30)
         return;
     }
     button_mask_b_y |= 0x80;
@@ -2970,7 +2970,7 @@ void LinkState_CrossingWorlds() {  // 87a9b1
   Link_ResetProperties_B();
   TileCheckForMirrorBonk();
 
-  if ((overworld_screen_index & 0x40) != last_light_vs_dark_world && ((t = R12 | R14) & 0xc) != 0 && BitSum4(t) >= 2)
+  if ((overworld_screen_index & 0x40) != last_light_vs_dark_world && ((t = g_r12 | g_r14) & 0xc) != 0 && BitSum4(t) >= 2)
     goto do_mirror;
 
   if (BitSum4(tiledetect_deepwater) >= 2) {
@@ -3876,15 +3876,15 @@ void Player_LimitDirections_Inner() {  // 87b660
     link_last_direction_moved_towards = link_direction & 8 ? 0 : 1;
     TileDetect_Movement_VerticalSlopes(link_last_direction_moved_towards);
 
-    if ((R14 & 0x30) && !(tiledetect_var1 & 2) && !(((R14 & 0x30) >> 4) & link_direction) && (link_direction & 3)) {
+    if ((g_r14 & 0x30) && !(tiledetect_var1 & 2) && !(((g_r14 & 0x30) >> 4) & link_direction) && (link_direction & 3)) {
       link_direction_mask_a = kMasks[(link_direction & 2) ? 2 : 3];
     } else {
       if (dung_hdr_collision == 0) {
-        if (link_auxiliary_state != 0 && (R12 & 3))
+        if (link_auxiliary_state != 0 && (g_r12 & 3))
           goto set_thingy;
       }
 
-      if (R14 & 3) {
+      if (g_r14 & 3) {
         link_moving_against_diag_tile = 0;
         if (link_flag_moving && (bitfield_spike_cactus_tiles & 3) == 0 && (link_direction & 3)) {
           swimcoll_var1[0] = 0;
@@ -3904,15 +3904,15 @@ set_thingy:
       link_last_direction_moved_towards = link_direction & 2 ? 2 : 3;
       TileDetect_Movement_HorizontalSlopes(link_last_direction_moved_towards);
 
-      if ((R14 & 0x30) && (tiledetect_var1 & 2) && !(((R14 & 0x30) >> 2) & link_direction) && (link_direction & 0xC)) {
+      if ((g_r14 & 0x30) && (tiledetect_var1 & 2) && !(((g_r14 & 0x30) >> 2) & link_direction) && (link_direction & 0xC)) {
         link_direction_mask_b = kMasks[(link_direction & 8) ? 0 : 1];
       } else {
         if (dung_hdr_collision == 0) {
-          if (link_auxiliary_state != 0 && (R12 & 3))
+          if (link_auxiliary_state != 0 && (g_r12 & 3))
             goto set_thingy_b;
         }
 
-        if (R14 & 3) {
+        if (g_r14 & 3) {
           link_moving_against_diag_tile = 0;
           if (link_flag_moving && (bitfield_spike_cactus_tiles & 3) == 0 && (link_direction & 0xC)) {
             swimcoll_var1[1] = 0;
@@ -3952,14 +3952,14 @@ void Link_HandleCardinalCollision() {  // 87b7c7
       goto yx;
     tile_coll_flag = 2;
     Player_TileDetectNearby();
-    byte_7E0316 = R14;
+    byte_7E0316 = g_r14;
     if (byte_7E0316 == 0)
       goto yx;
     link_y_vel += dung_floor_y_vel;
     link_x_vel += dung_floor_x_vel;
 
     uint8 a;
-    a = R14;
+    a = g_r14;
     if (a == 12 || a == 3)
       goto yx;
     if (a == 10 || a == 5)
@@ -3982,7 +3982,7 @@ xy:   RunSlopeCollisionChecks_HorizontalFirst();
 
   if (dung_hdr_collision == 2) {
     Player_TileDetectNearby();
-    if ((R14 | byte_7E0316) == 0xf) {
+    if ((g_r14 | byte_7E0316) == 0xf) {
       if (!countdown_for_blink)
         countdown_for_blink = 58;
       if (link_direction == 0) {
@@ -4095,7 +4095,7 @@ void StartMovementCollisionChecks_Y() {  // 87ba0a
 
 void StartMovementCollisionChecks_Y_HandleIndoors() {  // 87ba35
   if (sign8(link_state_bits) || link_incapacitated_timer != 0) {
-    R14 |= R14 >> 4;
+    g_r14 |= g_r14 >> 4;
   } else {
     if (is_standing_in_doorway == 2) {
       if (link_num_orthogonal_directions == 0) {
@@ -4110,25 +4110,25 @@ void StartMovementCollisionChecks_Y_HandleIndoors() {  // 87ba35
         goto endif_1b;
       }
     } // else_3
-    if (R14 & 0x70) {
-      if ((R14 >> 8) & 7) {
+    if (g_r14 & 0x70) {
+      if ((g_r14 >> 8) & 7) {
         force_move_any_direction = (sign8(link_y_vel)) ? 8 : 4;
       } // endif_6
 
       is_standing_in_doorway = 1;
       link_on_conveyor_belt = 0;
-      if ((R14 & 0x70) != 0x70) {
-        if (R14 & 5) { // if_7
+      if ((g_r14 & 0x70) != 0x70) {
+        if (g_r14 & 5) { // if_7
           link_moving_against_diag_tile = 0;
           Link_AddInVelocityYFalling();
           CalculateSnapScratch_Y();
           is_standing_in_doorway = 0;
 
-          if (R14 & 0x20 && (R14 & 1) == 0 && (link_x_coord & 7) == 1)
+          if (g_r14 & 0x20 && (g_r14 & 1) == 0 && (link_x_coord & 7) == 1)
             link_x_coord &= ~7;
           goto else_7;
         }
-        if (R14 & 0x20)
+        if (g_r14 & 0x20)
           goto else_7;
       } else { // else_7
 else_7:
@@ -4152,7 +4152,7 @@ endif_1b:
 
 label_3:
 
-  if ((R14 & 7) == 0 && (R12 & 5) != 0) {
+  if ((g_r14 & 7) == 0 && (g_r12 & 5) != 0) {
     link_on_conveyor_belt = 0;
     FlagMovingIntoSlopes_Y();
     if ((link_moving_against_diag_tile & 0xf) != 0)
@@ -4161,16 +4161,16 @@ label_3:
 
   link_moving_against_diag_tile = 0;
   if (tiledetect_key_lock_gravestones & 0x20) {
-    uint16 bak = R14;
+    uint16 bak = g_r14;
     int dummy;
     OpenChestForItem(tiledetect_tile_type, &dummy);
     tiledetect_tile_type = 0;
-    R14 = bak;
+    g_r14 = bak;
   }
   if (!link_is_on_lower_level) {
     if (tiledetect_water_staircase & 7) {
       byte_7E0322 |= 1;
-    } else if ((bitfield_spike_cactus_tiles & 7) == 0 && (R14 & 2) == 0) { // else_11
+    } else if ((bitfield_spike_cactus_tiles & 7) == 0 && (g_r14 & 2) == 0) { // else_11
       byte_7E0322 &= ~1;
     } // endif_11
   } else { // else_10
@@ -4200,7 +4200,7 @@ label_3:
   } else if (tiledetect_var4 & 0x2200) {
     link_on_conveyor_belt = tiledetect_var4 & 0x2000 ? 4 : 3;
   } else {
-    if (!(bitfield_spike_cactus_tiles & 7) && !(R14 & 2))
+    if (!(bitfield_spike_cactus_tiles & 7) && !(g_r14 & 2))
       link_on_conveyor_belt = 0;
   } // endif_15
 
@@ -4234,14 +4234,14 @@ endif_19:
     // else_20
     if ((tiledetect_normal_tiles & 2) && link_is_in_deep_water != 0) {
       if (link_auxiliary_state != 0) {
-        R14 = 7;
+        g_r14 = 7;
       } else {
         Link_CancelDash();
         link_direction_last = link_some_direction_bits;
         link_is_in_deep_water = 0;
         if (AncillaAdd_Splash(0x15, 0)) {
           link_is_in_deep_water = 1;
-          R14 = 7;
+          g_r14 = 7;
         } else {
           link_disable_sprite_damage = 1;
           Link_HopInOrOutOfWater_Y();
@@ -4252,8 +4252,8 @@ endif_19:
 
   if ((tiledetect_stair_tile & 7) == 7) {
     if (link_incapacitated_timer) {
-      R14 &= ~0xff;
-      R14 |= tiledetect_stair_tile & 7;
+      g_r14 &= ~0xff;
+      g_r14 |= tiledetect_stair_tile & 7;
       HandlePushingBonkingSnaps_Y();
       return;
     }
@@ -4279,7 +4279,7 @@ endif_19:
   if (link_speed_modifier == 1)
     link_speed_modifier = 2;
 
-  if (tiledetect_pit_tile & 5 && (R14 & 2) == 0) {
+  if (tiledetect_pit_tile & 5 && (g_r14 & 2) == 0) {
     if (link_player_handler_state == 5 || link_player_handler_state == 2)
       return;
     byte_7E005C = 9;
@@ -4301,8 +4301,8 @@ endif_19:
         return;
       }
     } else {
-      R14 &= ~0xFF;
-      R14 |= bitfield_spike_cactus_tiles & 7;
+      g_r14 &= ~0xFF;
+      g_r14 |= bitfield_spike_cactus_tiles & 7;
     } // endif_24
   } // endif_24
   if (dung_hdr_collision == 0 || dung_hdr_collision == 4 || !link_is_on_lower_level) {
@@ -4317,11 +4317,11 @@ endif_19:
           uint8 idx = FindFreeMovingBlockSlot(i);
           if (idx == 0xff)
             continue;
-          R14 = idx;
+          g_r14 = idx;
           if (InitializePushBlock(idx, i * 2))
             continue;
           Sprite_Dungeon_DrawSinglePushBlock(idx * 2);
-          R14 = 4;  // Unwanted side effect
+          g_r14 = 4;  // Unwanted side effect
           pushedblock_facing[idx] = link_last_direction_moved_towards * 2;
           push_block_direction = link_last_direction_moved_towards * 2;
           pushedblocks_target[idx] = (pushedblocks_y_lo[idx] - (link_last_direction_moved_towards == 1)) & 0xf;
@@ -4337,7 +4337,7 @@ endif_26:
 }
 
 void HandlePushingBonkingSnaps_Y() {  // 87bdb1
-  if (R14 & 7) {
+  if (g_r14 & 7) {
     if (link_player_handler_state == kPlayerState_Swimming) {
       if ((uint8)dung_floor_y_vel == 0)
         ResetAllAcceleration();
@@ -4348,16 +4348,16 @@ void HandlePushingBonkingSnaps_Y() {  // 87bdb1
       }
     }  // endif_2
 
-    if (R14 & 2 || (R14 & 5) == 5) {
-      uint16 bak = R14;
+    if (g_r14 & 2 || (g_r14 & 5) == 5) {
+      uint16 bak = g_r14;
       Link_BonkAndSmash();
       RepelDash();
-      R14 = bak;
+      g_r14 = bak;
     }
 
     fallhole_var1 = 1;
 
-    if ((R14 & 2) == 2) {
+    if ((g_r14 & 2) == 2) {
       Link_AddInVelocityYFalling();
     } else {
       if (link_num_orthogonal_directions == 1)
@@ -4369,13 +4369,13 @@ void HandlePushingBonkingSnaps_Y() {  // 87bdb1
 
 label_a:
 
-    if ((R14 & 5) == 5) {
+    if ((g_r14 & 5) == 5) {
       Link_BonkAndSmash();
       RepelDash();
-    } else if (R14 & 4) {
+    } else if (g_r14 & 4) {
       uint8 tt = sign8(link_y_vel) ? link_y_vel : -link_y_vel;
       uint8 r0 = sign8(tt) ? 0xff : 1;
-      if ((R14 & 2) == 0) {
+      if ((g_r14 & 2) == 0) {
         if (link_x_coord & 7) {
           link_x_coord += (int8)r0;
           HandleNudging(r0);
@@ -4387,7 +4387,7 @@ label_a:
     } else { // else_7
       uint8 tt = sign8(link_y_vel) ? -link_y_vel : link_y_vel;
       uint8 r0 = sign8(tt) ? 0xff : 1;
-      if ((R14 & 2) == 0) {
+      if ((g_r14 & 2) == 0) {
         if (link_x_coord & 7) {
           link_x_coord += (int8)r0;
           HandleNudging(r0);
@@ -4420,7 +4420,7 @@ void StartMovementCollisionChecks_Y_HandleOutdoors() {  // 87beaf
   if (link_speed_setting == 2)
     link_speed_setting = link_is_running ? 16 : 0;
 
-  if ((tiledetect_pit_tile & 5) != 0 && (R14 & 2) == 0) {
+  if ((tiledetect_pit_tile & 5) != 0 && (g_r14 & 2) == 0) {
     if (link_player_handler_state != 5 && link_player_handler_state != 2) {
       // start fall into hole
       byte_7E005C = 9;
@@ -4459,7 +4459,7 @@ void StartMovementCollisionChecks_Y_HandleOutdoors() {  // 87beaf
 
   if (link_is_in_deep_water) {
     if (tiledetect_vertical_ledge & 7) {
-      R14 = tiledetect_vertical_ledge & 7;
+      g_r14 = tiledetect_vertical_ledge & 7;
       HandlePushingBonkingSnaps_Y();
       return;
     }
@@ -4477,7 +4477,7 @@ void StartMovementCollisionChecks_Y_HandleOutdoors() {  // 87beaf
   }
 
   if (detection_of_ledge_tiles_horiz_uphoriz & 2 || detection_of_unknown_tile_types & 0x22) {
-    R14 = 7;
+    g_r14 = 7;
     HandlePushingBonkingSnaps_Y();
     return;
   }
@@ -4539,7 +4539,7 @@ void StartMovementCollisionChecks_Y_HandleOutdoors() {  // 87beaf
 
   if ((tiledetect_stair_tile & 7) == 7) {
     if (link_incapacitated_timer != 0) {
-      R14 = tiledetect_stair_tile & 7;
+      g_r14 = tiledetect_stair_tile & 7;
       HandlePushingBonkingSnaps_Y();
       return;
     } else if (!(link_last_direction_moved_towards & 2)) {
@@ -4555,7 +4555,7 @@ void StartMovementCollisionChecks_Y_HandleOutdoors() {  // 87beaf
   if (link_speed_modifier == 1)
     link_speed_modifier = 2;
 
-  if ((R14 & 7) == 0 && (R12 & 5) != 0) {
+  if ((g_r14 & 7) == 0 && (g_r12 & 5) != 0) {
     FlagMovingIntoSlopes_Y();
     if ((link_moving_against_diag_tile & 0xf) != 0)
       return;
@@ -4564,9 +4564,9 @@ void StartMovementCollisionChecks_Y_HandleOutdoors() {  // 87beaf
   link_moving_against_diag_tile = 0;
   if (tiledetect_key_lock_gravestones & 2 && link_last_direction_moved_towards == 0) {
     if (link_is_running || sign8(--gravestone_push_timeout)) {
-      uint16 bak = R14;
+      uint16 bak = g_r14;
       AncillaAdd_GraveStone(0x24, 4);
-      R14 = bak;
+      g_r14 = bak;
       gravestone_push_timeout = 52;
     }
   } else {
@@ -4583,7 +4583,7 @@ void StartMovementCollisionChecks_Y_HandleOutdoors() {  // 87beaf
         return;
       }
     } else {
-      R14 = bitfield_spike_cactus_tiles & 7;
+      g_r14 = bitfield_spike_cactus_tiles & 7;
     }
   }  // endif_13
   HandlePushingBonkingSnaps_Y();
@@ -4631,7 +4631,7 @@ void Link_AddInVelocityYFalling() {  // 87c1e4
 // Adjust X coord to fit through door
 void CalculateSnapScratch_Y() {  // 87c1ff
   uint8 yv = link_y_vel;
-  if (R14 & 4) {
+  if (g_r14 & 4) {
     if (!sign8(yv)) yv = -yv;
   } else {
     if (sign8(yv)) yv = -yv;
@@ -4641,7 +4641,7 @@ void CalculateSnapScratch_Y() {  // 87c1ff
 
 void ChangeAxisOfPerpendicularDoorMovement_Y() {  // 87c23d
   link_cant_change_direction |= 2;
-  uint8 t = (R14 | (R14 >> 4)) & 0xf;
+  uint8 t = (g_r14 | (g_r14 >> 4)) & 0xf;
   if (!(t & 7)) {
     is_standing_in_doorway = 0;
     return;
@@ -4782,7 +4782,7 @@ void StartMovementCollisionChecks_X() {  // 87c4d4
 
 void StartMovementCollisionChecks_X_HandleIndoors() {  // 87c4ff
   if (sign8(link_state_bits) || link_incapacitated_timer != 0) {
-    R14 |= R14 >> 4;
+    g_r14 |= g_r14 >> 4;
   } else {
     if (link_num_orthogonal_directions == 0)
       link_speed_modifier = 0;
@@ -4796,22 +4796,22 @@ void StartMovementCollisionChecks_X_HandleIndoors() {  // 87c4ff
       goto label_3;
     } // else_3
 
-    if (R14 & 0x70) {
-      if ((R14 >> 8) & 7) {
+    if (g_r14 & 0x70) {
+      if ((g_r14 >> 8) & 7) {
         force_move_any_direction = (sign8(link_x_vel)) ? 2 : 1;
       } // endif_6
 
       is_standing_in_doorway = 2;
       link_on_conveyor_belt = 0;
-      if ((R14 & 0x70) != 0x70) {
-        if (R14 & 7) { // if_7
+      if ((g_r14 & 0x70) != 0x70) {
+        if (g_r14 & 7) { // if_7
           link_moving_against_diag_tile = 0;
           is_standing_in_doorway = 0;
           SnapOnX();
           CalculateSnapScratch_X();
           return;
         }
-        if (R14 & 0x70)
+        if (g_r14 & 0x70)
           goto else_7;
       } else { // else_7
 else_7:
@@ -4831,7 +4831,7 @@ else_7:
 
 label_3:
 
-  if ((R14 & 2) == 0 && (R12 & 5) != 0) {
+  if ((g_r14 & 2) == 0 && (g_r12 & 5) != 0) {
     link_on_conveyor_belt = 0;
     FlagMovingIntoSlopes_X();
     if ((link_moving_against_diag_tile & 0xf) != 0)
@@ -4842,7 +4842,7 @@ label_3:
   if (!link_is_on_lower_level) {
     if (tiledetect_water_staircase & 7) {
       byte_7E0322 |= 1;
-    } else if ((bitfield_spike_cactus_tiles & 7) == 0 && (R14 & 2) == 0) { // else_11
+    } else if ((bitfield_spike_cactus_tiles & 7) == 0 && (g_r14 & 2) == 0) { // else_11
       byte_7E0322 &= ~1;
     } // endif_11
   } else { // else_10
@@ -4872,7 +4872,7 @@ label_3:
   } else if (tiledetect_var4 & 0x2200) {
     link_on_conveyor_belt = tiledetect_var4 & 0x2000 ? 4 : 3;
   } else {
-    if (!(bitfield_spike_cactus_tiles & 7) && !(R14 & 2))
+    if (!(bitfield_spike_cactus_tiles & 7) && !(g_r14 & 2))
       link_on_conveyor_belt = 0;
   } // endif_15
 
@@ -4905,7 +4905,7 @@ endif_19:
     // else_20
     if ((tiledetect_normal_tiles & 7) == 7 && link_is_in_deep_water != 0) {
       if (link_auxiliary_state != 0) {
-        R14 = 7;
+        g_r14 = 7;
       } else {
         Link_CancelDash();
         if (link_auxiliary_state == 0) {
@@ -4919,7 +4919,7 @@ endif_19:
     }
   } // endif_21
 
-  if (tiledetect_pit_tile & 5 && (R14 & 2) == 0) {
+  if (tiledetect_pit_tile & 5 && (g_r14 & 2) == 0) {
     if (link_player_handler_state == 5 || link_player_handler_state == 2)
       return;
     byte_7E005C = 9;
@@ -4941,8 +4941,8 @@ endif_19:
         return;
       }
     } else {
-      R14 &= ~0xFF;
-      R14 |= bitfield_spike_cactus_tiles & 7;
+      g_r14 &= ~0xFF;
+      g_r14 |= bitfield_spike_cactus_tiles & 7;
     } // endif_24
   } // endif_24
   if (dung_hdr_collision == 0 || dung_hdr_collision == 4 || !link_is_on_lower_level) {
@@ -4957,11 +4957,11 @@ endif_19:
           uint8 idx = FindFreeMovingBlockSlot(i);
           if (idx == 0xff)
             continue;
-          R14 = idx;  // This seems like it's overwriting the tiledetector's stuff
+          g_r14 = idx;  // This seems like it's overwriting the tiledetector's stuff
           if (InitializePushBlock(idx, i * 2))
             continue;
           Sprite_Dungeon_DrawSinglePushBlock(idx * 2);
-          R14 = 4;
+          g_r14 = 4;
           pushedblock_facing[idx] = link_last_direction_moved_towards * 2;
           push_block_direction = link_last_direction_moved_towards * 2;
           pushedblocks_target[idx] = (pushedblocks_x_lo[idx] - (link_last_direction_moved_towards != 2)) & 0xf;
@@ -4982,20 +4982,20 @@ endif_26:
 }
 
 void HandlePushingBonkingSnaps_X() {  // 87c7fc
-  if (R14 & 7) {
+  if (g_r14 & 7) {
     if (link_player_handler_state == kPlayerState_Swimming && (uint8)dung_floor_x_vel == 0)
       ResetAllAcceleration();
 
-    if (R14 & 2) {
-      uint16 bak = R14;
+    if (g_r14 & 2) {
+      uint16 bak = g_r14;
       Link_BonkAndSmash();
       RepelDash();
-      R14 = bak;
+      g_r14 = bak;
     }
 
     fallhole_var1 = 1;
 
-    if ((R14 & 7) == 7) {
+    if ((g_r14 & 7) == 7) {
       SnapOnX();
     } else {
       if (link_num_orthogonal_directions == 2)
@@ -5005,13 +5005,13 @@ void HandlePushingBonkingSnaps_X() {  // 87c7fc
         goto returnb;
     } // endif_4
 
-    if ((R14 & 5) == 5) {
+    if ((g_r14 & 5) == 5) {
       Link_BonkAndSmash();
       RepelDash();
-    } else if (R14 & 4) {
+    } else if (g_r14 & 4) {
       uint8 tt = sign8(link_x_vel) ? link_x_vel : -link_x_vel;
       uint8 r0 = sign8(tt) ? 0xff : 1;
-      if ((R14 & 2) == 0) {
+      if ((g_r14 & 2) == 0) {
         if (link_y_coord & 7) {
           link_y_coord += (int8)r0;
           HandleNudging(r0);
@@ -5023,7 +5023,7 @@ void HandlePushingBonkingSnaps_X() {  // 87c7fc
     } else { // else_7
       uint8 tt = sign8(link_x_vel) ? -link_x_vel : link_x_vel;
       uint8 r0 = sign8(tt) ? 0xff : 1;
-      if ((R14 & 2) == 0) {
+      if ((g_r14 & 2) == 0) {
         if (link_y_coord & 7) {
           link_y_coord += (int8)r0;
           HandleNudging(r0);
@@ -5059,7 +5059,7 @@ void StartMovementCollisionChecks_X_HandleOutdoors() {  // 87c8e9
       link_speed_setting = 0;
   }
 
-  if ((tiledetect_pit_tile & 5) != 0 && (R14 & 2) == 0) {
+  if ((tiledetect_pit_tile & 5) != 0 && (g_r14 & 2) == 0) {
     if (link_player_handler_state != 5 && link_player_handler_state != 2) {
       // start fall into hole
       byte_7E005C = 9;
@@ -5098,7 +5098,7 @@ void StartMovementCollisionChecks_X_HandleOutdoors() {  // 87c8e9
 
   if (link_is_in_deep_water ? ((detection_of_ledge_tiles_horiz_uphoriz & 7) == 7) : (tiledetect_vertical_ledge & 0x42)) {
     // not implemented, jumps to another routine
-    R14 = 7;
+    g_r14 = 7;
     HandlePushingBonkingSnaps_X();
     return;
   } // endif_3
@@ -5190,7 +5190,7 @@ void StartMovementCollisionChecks_X_HandleOutdoors() {  // 87c8e9
   // If force facing down (hold B button), while turboing on the Run key, we'll never
   // reach FlagMovingIntoSlopes_X causing a Dash Buffering glitch.
   // Fix by always calling it, not sure why you wouldn't always want to call it.
-  if ((R14 & 2) == 0 && (R12 & 5) != 0) {
+  if ((g_r14 & 2) == 0 && (g_r12 & 5) != 0) {
     bool skip_check = link_is_running && !(link_direction_facing & 4);
     if (!skip_check || (enhanced_features0 & kFeatures0_MiscBugFixes)) {
       FlagMovingIntoSlopes_X();
@@ -5210,7 +5210,7 @@ void StartMovementCollisionChecks_X_HandleOutdoors() {  // 87c8e9
         return;
       }
     } else {
-      R14 = bitfield_spike_cactus_tiles & 7;
+      g_r14 = bitfield_spike_cactus_tiles & 7;
     }
   }  // endif_10
   HandlePushingBonkingSnaps_X();
@@ -5221,7 +5221,7 @@ void SnapOnX() {  // 87cb84
 }
 
 void CalculateSnapScratch_X() {  // 87cb9f
-  if (R14 & 4) {
+  if (g_r14 & 4) {
     int8 x = link_x_vel;
     if (x >= 0) x = -x; // wtf
     link_y_coord += x < 0 ? -1 : 1;
@@ -5234,7 +5234,7 @@ void CalculateSnapScratch_X() {  // 87cb9f
 
 int8 ChangeAxisOfPerpendicularDoorMovement_X() {  // 87cbdd
   link_cant_change_direction |= 2;
-  uint8 r0 = (R14 | (R14 >> 4)) & 0xf;
+  uint8 r0 = (g_r14 | (g_r14 >> 4)) & 0xf;
   if ((r0 & 7) == 0) {
     is_standing_in_doorway = 0;
     return r0; // wtf?
@@ -5282,7 +5282,7 @@ void Link_HandleDiagonalKickback() {  // 87ccab
     link_x_coord_copy = link_x_coord;
 
     TileDetect_Movement_X(sign8(link_x_vel) ? 2 : 3);
-    if ((R12 & 5) == 0)
+    if ((g_r12 & 5) == 0)
       goto noHorizOrNoVertical;
     FlagMovingIntoSlopes_X();
     if (!(link_moving_against_diag_tile & 0xf))
@@ -5293,7 +5293,7 @@ void Link_HandleDiagonalKickback() {  // 87ccab
     link_x_vel = xd;
 
     TileDetect_Movement_Y(sign8(link_y_vel) ? 0 : 1);
-    if ((R12 & 5) == 0)
+    if ((g_r12 & 5) == 0)
       goto noHorizOrNoVertical;
     FlagMovingIntoSlopes_Y();
     if (!(link_moving_against_diag_tile & 0xf))
@@ -5528,7 +5528,7 @@ uint8 Link_HandleLiftables() {  // 87d383
   TileDetection_Execute(x0, y0, 1);
   TileDetection_Execute(x1, y1, 2);
 
-  uint8 action = ((R14 | tiledetect_vertical_ledge) & 1) ? 3 : 2;
+  uint8 action = ((g_r14 | tiledetect_vertical_ledge) & 1) ? 3 : 2;
 
   if (player_is_indoors) {
     uint8 a = Dungeon_CheckForAndIDLiftableTile();
@@ -5561,10 +5561,10 @@ void HandleNudging(int8 arg_r0) {  // 87d485
 
   if ((link_last_direction_moved_towards & 2) == 0) {
     p = (link_last_direction_moved_towards & 1) ? 4 : 0;
-    o = (R14 & 4) ? 0 : 2;
+    o = (g_r14 & 4) ? 0 : 2;
   } else {
     p = (link_last_direction_moved_towards & 1) ? 12 : 8;
-    o = (R14 & 4) ? 0 : 2;
+    o = (g_r14 & 4) ? 0 : 2;
   }
   o = (o + p) >> 1;
 
@@ -5580,7 +5580,7 @@ void HandleNudging(int8 arg_r0) {  // 87d485
   TileDetection_Execute(x0, y0, 1);
   TileDetection_Execute(x1, y1, 2);
 
-  if ((R14 | detection_of_ledge_tiles_horiz_uphoriz) & 3 ||
+  if ((g_r14 | detection_of_ledge_tiles_horiz_uphoriz) & 3 ||
       (tiledetect_vertical_ledge | detection_of_unknown_tile_types) & 0x33) {
 
     if (link_last_direction_moved_towards & 2)
@@ -5601,7 +5601,7 @@ uint8 PushBlock_GetTargetTileFlag(uint16 x, uint16 y) {  // 87e026
 
 void FlagMovingIntoSlopes_Y() {  // 87e076
   int8 y = (tiledetect_which_y_pos[0] & 7);
-  uint8 o = (tiledetect_diag_state * 4) + ((link_x_coord - ((R12 & 4) != 0)) & 7);
+  uint8 o = (tiledetect_diag_state * 4) + ((link_x_coord - ((g_r12 & 4) != 0)) & 7);
 
   if (tiledetect_diagonal_tile & 5) {
     int8 ym = tiledetect_which_y_pos[0] & 7;
@@ -5645,12 +5645,12 @@ void FlagMovingIntoSlopes_Y() {  // 87e076
     link_y_coord += y;
     link_moving_against_diag_tile = 4;
   }
-  link_moving_against_diag_tile |= (R12 & 4) ? 0x10 + 2 : 0x10 + 1;
+  link_moving_against_diag_tile |= (g_r12 & 4) ? 0x10 + 2 : 0x10 + 1;
 }
 
 void FlagMovingIntoSlopes_X() {  // 87e112
   int8 x = (link_x_coord - (tiledetect_diag_state == 6)) & 7;
-  uint8 o = (tiledetect_diag_state * 4) + (tiledetect_which_y_pos[(R12 & 4) ? 1 : 0] & 7);
+  uint8 o = (tiledetect_diag_state * 4) + (tiledetect_which_y_pos[(g_r12 & 4) ? 1 : 0] & 7);
 
   if (tiledetect_diagonal_tile & 5) {
     int8 xm = link_x_coord & 7;

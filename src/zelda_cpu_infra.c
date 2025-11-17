@@ -547,7 +547,7 @@ static void PatchRom(uint8_t *rom) {
   rom[0x443fe] = 0x48; rom[0x443ff] = 0x6;
   rom[0x44607] = 0x48; rom[0x44608] = 0x6;
 
-  // AncillaAdd_AddAncilla_Bank09 destroys R14
+  // AncillaAdd_AddAncilla_Bank09 destroys g_r14
   rom[0x49d0c] = 0xda; rom[0x49d0d] = 0xfa; 
   rom[0x49d0f] = 0xda; rom[0x49d10] = 0xfa; 
 
