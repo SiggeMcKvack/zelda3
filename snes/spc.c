@@ -50,8 +50,10 @@ static uint8_t spc_read(Spc* spc, uint16_t adr) {
 }
 
 static void spc_write(Spc* spc, uint16_t adr, uint8_t val) {
+#ifndef NDEBUG
   if (0 && adr == 0x5e)
     printf("writing to vol_dirty %d\n", val);
+#endif  // NDEBUG
   apu_cpuWrite(spc->apu, adr, val);
 }
 

@@ -7,6 +7,7 @@
 #include "util.h"
 #include "glsl_shader.h"
 #include "config.h"
+#include "logging.h"
 
 #define CODE(...) #__VA_ARGS__
 
@@ -29,9 +30,10 @@ static void GL_APIENTRY MessageCallback(GLenum source,
   if (type == GL_DEBUG_TYPE_OTHER)
     return;
 
-  fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-          (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
-          type, severity, message);
+  if (type == GL_DEBUG_TYPE_ERROR)
+    LogError("GL ERROR: type = 0x%x, severity = 0x%x, message = %s", type, severity, message);
+  else
+    LogDebug("GL CALLBACK: type = 0x%x, severity = 0x%x, message = %s", type, severity, message);
   if (type == GL_DEBUG_TYPE_ERROR)
     Die("OpenGL error!\n");
 }
@@ -121,7 +123,7 @@ static bool OpenGLRenderer_Init(SDL_Window *window) {
   glGetShaderiv(vs, GL_COMPILE_STATUS, &success);
   if (!success) {
     glGetShaderInfoLog(vs, 512, NULL, infolog);
-    printf("%s\n", infolog);
+    LogError("Vertex shader compilation failed: %s", infolog);
   }
 
   // fragment shader
@@ -155,7 +157,7 @@ static bool OpenGLRenderer_Init(SDL_Window *window) {
   glGetShaderiv(fs, GL_COMPILE_STATUS, &success);
   if (!success) {
     glGetShaderInfoLog(fs, 512, NULL, infolog);
-    printf("%s\n", infolog);
+    LogError("Fragment shader compilation failed: %s", infolog);
   }
 
   // create program
@@ -167,7 +169,7 @@ static bool OpenGLRenderer_Init(SDL_Window *window) {
 
   if (!success) {
     glGetProgramInfoLog(program, 512, NULL, infolog);
-    printf("%s\n", infolog);
+    LogError("Shader program linking failed: %s", infolog);
   }
 
   if (g_config.shader)
@@ -185,7 +187,7 @@ static void OpenGLRenderer_BeginDraw(int width, int height, uint8 **pixels, int 
   if (width < 0 || height < 0 ||
       (size_t)width > SIZE_MAX / (size_t)height ||
       (size_t)width * (size_t)height > SIZE_MAX / 4) {
-    fprintf(stderr, "OpenGL: Invalid screen dimensions %dx%d, overflow risk\n", width, height);
+    LogError("OpenGL: Invalid screen dimensions %dx%d, overflow risk", width, height);
     *pixels = NULL;
     *pitch = 0;
     return;
@@ -198,7 +200,7 @@ static void OpenGLRenderer_BeginDraw(int width, int height, uint8 **pixels, int 
     free(g_screen_buffer);
     g_screen_buffer = malloc(size * 4);
     if (!g_screen_buffer) {
-      fprintf(stderr, "OpenGL: Failed to allocate %zu bytes for screen buffer\n", size * 4);
+      LogError("OpenGL: Failed to allocate %zu bytes for screen buffer", size * 4);
       g_screen_buffer_size = 0;
       *pixels = NULL;
       *pitch = 0;

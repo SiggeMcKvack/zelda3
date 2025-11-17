@@ -33,6 +33,7 @@ __pycache__
 
 # CMake build directory
 build/
+build-*/
 cmake-build-*/
 CMakeCache.txt
 CMakeFiles/

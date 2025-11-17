@@ -90,7 +90,7 @@ void NORETURN Die(const char *error) {
 #if defined(NDEBUG) && defined(PLATFORM_WINDOWS)
   SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, kWindowTitle, error, NULL);
 #endif
-  fprintf(stderr, "Error: %s\n", error);
+  LogError("Error: %s", error);
   exit(1);
 }
 
@@ -226,22 +226,22 @@ static SDL_Rect g_sdl_renderer_rect;
 static bool SdlRenderer_Init(SDL_Window *window) {
 
   if (g_config.shader)
-    fprintf(stderr, "Warning: Shaders are supported only with the OpenGL backend\n");
+    LogWarn("Warning: Shaders are supported only with the OpenGL backend");
 
   SDL_Renderer *renderer = SDL_CreateRenderer(g_window, -1,
                                               g_config.output_method == kOutputMethod_SDLSoftware ? SDL_RENDERER_SOFTWARE :
                                               SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
   if (renderer == NULL) {
-    printf("Failed to create renderer: %s\n", SDL_GetError());
+    LogError("Failed to create renderer: %s", SDL_GetError());
     return false;
   }
   SDL_RendererInfo renderer_info;
   SDL_GetRendererInfo(renderer, &renderer_info);
   if (kDebugFlag) {
-    printf("Supported texture formats:");
+    LogDebug("Supported texture formats:");
     for (int i = 0; i < renderer_info.num_texture_formats; i++)
-      printf(" %s", SDL_GetPixelFormatName(renderer_info.texture_formats[i]));
-    printf("\n");
+      LogDebug(" %s", SDL_GetPixelFormatName(renderer_info.texture_formats[i]));
+    LogDebug("");
   }
   g_renderer = renderer;
   if (!g_config.ignore_aspect_ratio)
@@ -253,7 +253,7 @@ static bool SdlRenderer_Init(SDL_Window *window) {
   g_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
                                 g_snes_width * tex_mult, g_snes_height * tex_mult);
   if (g_texture == NULL) {
-    printf("Failed to create texture: %s\n", SDL_GetError());
+    LogError("Failed to create texture: %s", SDL_GetError());
     return false;
   }
   return true;
@@ -268,7 +268,7 @@ static void SdlRenderer_BeginDraw(int width, int height, uint8 **pixels, int *pi
   g_sdl_renderer_rect.w = width;
   g_sdl_renderer_rect.h = height;
   if (SDL_LockTexture(g_texture, &g_sdl_renderer_rect, (void **)pixels, pitch) != 0) {
-    printf("Failed to lock texture: %s\n", SDL_GetError());
+    LogError("Failed to lock texture: %s", SDL_GetError());
     return;
   }
 }
@@ -350,7 +350,7 @@ int main(int argc, char** argv) {
 
   // set up SDL
   if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) {
-    printf("Failed to init SDL: %s\n", SDL_GetError());
+    LogError("Failed to init SDL: %s", SDL_GetError());
     return 1;
   }
 
@@ -368,7 +368,7 @@ int main(int argc, char** argv) {
 
   SDL_Window* window = SDL_CreateWindow(kWindowTitle, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, window_width, window_height, g_win_flags);
   if(window == NULL) {
-    printf("Failed to create window: %s\n", SDL_GetError());
+    LogError("Failed to create window: %s", SDL_GetError());
     return 1;
   }
   g_window = window;
@@ -390,7 +390,7 @@ int main(int argc, char** argv) {
     want.callback = &AudioCallback;
     device = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
     if (device == 0) {
-      printf("Failed to open audio device: %s\n", SDL_GetError());
+      LogError("Failed to open audio device: %s", SDL_GetError());
       return 1;
     }
     g_audio_channels = have.channels;
@@ -691,7 +691,7 @@ static void OpenOneGamepad(int i) {
   if (SDL_IsGameController(i)) {
     SDL_GameController *controller = SDL_GameControllerOpen(i);
     if (!controller)
-      fprintf(stderr, "Could not open gamepad %d: %s\n", i, SDL_GetError());
+      LogError("Could not open gamepad %d: %s", i, SDL_GetError());
   }
 }
 
@@ -731,10 +731,10 @@ static void HandleVolumeAdjustment(int volume_adjustment) {
   int current_volume = GetApplicationVolume();
   int new_volume = IntMin(IntMax(0, current_volume + volume_adjustment * 5), 100);
   SetApplicationVolume(new_volume);
-  printf("[System Volume]=%i\n", new_volume);
+  LogDebug("[System Volume]=%i", new_volume);
 #else
   g_sdl_audio_mixer_volume = IntMin(IntMax(0, g_sdl_audio_mixer_volume + volume_adjustment * (SDL_MIX_MAXVOLUME >> 4)), SDL_MIX_MAXVOLUME);
-  printf("[SDL mixer volume]=%i\n", g_sdl_audio_mixer_volume);
+  LogDebug("[SDL mixer volume]=%i", g_sdl_audio_mixer_volume);
 #endif
 }
 
@@ -810,7 +810,7 @@ static bool ParseLinkGraphics(uint8 *file, size_t length) {
 
 static void LoadLinkGraphics() {
   if (g_config.link_graphics) {
-    fprintf(stderr, "Loading Link Graphics: %s\n", g_config.link_graphics);
+    LogInfo("Loading Link Graphics: %s", g_config.link_graphics);
     size_t length = 0;
     uint8 *file = Platform_ReadWholeFile(g_config.link_graphics, &length);
     if (file == NULL || !ParseLinkGraphics(file, length))
@@ -889,7 +889,7 @@ static void SwitchDirectory() {
       fclose(f);
       buf[pos] = 0;
       if (step != 0) {
-        printf("Found zelda3.ini in %s\n", buf);
+        LogInfo("Found zelda3.ini in %s", buf);
         int err = chdir(buf);
         (void)err;
       }

@@ -224,6 +224,9 @@ cmake .. -DCMAKE_C_COMPILER=clang
 - **Platform consistency:** MSU audio now uses Platform_* API
 - **Utility headers:** platform_detect.h, math_util.h, dynamic_array.h, logging.h
 - **Path validation:** Case-insensitive path lookup for MSU/shader paths on Linux
+- **Logging standardization:** All user-facing errors/warnings now use LogError/LogWarn API
+- **Debug output gating:** Debug-only code properly gated with NDEBUG
+- **Debug state tracking:** Event-driven game state console output for bug fixing
 - **Compatibility:** Original SNES bugs preserved, fixes gated behind feature flags
 
 **Major update: Android port integration (2024)**

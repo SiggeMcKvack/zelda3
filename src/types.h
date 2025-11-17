@@ -41,9 +41,9 @@ typedef unsigned int uint;
 #define NOINLINE
 #endif
 
-#ifdef _DEBUG
+#ifndef NDEBUG
 #define kDebugFlag 1
-#else
+#else  // NDEBUG
 #define kDebugFlag 0
 #endif
 

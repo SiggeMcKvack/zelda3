@@ -8,6 +8,7 @@
 #include "config.h"
 #include "assets.h"
 #include "platform.h"
+#include "logging.h"
 
 // This needs to hold a lot more things than with just PCM
 typedef struct MsuPlayerResumeInfo {
@@ -200,12 +201,12 @@ static void MsuPlayer_Open(MsuPlayer *mp, int orig_track, bool resume_from_snaps
     return;
   char fname[256], buf[8];
   snprintf(fname, sizeof(fname), "%s%d.%s", g_config.msu_path ? g_config.msu_path : "", actual_track, mp->enabled & kMsuEnabled_Opuz ? "opuz" : "pcm");
-  printf("Loading MSU %s\n", fname);
+  LogInfo("Loading MSU %s", fname);
   mp->f = Platform_OpenFile(fname, "rb");
   if (mp->f == NULL)
     goto READ_ERROR;
   if (Platform_ReadFile(buf, 1, 8, mp->f) != 8) READ_ERROR: {
-    fprintf(stderr, "Unable to read MSU file %s\n", fname);
+    LogError("Unable to read MSU file %s", fname);
     MsuPlayer_CloseFile(mp);
     return;
   }
@@ -302,7 +303,7 @@ void MsuPlayer_Mix(MsuPlayer *mp, int16 *audio_buffer, int audio_samples) {
           Platform_SeekFile(mp->f, mp->range_cur, SEEK_SET);
           uint8 *file_data = (uint8 *)mp->buffer;
           if (Platform_ReadFile(file_data, 1, 10, mp->f) != 10) READ_ERROR: {
-            fprintf(stderr, "MSU read/decode error!\n");
+            LogError("MSU read/decode error!");
             zelda_apu_write(APUI00, mp->resume_info.orig_track);
             MsuPlayer_CloseFile(mp);
             return;
@@ -526,10 +527,10 @@ void ZeldaEnableMsu(uint8 enable) {
   g_msu_player.enabled = enable;
   if (enable & kMsuEnabled_Opuz) {
     if (g_config.audio_freq != 48000)
-      fprintf(stderr, "Warning: MSU Opuz requires: AudioFreq = 48000\n");
+      LogWarn("MSU Opuz requires: AudioFreq = 48000");
   } else if (enable) {
     if (g_config.audio_freq != 44100)
-      fprintf(stderr, "Warning: MSU requires: AudioFreq = 44100\n");
+      LogWarn("MSU requires: AudioFreq = 44100");
   }
 
   float volscale = g_config.msuvolume * (1.0f / 255 / 100);

@@ -11,10 +11,16 @@
 #include "util.h"
 #include "audio.h"
 #include "assets.h"
+#include "debug_state.h"
+#include "logging.h"
 ZeldaEnv g_zenv;
 uint8 g_ram[131072];
 
 uint32 g_wanted_zelda_features;
+
+#ifndef NDEBUG
+static DebugState g_debug_state = {0};
+#endif  // NDEBUG
 
 static void Startup_InitializeMemory();
 
@@ -559,7 +565,7 @@ void StateRecorder_Save(StateRecorder *sr, FILE *f) {
 }
 
 void StateRecorder_ClearKeyLog(StateRecorder *sr) {
-  printf("Clearing key log!\n");
+  LogInfo("Clearing key log");
   sr->base_snapshot.size = 0;
   SaveSnesState(&saveFunc, &sr->base_snapshot);
   ByteArray old_log = sr->log;
@@ -748,6 +754,11 @@ bool ZeldaRunFrame(int inputs) {
 
   ZeldaPushApuState();
 
+#ifndef NDEBUG
+  // Update debug state tracker (event-driven logging)
+  DebugState_Update(&g_debug_state);
+#endif  // NDEBUG
+
   return is_replay;
 }
 
@@ -759,7 +770,7 @@ void ZeldaSetLanguage(const char *language) {
     for (int i = 0; ; i++) {
       MemBlk mb = kDialogueMap(i);
       if (mb.ptr == 0) {
-        fprintf(stderr, "Unable to find language '%s'\n", language);
+        LogError("Unable to find language '%s'", language);
         break;
       }
       MemBlk name = FindIndexInMemblk(mb, 0);
@@ -802,8 +813,8 @@ void SaveLoadSlot(int cmd, int which) {
   }
   FILE *f = fopen(name, cmd != kSaveLoad_Save ? "rb" : "wb");
   if (f) {
-    printf("*** %s slot %d\n",
-      cmd == kSaveLoad_Save ? "Saving" : cmd == kSaveLoad_Load ? "Loading" : "Replaying", which);
+    const char *action = cmd == kSaveLoad_Save ? "Saving" : cmd == kSaveLoad_Load ? "Loading" : "Replaying";
+    LogInfo("%s slot %d", action, which);
 
     if (cmd != kSaveLoad_Save)
       StateRecorder_Load(&state_recorder, f, cmd == kSaveLoad_Replay);
@@ -872,7 +883,7 @@ void ZeldaReadSram() {
   FILE *f = fopen("saves/sram.dat", "rb");
   if (f) {
     if (fread(g_zenv.sram, 1, 8192, f) != 8192)
-      fprintf(stderr, "Error reading saves/sram.dat\n");
+      LogError("Error reading saves/sram.dat");
     fclose(f);
     EmuSynchronizeWholeState();
   }
@@ -885,6 +896,6 @@ void ZeldaWriteSram() {
     fwrite(g_zenv.sram, 1, 8192, f);
     fclose(f);
   } else {
-    fprintf(stderr, "Unable to write saves/sram.dat\n");
+    LogError("Unable to write saves/sram.dat");
   }
 }
