@@ -4,6 +4,57 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## Recent Updates (November 2025)
 
+### Pokemode & PrincessZeldaHelps Features
+
+**New Experimental Features:** Pokemon-style monster capture and Zelda companion mode
+
+Ported from the Android fork, these features add optional gameplay mechanics while preserving original behavior when disabled.
+
+**Pokemode - Monster Capture System:**
+- Capture enemies and NPCs with Bug Net (sprites taking Bug Net damage)
+- Store captured sprites in bottles using extended bottle states (0xF3-0xFB + sprite IDs)
+- Release captured sprites from bottles to spawn at Link's position
+- Friendly AI mode: Some sprites (Guards, Ravens, Zelda) attack nearby enemies
+- Bottles display flute icon instead of standard icons when Pokemode enabled
+- Supported captures: Ravens, Vultures, Stalfos Heads, Guards, Princess Zelda, followers (Old Man, Kiki, Blind Maiden, etc.)
+
+**PrincessZeldaHelps - Zelda Companion:**
+- Princess Zelda becomes a permanent follower outside normal story sequence
+- Triggers when released from bottle with AI state 10 (Pokemode integration)
+- Triggers after healing Link at sanctuary (replaces normal despawn)
+- Uses existing tagalong/follower system
+
+**Sprite-to-Sprite Targeting System:**
+- Added `Sprite_IsRightOfTarget()`, `Sprite_IsBelowTarget()` - Position checks between sprites
+- Added `Sprite_ProjectSpeedTowardsTarget()` - Calculate velocity vector toward target sprite
+- Added `Sprite_ApplySpeedTowardsTarget()` - Set sprite velocity toward another sprite
+- Added `Sprite_DirectionToFaceTarget()` - Get direction for sprite to face another sprite
+- Added `LinkItem_Net_endAnimation()` - Clean Bug Net animation end
+- Enables friendly AI to properly chase and attack enemies instead of Link
+
+**Implementation Details:**
+- ~300 lines of new code across sprite system, player, HUD modules
+- Fully gated behind `kFeatures0_Pokemode` and `kFeatures0_PrincessZeldaHelps` feature flags
+- Disabled by default (preserves original behavior and replay compatibility)
+- Added follower indicator constants (13 values) and bottle state constants (17 extended states)
+- Friendly sprites use AI state 10 with bee-style enemy-seeking behavior
+
+**Files Modified:**
+- `src/sprite_main.c` - Core capture/release logic, friendly AI, Zelda follower triggers
+- `src/sprite.c` - Sprite-to-sprite targeting utilities (6 functions, ~77 lines)
+- `src/sprite.h` - Function declarations for targeting system
+- `src/player.c` - Extended bottle usage logic, Bug Net animation cleanup
+- `src/player.h` - Follower indicator and bottle state enums
+- `src/hud.c` - Bottle icon display (flute icon for Pokemode)
+- `zelda3.ini` - Comprehensive feature descriptions with warnings
+
+**Configuration:**
+```ini
+[Features]
+Pokemode = 0                # Pokemon-style capture system
+PrincessZeldaHelps = 0      # Zelda companion mode
+```
+
 ### Path Validation for Case-Sensitive Filesystems
 
 **New Feature:** Case-insensitive path validation (`src/platform.c`, `src/config.c`)

@@ -33,7 +33,54 @@ enum {
   kPlayerState_SpinAttackMotion = 30,
 };
 
+// Follower indicator constants (Pokemode feature)
+enum {
+  follower_indicator_noone = 0,
+  follower_indicator_Zelda = 1,
+  follower_indicator_0x3 = 3,
+  follower_indicator_OldMan = 4,
+  follower_indicator_Uncle_Telepathy = 5,
+  follower_indicator_BlindMaiden = 6,
+  follower_indicator_Smithy_Frog = 7,
+  follower_indicator_Smith = 8,
+  follower_indicator_LockSmith = 9,
+  follower_indicator_Kiki = 10,
+  follower_indicator_11 = 11,
+  follower_indicator_PurpleChess = 12,
+  follower_indicator_BigBomb = 13,
+  follower_indicator_HandleTrigger = 0xe,
+};
 
+// Bottle state constants (Pokemode feature)
+enum {
+  bottle_state_empty = 2,
+  bottle_state_redpotion = 3,
+  bottle_state_greenpotion = 4,
+  bottle_state_bluepotion = 5,
+  bottle_state_fairy = 6,
+  bottle_state_bee = 7,
+  bottle_state_goodbee = 8,
+  // Pokemode extended bottle states (0xF3-0xFB)
+  bottle_state_00_Raven = 0xf3,
+  bottle_state_01_Vulture_bounce = 0xf4,
+  bottle_state_02_StalfosHead = 0xf5,
+  bottle_state_NULL = 0xf6,
+  bottle_state_04_PullSwitch_bounce = 0xf7,
+  bottle_state_05_PullSwitch_bounce = 0xf8,
+  bottle_state_06_PullSwitch_bounce = 0xf9,
+  bottle_state_07_PullSwitch_bounce = 0xfa,
+  bottle_state_08_Octorok = 0xfb,
+  // Follower/NPC bottle states
+  bottle_state_1A_Smithy = 0x1a,
+  bottle_state_39_Locksmith = 0x39,
+  bottle_state_73_UncleAndPriest = 0x73,
+  bottle_state_76_Zelda = 0x76,
+  bottle_state_AD_OldMan = 0xad,
+  bottle_state_B4_PurpleChest = 0xb4,
+  bottle_state_B5_BombShop = 0xb5,
+  bottle_state_B6_Kiki = 0xb6,
+  bottle_state_B7_BlindMaiden = 0xb7,
+};
 
 
 
@@ -149,6 +196,7 @@ void LinkItem_CaneOfSomaria();
 void LinkItem_CaneOfByrna();
 bool SearchForByrnaSpark();
 void LinkItem_Net();
+void LinkItem_Net_endAnimation();
 bool CheckYButtonPress();
 bool LinkCheckMagicCost(uint8 x);
 void Refund_Magic(uint8 x);

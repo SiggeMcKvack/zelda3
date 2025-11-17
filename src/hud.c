@@ -915,8 +915,13 @@ static const ItemBoxGfx *Hud_GetIconForItem(int i) {
   if (i <= 0)
     return kHudItemEmpty;
 
-  if (i >= kHudItem_Bottle1)
+  if (i >= kHudItem_Bottle1) {
+    // Pokemode: Display flute icon for bottles with captured sprites
+    if (enhanced_features0 & kFeatures0_Pokemode) {
+      return &kHudItemFlute[link_item_flute >= 1];
+    }
     return &kHudItemBottles[link_bottle_info[i - kHudItem_Bottle1]];
+  }
   if (i == kHudItem_Shovel && kNewStyleInventory)
     return &kHudItemFlute[link_item_flute >= 1];
 

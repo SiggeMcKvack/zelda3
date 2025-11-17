@@ -2081,6 +2081,40 @@ void Sprite_MoveZ(int k) {  // 86e96c
   sprite_z[k] = z >> 8;
 }
 
+ProjectSpeedRet Sprite_ProjectSpeedTowardsTarget(int k, int j, uint8 vel) {  // Pokemode: Sprite-to-sprite targeting
+  if (vel == 0) {
+    ProjectSpeedRet rv = { 0, 0, 0, 0 };
+    return rv;
+  }
+  PairU8 below = Sprite_IsBelowTarget(k, j);
+  uint8 r12 = sign8(below.b) ? -below.b : below.b;
+
+  PairU8 right = Sprite_IsRightOfTarget(k, j);
+  uint8 r13 = sign8(right.b) ? -right.b : right.b;
+  uint8 t;
+  bool swapped = false;
+  if (r13 < r12) {
+    swapped = true;
+    t = r12, r12 = r13, r13 = t;
+  }
+  uint8 xvel = vel, yvel = 0;
+  t = 0;
+  do {
+    t += r12;
+    if (t >= r13)
+      t -= r13, yvel++;
+  } while (--vel);
+  if (swapped)
+    t = xvel, xvel = yvel, yvel = t;
+  ProjectSpeedRet rv = {
+    (uint8)(right.a ? -xvel : xvel),
+    (uint8)(below.a ? -yvel : yvel),
+    right.b,
+    below.b
+  };
+  return rv;
+}
+
 ProjectSpeedRet Sprite_ProjectSpeedTowardsLink(int k, uint8 vel) {  // 86e991
   if (vel == 0) {
     ProjectSpeedRet rv = { 0, 0, 0, 0 };
@@ -2114,6 +2148,12 @@ ProjectSpeedRet Sprite_ProjectSpeedTowardsLink(int k, uint8 vel) {  // 86e991
 
   };
   return rv;
+}
+
+void Sprite_ApplySpeedTowardsTarget(int k, int j, uint8 vel) {  // Pokemode: Sprite-to-sprite targeting
+  ProjectSpeedRet pt = Sprite_ProjectSpeedTowardsTarget(k, j, vel);
+  sprite_x_vel[k] = pt.x;
+  sprite_y_vel[k] = pt.y;
 }
 
 void Sprite_ApplySpeedTowardsLink(int k, uint8 vel) {  // 86ea04
@@ -2156,6 +2196,17 @@ ProjectSpeedRet Sprite_ProjectSpeedTowardsLocation(int k, uint16 x, uint16 y, ui
   return rv;
 }
 
+uint8 Sprite_DirectionToFaceTarget(int k, int j, PointU8 *coords_out) {  // Pokemode: Sprite-to-sprite targeting
+  PairU8 below = Sprite_IsBelowTarget(k, j);
+  PairU8 right = Sprite_IsRightOfTarget(k, j);
+  uint8 ym = sign8(below.b) ? -below.b : below.b;
+  tmp_counter = ym;
+  uint8 xm = sign8(right.b) ? -right.b : right.b;
+  if (coords_out)
+    coords_out->x = right.b, coords_out->y = below.b;
+  return (xm >= ym) ? right.a : below.a + 2;
+}
+
 uint8 Sprite_DirectionToFaceLink(int k, PointU8 *coords_out) {  // 86eaa4
   PairU8 below = Sprite_IsBelowLink(k);
   PairU8 right = Sprite_IsRightOfLink(k);
@@ -2178,6 +2229,22 @@ PairU8 Sprite_IsBelowLink(int k) {  // 86eae8
   int u = (t & 0xff) + sprite_z[k];
   int v = (u & 0xff) - sprite_y_lo[k];
   int w = HIBYTE(link_y_coord) - sprite_y_hi[k] - (v < 0);
+  uint8 y = (w & 0xff) + (t >> 8) + (u >> 8);
+  PairU8 rv = { (uint8)(sign8(y) ? 1 : 0), (uint8)v };
+  return rv;
+}
+
+PairU8 Sprite_IsRightOfTarget(int k, int j) {  // Pokemode: Sprite-to-sprite targeting
+  uint16 x = Sprite_GetX(j) - Sprite_GetX(k);
+  PairU8 rv = { (uint8)(sign16(x) ? 1 : 0), (uint8)x };
+  return rv;
+}
+
+PairU8 Sprite_IsBelowTarget(int k, int j) {  // Pokemode: Sprite-to-sprite targeting
+  int t = sprite_y_lo[j] + 8;
+  int u = (t & 0xff) + sprite_z[k];
+  int v = (u & 0xff) - sprite_y_lo[k];
+  int w = sprite_y_hi[j] - sprite_y_hi[k] - (v < 0);
   uint8 y = (w & 0xff) + (t >> 8) + (u >> 8);
   PairU8 rv = { (uint8)(sign8(y) ? 1 : 0), (uint8)v };
   return rv;
