@@ -62,11 +62,19 @@ target_include_directories(zelda3 PRIVATE
 )
 
 # Compiler flags
-target_compile_options(zelda3 PRIVATE
-    $<$<CONFIG:Release>:-O2>
-    $<$<CONFIG:Debug>:-O0 -g>
-    -Wall
-)
+if(MSVC)
+    target_compile_options(zelda3 PRIVATE
+        $<$<CONFIG:Release>:/O2>
+        $<$<CONFIG:Debug>:/Od /Zi>
+        /W3
+    )
+else()
+    target_compile_options(zelda3 PRIVATE
+        $<$<CONFIG:Release>:-O2>
+        $<$<CONFIG:Debug>:-O0 -g>
+        -Wall
+    )
+endif()
 
 # Optional: Enable -Werror (disabled by default due to pre-existing warnings)
 # To enable: cmake .. -DENABLE_WERROR=ON
