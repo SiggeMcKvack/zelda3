@@ -6,44 +6,53 @@
 // Math utility functions
 // Consolidates math helpers scattered across the codebase
 
+// MSVC doesn't support C99 inline keyword in C mode
+#ifndef MATH_INLINE
+  #if defined(_MSC_VER)
+    #define MATH_INLINE static __inline
+  #else
+    #define MATH_INLINE static inline
+  #endif
+#endif
+
 // Absolute value functions
-static inline uint16_t abs16(uint16_t t) {
+MATH_INLINE uint16_t abs16(uint16_t t) {
   return (t & 0x8000) ? -t : t;
 }
 
-static inline uint8_t abs8(uint8_t t) {
+MATH_INLINE uint8_t abs8(uint8_t t) {
   return (t & 0x80) ? -t : t;
 }
 
 // Min/max functions for signed integers
-static inline int IntMin(int a, int b) {
+MATH_INLINE int IntMin(int a, int b) {
   return a < b ? a : b;
 }
 
-static inline int IntMax(int a, int b) {
+MATH_INLINE int IntMax(int a, int b) {
   return a > b ? a : b;
 }
 
 // Min/max functions for unsigned integers
-static inline unsigned int UintMin(unsigned int a, unsigned int b) {
+MATH_INLINE unsigned int UintMin(unsigned int a, unsigned int b) {
   return a < b ? a : b;
 }
 
-static inline unsigned int UintMax(unsigned int a, unsigned int b) {
+MATH_INLINE unsigned int UintMax(unsigned int a, unsigned int b) {
   return a > b ? a : b;
 }
 
 // Clamp value to range [min, max]
-static inline int IntClamp(int val, int min, int max) {
+MATH_INLINE int IntClamp(int val, int min, int max) {
   return val < min ? min : (val > max ? max : val);
 }
 
-static inline unsigned int UintClamp(unsigned int val, unsigned int min, unsigned int max) {
+MATH_INLINE unsigned int UintClamp(unsigned int val, unsigned int min, unsigned int max) {
   return val < min ? min : (val > max ? max : val);
 }
 
 // Count set bits (population count)
-static inline int CountBits32(uint32_t n) {
+MATH_INLINE int CountBits32(uint32_t n) {
 #if defined(__GNUC__) || defined(__clang__)
   return __builtin_popcount(n);
 #else
@@ -58,7 +67,7 @@ static inline int CountBits32(uint32_t n) {
 // Approximates atan2(y, x) normalized to the [0,4) range
 // Maximum error of 0.1620 degrees
 // Uses: normalized_atan(x) ~ (b x + x^2) / (1 + 2 b x + x^2)
-static inline float ApproximateAtan2(float y, float x) {
+MATH_INLINE float ApproximateAtan2(float y, float x) {
   uint32_t sign_mask = 0x80000000;
   float b = 0.596227f;
   // Extract the sign bits
