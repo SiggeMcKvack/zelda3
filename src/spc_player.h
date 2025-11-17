@@ -1,3 +1,6 @@
+#ifndef ZELDA3_SPC_PLAYER_H_
+#define ZELDA3_SPC_PLAYER_H_
+
 #include <stddef.h>
 #include "snes/dsp.h"
 
@@ -137,9 +140,11 @@ typedef struct SpcPlayer {
   uint8 ram[65536]; // rest of ram
 } SpcPlayer;
 
-SpcPlayer *SpcPlayer_Create();
+SpcPlayer *SpcPlayer_Create(void);
 void SpcPlayer_GenerateSamples(SpcPlayer *p);
 void SpcPlayer_Initialize(SpcPlayer *p);
-void SpcPlayer_Upload(SpcPlayer *p, const uint8_t *data);
+void SpcPlayer_Upload(SpcPlayer *p, const uint8 *data);
 void SpcPlayer_CopyVariablesFromRam(SpcPlayer *p);
 void SpcPlayer_CopyVariablesToRam(SpcPlayer *p);
+
+#endif  // ZELDA3_SPC_PLAYER_H_
