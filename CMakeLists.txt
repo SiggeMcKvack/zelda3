@@ -67,6 +67,7 @@ if(MSVC)
         $<$<CONFIG:Release>:/O2>
         $<$<CONFIG:Debug>:/Od /Zi>
         /W3
+        /std:c17
     )
     target_compile_definitions(zelda3 PRIVATE
         _CRT_SECURE_NO_WARNINGS
