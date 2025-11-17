@@ -4,7 +4,7 @@
 #include "features.h"
 #include "snes/snes_regs.h"
 #include "spc_player.h"
-#include "third_party/opus-1.3.1-stripped/opus.h"
+#include <opus/opus.h>
 #include "config.h"
 #include "assets.h"
 #include "platform.h"

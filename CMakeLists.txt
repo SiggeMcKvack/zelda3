@@ -17,6 +17,12 @@ if(SDL2_FOUND)
     message(STATUS "Found SDL2: ${SDL2_LIBRARIES}")
 endif()
 
+# Find Opus (required for MSU audio support)
+find_package(Opus REQUIRED)
+if(Opus_FOUND)
+    message(STATUS "Found Opus: ${OPUS_LIBRARIES}")
+endif()
+
 # Find OpenGL (optional, for OpenGL renderer)
 find_package(OpenGL)
 if(OPENGL_FOUND)
@@ -46,7 +52,6 @@ file(GLOB GAME_SOURCES
 # Third-party sources
 set(THIRD_PARTY_SOURCES
     third_party/gl_core/gl_core_3_1.c
-    third_party/opus-1.3.1-stripped/opus_decoder_amalgam.c
 )
 
 # Create executable
@@ -59,6 +64,7 @@ add_executable(zelda3
 target_include_directories(zelda3 PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${SDL2_INCLUDE_DIRS}
+    ${OPUS_INCLUDE_DIRS}
 )
 
 # Compiler flags
@@ -73,8 +79,6 @@ if(MSVC)
     target_compile_definitions(zelda3 PRIVATE
         _CRT_SECURE_NO_WARNINGS
         _CRT_NONSTDC_NO_DEPRECATE
-        OPUS_BUILD=1
-        DISABLE_PTR_CHECK=1
     )
 else()
     target_compile_options(zelda3 PRIVATE
@@ -108,6 +112,7 @@ endif()
 # Link libraries
 target_link_libraries(zelda3 PRIVATE
     ${SDL2_LIBRARIES}
+    ${OPUS_LIBRARIES}
 )
 
 # Link math library on Unix-like systems
@@ -150,6 +155,7 @@ message(STATUS "=== Zelda3 Build Configuration ===")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "C Compiler: ${CMAKE_C_COMPILER}")
 message(STATUS "SDL2 Found: ${SDL2_FOUND}")
+message(STATUS "Opus Found: ${Opus_FOUND}")
 message(STATUS "OpenGL Found: ${HAVE_OPENGL}")
 message(STATUS "Vulkan Found: ${HAVE_VULKAN}")
 message(STATUS "Platform: ${CMAKE_SYSTEM_NAME}")
