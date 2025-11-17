@@ -37,6 +37,12 @@ POSSIBILITY OF SUCH DAMAGE.
 
 #define OPUS_BUILD            1
 
+/* Disable pointer type checking for MSVC to avoid preprocessor corruption */
+#if defined(_MSC_VER)
+#define DISABLE_FLOAT_API
+#define DISABLE_PTR_CHECK
+#endif
+
 #if (defined(_M_IX86) || defined(_M_X64)) && !COMPILER_TCC
 
 /* Can always compile SSE intrinsics (no special compiler flags necessary) */
