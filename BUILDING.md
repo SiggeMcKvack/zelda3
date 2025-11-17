@@ -7,36 +7,41 @@ Complete build instructions for all supported platforms.
 ### All Platforms
 - **Python 3.x** with pip
 - **SDL2** development libraries
+- **Opus** audio codec library
 - **CMake 3.10+**
 
 ### Platform-Specific Dependencies
 
 **Linux (Ubuntu/Debian):**
 ```bash
-sudo apt install libsdl2-dev cmake build-essential python3 python3-pip
+sudo apt install libsdl2-dev libopus-dev cmake build-essential python3 python3-pip
 python3 -m pip install -r requirements.txt
 ```
 
 **Linux (Fedora):**
 ```bash
-sudo dnf install SDL2-devel cmake gcc python3 python3-pip
+sudo dnf install SDL2-devel opus-devel cmake gcc python3 python3-pip
 python3 -m pip install -r requirements.txt
 ```
 
 **Linux (Arch):**
 ```bash
-sudo pacman -S sdl2 cmake gcc python python-pip
+sudo pacman -S sdl2 opus cmake gcc python python-pip
 python3 -m pip install -r requirements.txt
 ```
 
 **macOS:**
 ```bash
-brew install sdl2 cmake
+brew install sdl2 opus cmake
 python3 -m pip install -r requirements.txt
 ```
 
-**Windows:**
-See README.md for TCC or Visual Studio options.
+**Windows (vcpkg):**
+```bash
+vcpkg install sdl2:x64-windows opus:x64-windows
+# Then build with CMake using vcpkg toolchain file
+```
+See below for detailed Windows build instructions.
 
 ## Asset Extraction (Required First Step)
 
