@@ -2,7 +2,42 @@
 
 Notable changes, improvements, and additions to the Zelda3 project.
 
-## Recent Updates - Android Port Integration (2024)
+## Recent Updates (November 2025)
+
+### Path Validation for Case-Sensitive Filesystems
+
+**New Feature:** Case-insensitive path validation (`src/platform.c`, `src/config.c`)
+
+Addresses cross-platform compatibility issues between case-insensitive (Windows/macOS) and case-sensitive (Linux) filesystems:
+
+**Platform Layer Enhancement:**
+- Added `Platform_FindFileWithCaseInsensitivity()` to `src/platform.h`/`src/platform.c`
+- On Windows/macOS: Validates path existence (filesystems are case-insensitive)
+- On Linux: Scans directories for case-insensitive matches
+- Returns corrected path or NULL if not found
+
+**Config Validation:**
+- Validates MSU audio and shader paths at startup
+- Detects case mismatches before runtime failures
+- Provides helpful error messages:
+  ```
+  ERROR: Shader path 'glsl-shaders/crt.glslp' not found
+    Note: On case-sensitive filesystems (Linux), the path must match exactly
+    Check that the directory/file exists with the correct capitalization
+  ```
+
+**Impact:**
+- Linux users get clear guidance when paths don't match exact capitalization
+- Prevents silent failures (MSU audio) and runtime errors (shaders)
+- No performance impact (validation only runs during config loading)
+- Zero overhead on case-insensitive filesystems
+
+**Files Modified:**
+- `src/platform.h` - New API declaration
+- `src/platform.c` - Case-insensitive path lookup implementation
+- `src/config.c` - Path validation in `ParseConfigFile()`
+
+## Android Port Integration (2024)
 
 ### Build System Migration
 

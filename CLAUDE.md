@@ -148,6 +148,7 @@ Platform-specific files go in `src/platform/<name>/`
 - Platform code: `src/platform/<name>/`
 - Logging: Use `src/logging.h` for errors/warnings
 - File I/O: Use `Platform_ReadWholeFile()` from `src/platform.h`
+- Path validation: Use `Platform_FindFileWithCaseInsensitivity()` from `src/platform.h` for case-sensitive filesystem support
 - Memory: Use `DYNARR_*` macros from `src/dynamic_array.h` for growable arrays
 - CMake auto-detects `.c` files via `file(GLOB ...)`
 
@@ -210,12 +211,19 @@ cmake .. -DCMAKE_C_COMPILER=clang
 - Out-of-source builds (build/ directory)
 - See [BUILDING.md](BUILDING.md) for details
 
+**Case-Sensitive Filesystems (Linux):**
+- MSU audio and shader paths must match exact capitalization
+- Config validation at startup warns about case mismatches
+- Use `Platform_FindFileWithCaseInsensitivity()` to check paths
+- Error messages guide users to correct capitalization
+
 ## Recent Changes
 
 **Code quality improvements (November 2025):**
 - **Refactoring:** Config section handlers, magic number extraction, shader cleanup
 - **Platform consistency:** MSU audio now uses Platform_* API
 - **Utility headers:** platform_detect.h, math_util.h, dynamic_array.h, logging.h
+- **Path validation:** Case-insensitive path lookup for MSU/shader paths on Linux
 - **Compatibility:** Original SNES bugs preserved, fixes gated behind feature flags
 
 **Major update: Android port integration (2024)**

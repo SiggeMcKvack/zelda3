@@ -350,6 +350,23 @@ static bool ParseBoolBit(const char *value, uint32 *data, uint32 mask) {
   return true;
 }
 
+static void ValidatePathWithCaseSuggestion(const char *path, const char *path_type) {
+  if (!path || *path == '\0')
+    return;
+
+  char *found_path = Platform_FindFileWithCaseInsensitivity(path);
+  if (!found_path) {
+    LogError("Config: %s path '%s' not found", path_type, path);
+    LogError("  Note: On case-sensitive filesystems (Linux), the path must match exactly");
+    LogError("  Check that the directory/file exists with the correct capitalization");
+  } else if (strcmp(found_path, path) != 0) {
+    LogWarn("Config: %s path has incorrect case: '%s'", path_type, path);
+    LogWarn("  Found with correct case: '%s'", found_path);
+    LogWarn("  This will fail on case-sensitive filesystems (Linux)");
+  }
+  free(found_path);
+}
+
 static bool HandleKeyMapConfig(const char *key, char *value) {
   for (int i = 0; i < countof(kKeyNameId); i++) {
     if (StringEqualsNoCase(key, kKeyNameId[i].name)) {
@@ -595,6 +612,25 @@ void ParseConfigFile(const char *filename) {
       LogWarn("Config: Unable to read config file %s", filename);
   }
   RegisterDefaultKeys();
+
+  // Validate paths for case-sensitivity issues
+  if (g_config.shader) {
+    ValidatePathWithCaseSuggestion(g_config.shader, "Shader");
+  }
+  if (g_config.msu_path) {
+    // For MSU, we need to validate the directory part only (before the track prefix)
+    // MSU path format is like "msu/alttp_msu-" where files are "msu/alttp_msu-1.pcm", etc.
+    // We'll validate just the directory portion
+    char *msu_dir_copy = strdup(g_config.msu_path);
+    if (msu_dir_copy) {
+      char *last_slash = strrchr(msu_dir_copy, '/');
+      if (last_slash) {
+        *last_slash = '\0';  // Truncate to just directory
+        ValidatePathWithCaseSuggestion(msu_dir_copy, "MSU directory");
+      }
+      free(msu_dir_copy);
+    }
+  }
 }
 
 void Config_Shutdown(void) {

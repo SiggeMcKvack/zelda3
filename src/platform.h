@@ -22,6 +22,13 @@ int Platform_EofFile(PlatformFile *file);
 // Utility function to read entire file into memory
 uint8_t *Platform_ReadWholeFile(const char *filename, size_t *length_out);
 
+// Case-insensitive path lookup
+// On case-insensitive filesystems (Windows, macOS), returns the input path unchanged
+// On case-sensitive filesystems (Unix/Linux), searches for a case-insensitive match
+// Returns a newly allocated string with the corrected path, or NULL if not found
+// Caller must free() the returned string
+char *Platform_FindFileWithCaseInsensitivity(const char *path);
+
 // Platform initialization (for platforms that need it)
 void Platform_Init(void);
 void Platform_Shutdown(void);
