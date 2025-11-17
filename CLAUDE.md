@@ -190,8 +190,9 @@ cmake .. -DCMAKE_C_COMPILER=clang
 - Reverse-engineered, variable names from disassembly
 - Follows original SNES code structure
 - Function names: `Module_FunctionName()` or camelCase
-- Globals: `g_prefix`
+- Globals: `g_prefix` (e.g., `g_ram`, `g_r12`)
 - Constants: `kConstantName`
+- RAM macros: Prefix with `g_` if they might conflict with platform symbols (e.g., Windows register names R10-R20)
 
 **Compatibility:**
 - Original behavior must be preserved
@@ -207,7 +208,8 @@ cmake .. -DCMAKE_C_COMPILER=clang
 
 **Build System:**
 - Uses CMake (Makefile removed)
-- Auto-detects dependencies
+- Auto-detects dependencies (SDL2, Opus, OpenGL, Vulkan)
+- Uses system libraries (no vendored dependencies)
 - Out-of-source builds (build/ directory)
 - See [BUILDING.md](BUILDING.md) for details
 
@@ -218,6 +220,13 @@ cmake .. -DCMAKE_C_COMPILER=clang
 - Error messages guide users to correct capitalization
 
 ## Recent Changes
+
+**Build system and Windows compatibility (November 2025):**
+- **Opus migration:** Switched from vendored Opus 1.3.1 to system library (-924KB)
+- **CMake modules:** Added FindOpus.cmake for pkg-config-based detection
+- **Windows fix:** Renamed R10/R12/R14/R16/R18/R20 macros to g_r10/g_r12/etc to avoid Windows x64 register name collisions
+- **CI improvements:** Updated GitHub Actions with Opus dependencies, vcpkg@v11.5
+- **All platforms building:** 10/10 CI jobs passing (Ubuntu, Arch, Windows, macOS x86_64/ARM64)
 
 **Code quality improvements (November 2025):**
 - **Refactoring:** Config section handlers, magic number extraction, shader cleanup
