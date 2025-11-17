@@ -71,7 +71,7 @@ if(MSVC)
     target_compile_definitions(zelda3 PRIVATE
         _CRT_SECURE_NO_WARNINGS
         _CRT_NONSTDC_NO_DEPRECATE
-        _NO_SAL_ANNOTATIONS
+        _SAL_VERSION=0
     )
 else()
     target_compile_options(zelda3 PRIVATE
