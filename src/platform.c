@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <sys/stat.h>
 
-#if defined(PLATFORM_UNIX)
+#if defined(PLATFORM_POSIX)
 #include <dirent.h>
 #include <strings.h>  // For strcasecmp
 #endif
