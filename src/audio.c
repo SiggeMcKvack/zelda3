@@ -1,3 +1,8 @@
+// Disable SAL annotations on Windows to workaround MSVC parser bug
+#ifdef _MSC_VER
+#define _SAL_VERSION 0
+#endif
+
 #include "audio.h"
 #include "zelda_rtl.h"
 #include "variables.h"
