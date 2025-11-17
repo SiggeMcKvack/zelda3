@@ -17,7 +17,9 @@
       "WebFetch(domain:dev.to)",
       "Bash(cat:*)",
       "Bash(ls:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(gcc:*)",
+      "Bash(./test_case_validation/test_config_validation)"
     ],
     "deny": [],
     "ask": []

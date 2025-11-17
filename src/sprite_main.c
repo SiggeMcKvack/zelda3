@@ -6247,6 +6247,104 @@ void Priest_SpawnRescuedPrincess() {  // 85ec4c
   sprite_flags4[k] = 3;
 }
 
+void Generic_PutInBottle(int k, int bottle_state) {  // Pokemode: inspired by Bee_PutInBottle
+  if (enhanced_features0 & kFeatures0_Pokemode) {
+    if (Sprite_CheckDamageFromLink(k) & kCheckDamageFromPlayer_Ne) {
+      int j = Sprite_Find_EmptyBottle();
+      if (j >= 0) {
+        link_bottle_info[j] = bottle_state;
+        Hud_RefreshIcon();
+        sprite_state[k] = 0;
+        LinkItem_Net_endAnimation();
+        return;
+      }
+      LinkItem_Net_endAnimation();
+      dialogue_message_index = 0xca;
+      Sprite_ShowMessageMinimal();
+      return;
+    }
+  }
+}
+
+void Follower_PutInBottle(int bottle_state) {  // Pokemode: inspired by Bee_PutInBottle
+  if (enhanced_features0 & kFeatures0_Pokemode) {
+    if (follower_indicator != follower_indicator_noone) {
+      switch (follower_indicator) {
+      case follower_indicator_0x3: bottle_state = bottle_state_bee; break;
+      case follower_indicator_11: bottle_state = bottle_state_bee; break;
+      case follower_indicator_BigBomb: bottle_state = bottle_state_B5_BombShop; break;
+      case follower_indicator_BlindMaiden: bottle_state = bottle_state_B7_BlindMaiden; break;
+      case follower_indicator_HandleTrigger: bottle_state = bottle_state_bee; break;
+      case follower_indicator_Kiki: bottle_state = bottle_state_B6_Kiki; break;
+      case follower_indicator_LockSmith: bottle_state = bottle_state_39_Locksmith; break;
+      case follower_indicator_OldMan: bottle_state = bottle_state_AD_OldMan; break;
+      case follower_indicator_PurpleChess: bottle_state = bottle_state_B4_PurpleChest; break;
+      case follower_indicator_Smith: bottle_state = bottle_state_1A_Smithy; break;
+      case follower_indicator_Smithy_Frog: bottle_state = bottle_state_1A_Smithy; break;
+      case follower_indicator_Uncle_Telepathy: bottle_state = bottle_state_73_UncleAndPriest; break;
+      case follower_indicator_Zelda: bottle_state = bottle_state_76_Zelda; break;
+      default: bottle_state = follower_indicator;
+      }
+      if (kCheckDamageFromPlayer_Ne) {
+        int j = Sprite_Find_EmptyBottle();
+        if (j >= 0) {
+          link_bottle_info[j] = bottle_state;
+          Hud_RefreshIcon();
+          follower_indicator = follower_indicator_noone;
+          return;
+        }
+        Sprite_ShowMessageUnconditional(0xca);
+        return;
+      }
+    }
+  }
+}
+
+int FindTargetNearby(int k) {  // Pokemode: Find nearby enemy sprite for friendly AI
+  int n = 16;
+  int j = k * 4 & 0xf;
+  do {
+    if (j == k || sprite_state[j] < 9 || sprite_pause[j])
+      continue;
+    if (!(sprite_flags2[j] & 0x80)) {
+      if (sprite_floor[k] != sprite_floor[j] || sprite_flags4[j] & 0x40 || sprite_ignore_projectile[j])
+        continue;
+    } else {
+      if (!sprite_head_dir[k] || !(sprite_bump_damage[j] & 0x40))
+        continue;
+    }
+    return j;
+  } while (j = (j - 1) & 0xf, --n);
+  return -1;
+}
+
+void Soldier_Func12Target(int k, int j) {  // Pokemode: Friendly soldier attacks target
+  if (((k ^ frame_counter) & 0x1f) == 0) {
+    if (!sprite_G[k]) {
+      sprite_G[k] = 1;
+      SpriteSfx_QueueSfx3WithPan(k, 4);
+    }
+    Sprite_ApplySpeedTowardsTarget(k, j, 16);
+    sprite_D[k] = sprite_head_dir[k] = Sprite_DirectionToFaceTarget(k, j, NULL);
+  }
+  Guard_ApplySpeedInDirection(k);
+  sprite_subtype2[k]++;
+  Guard_TickAndUpdateBody(k);
+}
+
+void Friendly_Attacks_Enemies_BeeStyle(int k) {  // Pokemode: Bee-style friendly AI
+  Point16U pt2;
+  if (!PlayerBee_FindTarget(k, &pt2)) {
+    pt2.x = link_x_coord + (GetRandomNumber() & 3) * 5;
+    pt2.y = link_y_coord + (GetRandomNumber() & 3) * 5;
+  }
+  if ((k ^ frame_counter) & 7)
+    return;
+  ProjectSpeedRet pt = Sprite_ProjectSpeedTowardsLocation(k, pt2.x, pt2.y, 32);
+  sprite_x_vel[k] = pt.x;
+  sprite_y_vel[k] = pt.y;
+}
+
 void Sprite_76_Zelda(int k) {  // 85ec9e
   CrystalMaiden_Draw(k);
   if (Sprite_ReturnIfInactive(k))
@@ -6254,6 +6352,16 @@ void Sprite_76_Zelda(int k) {  // 85ec9e
   Sprite_BehaveAsBarrier(k);
   if (Sprite_TrackBodyToHead(k))
     Sprite_MoveXY(k);
+
+  // PrincessZeldaHelps: Allow Zelda to become a follower
+  if (enhanced_features0 & kFeatures0_PrincessZeldaHelps) {
+    if (sprite_ai_state[k] == 10) {
+      follower_indicator &= follower_indicator_Zelda;
+      Sprite_BecomeFollower(k);
+      sprite_state[k] = 0;
+    }
+  }
+
   switch (sprite_subtype2[k]) {
   case 0: Zelda_InCell(k); break;
   case 1: Zelda_EnteringSanctuary(k); break;
@@ -6359,6 +6467,13 @@ void Zelda_AtSanctuary(int k) {  // 85ee0c
   if (j & 0x100) {
     sprite_D[k] = sprite_head_dir[k] = (uint8)j;
     link_hearts_filler = 0xa0;
+
+    // PrincessZeldaHelps: After healing Link, Zelda becomes a follower
+    if (enhanced_features0 & kFeatures0_PrincessZeldaHelps) {
+      follower_indicator = follower_indicator_Zelda;
+      Sprite_BecomeFollower(k);
+      sprite_state[k] = 0;
+    }
   }
 }
 
@@ -23998,21 +24113,70 @@ void InitializeSpawnedBee(int k) {  // 9edc9b
 }
 
 int ReleaseBeeFromBottle(int x_value) {  // 9edccf
-  static const int8 kSpawnBee_XY[8] = {8, 2, -2, -8, 10, 5, -5, -10};
-
   SpriteSpawnInfo info;
-  int j = Sprite_SpawnDynamically(x_value, 0xb2, &info);
+  int j;
+  int idxInsideBottle = link_bottle_info[link_item_bottle_index - 1];
+
+  if (enhanced_features0 & kFeatures0_Pokemode) {
+    uint8 sprite_id = 0xb2; // PlayerBee by default
+    if (idxInsideBottle >= 243) { // after 0xF2 = 243, particular cases
+      switch (idxInsideBottle) {
+      case bottle_state_00_Raven: sprite_id = 0x00; break;
+      case bottle_state_01_Vulture_bounce: sprite_id = 0x01; break;
+      case bottle_state_02_StalfosHead: sprite_id = 0x02; break;
+      case bottle_state_NULL: sprite_id = 0x03; break;
+      case bottle_state_04_PullSwitch_bounce: sprite_id = 0x04; break;
+      case bottle_state_05_PullSwitch_bounce: sprite_id = 0x05; break;
+      case bottle_state_06_PullSwitch_bounce: sprite_id = 0x06; break;
+      case bottle_state_07_PullSwitch_bounce: sprite_id = 0x07; break;
+      case bottle_state_08_Octorok: sprite_id = 0x08; break;
+      }
+    } else if (idxInsideBottle >= 9) { // below 9, bottle_state_[...] are native
+      sprite_id = idxInsideBottle;
+    } else {
+      sprite_id = 0xb2; // PlayerBee
+    }
+    j = Sprite_SpawnDynamically(x_value, sprite_id, &info);
+    if (sprite_id == 0xb2) { // if bee
+      InitializeSpawnedBee(j);
+    } else if (sprite_id == 0x00) { // Raven
+      sprite_ai_state[j] = 10; // Friendly state
+    } else if (sprite_id == 0x41) { // Guard
+      sprite_ai_state[j] = 10; // Friendly state
+    } else if (sprite_id == 0x76) { // Zelda
+      sprite_ai_state[j] = 10;
+    } else if (sprite_id == 0xb5) { // Bombshop
+      sprite_subtype2[j] = 2; // 1=Clerk, 2=Bomb, 3=SuperBomb, 4=Huff
+    }
+  } else {
+    j = Sprite_SpawnDynamically(x_value, 0xb2, &info); // bee
+  }
+
   if (j >= 0) {
-    sprite_floor[j] = link_is_on_lower_level;
-    Sprite_SetX(j, link_x_coord + 8);
-    Sprite_SetY(j, link_y_coord + 16);
-    if (link_bottle_info[link_item_bottle_index - 1] == 8)
-      sprite_head_dir[j] = 1;
-    InitializeSpawnedBee(j);
-    sprite_x_vel[j] = kSpawnBee_XY[GetRandomNumber() & 7];
-    sprite_y_vel[j] = kSpawnBee_XY[GetRandomNumber() & 7];
-    sprite_delay_main[j] = 64;
-    sprite_A[j] = 64;
+    if (enhanced_features0 & kFeatures0_Pokemode) {
+      sprite_floor[j] = link_is_on_lower_level;
+      Sprite_SetX(j, link_x_coord + 16);
+      Sprite_SetY(j, link_y_coord + 16);
+      if (idxInsideBottle == bottle_state_goodbee) {
+        sprite_head_dir[j] = 1; // make bee face South
+      }
+      sprite_x_vel[j] = 0;
+      sprite_y_vel[j] = 0;
+      sprite_delay_main[j] = 64;
+      sprite_graphics[j] = 0;
+    } else {
+      static const int8 kSpawnBee_XY[8] = {8, 2, -2, -8, 10, 5, -5, -10};
+      sprite_floor[j] = link_is_on_lower_level;
+      Sprite_SetX(j, link_x_coord + 8);
+      Sprite_SetY(j, link_y_coord + 16);
+      if (idxInsideBottle == bottle_state_goodbee) {
+        sprite_head_dir[j] = 1;
+      }
+      sprite_x_vel[j] = kSpawnBee_XY[GetRandomNumber() & 7];
+      sprite_y_vel[j] = kSpawnBee_XY[GetRandomNumber() & 7];
+      sprite_delay_main[j] = 64;
+      sprite_A[j] = 64;
+    }
   }
   return j;
 }

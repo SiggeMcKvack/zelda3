@@ -2497,6 +2497,14 @@ fail:
       goto fail;
     link_bottle_info[btidx] = 2;
     Hud_Rebuild();
+  } else {
+    // Pokemode: Handle extended bottle states (captured sprites)
+    if (enhanced_features0 & kFeatures0_Pokemode) {
+      if (!ReleaseBeeFromBottle(btidx))
+        goto fail;
+      link_bottle_info[btidx] = 2;
+      Hud_Rebuild();
+    }
   }
 }
 
@@ -3405,6 +3413,16 @@ bool SearchForByrnaSpark() {  // 87afb5
       return true;
   } while (--i >= 0);
   return false;
+}
+
+void LinkItem_Net_endAnimation() {  // Pokemode: Clean end of Bug Net animation
+  link_var30d = 0;
+  player_handler_timer = 0;
+  button_mask_b_y &= 0x80;
+  link_position_mode = 0;
+  link_cant_change_direction &= ~1;
+  player_oam_x_offset = 0x80;
+  player_oam_y_offset = 0x80;
 }
 
 void LinkItem_Net() {  // 87aff8
