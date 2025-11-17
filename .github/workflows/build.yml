@@ -110,7 +110,6 @@ jobs:
     - name: Configure CMake
       run: |
         cmake -B build `
-          -T clangcl `
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
           -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
 
