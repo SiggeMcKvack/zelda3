@@ -183,11 +183,15 @@ extern "C" {
 #define __opus_check_int_ptr(ptr) (ptr)
 #define __opus_check_uint_ptr(ptr) (ptr)
 #define __opus_check_val16_ptr(ptr) (ptr)
-#else
+#endif
+
+#ifndef _MSC_VER
+#ifndef DISABLE_PTR_CHECK
 #define __opus_check_int(x) (((void)((x) == (opus_int32)0)), (opus_int32)(x))
 #define __opus_check_int_ptr(ptr) ((ptr) + ((ptr) - (opus_int32*)(ptr)))
 #define __opus_check_uint_ptr(ptr) ((ptr) + ((ptr) - (opus_uint32*)(ptr)))
 #define __opus_check_val16_ptr(ptr) ((ptr) + ((ptr) - (opus_val16*)(ptr)))
+#endif
 #endif
 /** @endcond */
 
