@@ -81,7 +81,6 @@ if(MSVC)
     target_compile_definitions(zelda3 PRIVATE
         _CRT_SECURE_NO_WARNINGS
         _CRT_NONSTDC_NO_DEPRECATE
-        DISABLE_PTR_CHECK=1
     )
 else()
     target_compile_options(zelda3 PRIVATE
