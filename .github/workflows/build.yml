@@ -9,8 +9,11 @@ on:
 
 jobs:
   build-ubuntu:
-    name: Ubuntu Latest
+    name: Ubuntu Latest (${{ matrix.build_type }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
 
     steps:
     - uses: actions/checkout@v4
@@ -33,7 +36,7 @@ jobs:
         echo "Skipping asset extraction (requires ROM)"
 
     - name: Configure CMake
-      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
 
     - name: Build
       run: cmake --build build -j$(nproc)
@@ -41,16 +44,19 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: zelda3-ubuntu
+        name: zelda3-ubuntu-${{ matrix.build_type }}
         path: |
           build/zelda3
           build/*.so
         if-no-files-found: ignore
 
   build-arch:
-    name: Arch Linux
+    name: Arch Linux (${{ matrix.build_type }})
     runs-on: ubuntu-latest
     container: archlinux:latest
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
 
     steps:
     - uses: actions/checkout@v4
@@ -66,7 +72,7 @@ jobs:
           openal
 
     - name: Configure CMake
-      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+      run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
 
     - name: Build
       run: cmake --build build -j$(nproc)
@@ -74,15 +80,18 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: zelda3-arch
+        name: zelda3-arch-${{ matrix.build_type }}
         path: |
           build/zelda3
           build/*.so
         if-no-files-found: ignore
 
   build-windows:
-    name: Windows Latest
+    name: Windows Latest (${{ matrix.build_type }})
     runs-on: windows-latest
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
 
     steps:
     - uses: actions/checkout@v4
@@ -99,24 +108,27 @@ jobs:
     - name: Configure CMake
       run: |
         cmake -B build `
-          -DCMAKE_BUILD_TYPE=Release `
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
           -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
 
     - name: Build
-      run: cmake --build build --config Release -j
+      run: cmake --build build --config ${{ matrix.build_type }} -j
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: zelda3-windows
+        name: zelda3-windows-${{ matrix.build_type }}
         path: |
-          build/Release/zelda3.exe
-          build/Release/*.dll
+          build/${{ matrix.build_type }}/zelda3.exe
+          build/${{ matrix.build_type }}/*.dll
         if-no-files-found: ignore
 
   build-macos-arm64:
-    name: macOS ARM64
+    name: macOS ARM64 (${{ matrix.build_type }})
     runs-on: macos-14
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
 
     steps:
     - uses: actions/checkout@v4
@@ -128,7 +140,7 @@ jobs:
     - name: Configure CMake
       run: |
         cmake -B build \
-          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DCMAKE_OSX_ARCHITECTURES=arm64
 
     - name: Build
@@ -137,15 +149,18 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: zelda3-macos-arm64
+        name: zelda3-macos-arm64-${{ matrix.build_type }}
         path: |
           build/zelda3
           build/*.dylib
         if-no-files-found: ignore
 
   build-macos-x86_64:
-    name: macOS x86_64
+    name: macOS x86_64 (${{ matrix.build_type }})
     runs-on: macos-13
+    strategy:
+      matrix:
+        build_type: [Debug, Release]
 
     steps:
     - uses: actions/checkout@v4
@@ -157,7 +172,7 @@ jobs:
     - name: Configure CMake
       run: |
         cmake -B build \
-          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
           -DCMAKE_OSX_ARCHITECTURES=x86_64
 
     - name: Build
@@ -166,7 +181,7 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: zelda3-macos-x86_64
+        name: zelda3-macos-x86_64-${{ matrix.build_type }}
         path: |
           build/zelda3
           build/*.dylib
