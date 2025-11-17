@@ -1421,12 +1421,12 @@
 #define dung_stairs_table_1 ((uint16*)(g_ram+0x6B8))
 #define selectfile_var8 (*(uint16*)(g_ram+0x630))
 
-#define R10 (*(uint16*)(g_ram+10))
-#define R12 (*(uint16*)(g_ram+12))
-#define R14 (*(uint16*)(g_ram+14))
-#define R16 (*(uint16*)(g_ram+0xc8))
-#define R18 (*(uint16*)(g_ram+0xca))
-#define R20 (*(uint16*)(g_ram+0xcc))
+#define g_r10 (*(uint16*)(g_ram+10))
+#define g_r12 (*(uint16*)(g_ram+12))
+#define g_r14 (*(uint16*)(g_ram+14))
+#define g_r16 (*(uint16*)(g_ram+0xc8))
+#define g_r18 (*(uint16*)(g_ram+0xca))
+#define g_r20 (*(uint16*)(g_ram+0xcc))
 
 // Relocated the hdma table so it can fit 240 rows
 #define hdma_table_dynamic_orig_pos ((uint16*)(g_ram+0x1B00))

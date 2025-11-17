@@ -2479,7 +2479,7 @@ void EtherSpell_HandleRadialSpin(int k) {  // 88abef
   if (BYTE(overworld_screen_index) == 0x70 && !(save_ow_event_info[0x70] & 0x20) && Ancilla_CheckForEntranceTrigger(2)) {
     trigger_special_entrance = 3;
     subsubmodule_index = 0;
-    BYTE(R16) = 0;
+    BYTE(g_r16) = 0;
   }
 
   if (link_player_handler_state != kPlayerState_ReceivingEther) {
@@ -2864,7 +2864,7 @@ void Ancilla1C_QuakeSpell(int k) {  // 88b66a
   if (BYTE(overworld_screen_index) == 0x47 && !(save_ow_event_info[0x47] & 0x20) && Ancilla_CheckForEntranceTrigger(3)) {
     trigger_special_entrance = 4;
     subsubmodule_index = 0;
-    BYTE(R16) = 0;
+    BYTE(g_r16) = 0;
   }
   button_mask_b_y = button_b_frames ? (joypad1H_last & 0x80) : 0;
   link_speed_setting = 0;
@@ -3162,7 +3162,7 @@ endif_7:
     goto do_draw;
   }
 
-  if ((R14 >> 4 | R14 | tiledetect_stair_tile | R12) & 3 && !ancilla_step[k]) {
+  if ((g_r14 >> 4 | g_r14 | tiledetect_stair_tile | g_r12) & 3 && !ancilla_step[k]) {
     ancilla_step[k] = 1;
     ancilla_y_vel[k] = -ancilla_y_vel[k];
     ancilla_x_vel[k] = -ancilla_x_vel[k];
@@ -3889,7 +3889,7 @@ lbl_else:
     if (--breaktowerseal_var5 == 0) {
       trigger_special_entrance = 5;
       subsubmodule_index = 0;
-      BYTE(R16) = 0;
+      BYTE(g_r16) = 0;
       ancilla_step[k]++;
     }
   } else {
@@ -6777,7 +6777,7 @@ void FireRodShot_BecomeSkullWoodsFire(int k) {  // 899c4f
 
   trigger_special_entrance = 2;
   subsubmodule_index = 0;
-  BYTE(R16) = 0;
+  BYTE(g_r16) = 0;
   ancilla_floor[0] = link_is_on_lower_level;
   ancilla_floor2[0] = link_is_on_lower_level_mirror;
   ancilla_item_to_link[0] = 0;
@@ -6973,10 +6973,10 @@ uint8 Ancilla_CalculateSfxPan(int k) {  // 8dbb5e
 }
 
 int Ancilla_AllocInit(uint8 type, uint8 limit) {  // 8ff577
-  // snes bug: R14 is used in tile detection already
+  // snes bug: g_r14 is used in tile detection already
   // unless this is here it the memcmp will fail when entering/leaving a water through steps quickly
   if (g_ram[kRam_BugsFixed] >= kBugFix_PolyRenderer)
-    BYTE(R14) = limit + 1;
+    BYTE(g_r14) = limit + 1;
 
   int n = 0;
   for (int i = 0; i < 5; i++) {
