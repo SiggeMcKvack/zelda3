@@ -41,7 +41,7 @@ def add_asset_packed(name, data):
 
 def print_map32_to_map16():
   tab = {}
-  for line in open('map32_to_map16.txt'):
+  for line in open('map32_to_map16.txt', encoding='utf-8'):
     line = line.strip()
     x, xs = line.split(':', 1)
     tab[int(x)] = [int(t) for t in xs.split(',')]
@@ -809,7 +809,7 @@ extern MemBlk FindInAssetArray(int asset, int idx);
       file_data += b'\0'
     file_data += v
 
-  open('../zelda3_assets.dat', 'wb').write(file_data)
+  open(os.path.join(os.path.dirname(__file__), '..', 'zelda3_assets.dat'), 'wb').write(file_data)
 
 def main(args):
   print_all(args)
