@@ -230,7 +230,7 @@ def print_overworld_area(overworld_area):
     }
     
   s = yaml.dump(y, default_flow_style=None, sort_keys=False)
-  open('overworld/overworld-%d.yaml' % overworld_area, 'w').write(s)
+  open('overworld/overworld-%d.yaml' % overworld_area, 'w', encoding='utf-8').write(s)
 
 def print_all_overworld_areas():
   area_heads = get_bytes(0x82A5EC, 64)
