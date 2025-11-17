@@ -174,11 +174,12 @@ extern "C" {
 #define OPUS_HAVE_OPUS_PROJECTION_H
 
 /* Macros to trigger compilation errors when the wrong types are provided to a CTL */
-#ifdef DISABLE_PTR_CHECK
-/* Simplified pass-through macros when type checking is disabled.
-   Used on MSVC to avoid preprocessor corruption that causes setjmp.h SAL annotation errors.
-   Newer Opus versions (1.5+) include this flag in the official codebase. */
-#define __opus_check_int(x) (x)
+#if defined(_MSC_VER) || defined(DISABLE_PTR_CHECK)
+/* Simplified pass-through macros for MSVC to avoid preprocessor corruption.
+   The complex pointer arithmetic in the original macros corrupts MSVC's preprocessor,
+   causing SAL annotation parsing errors in system headers like setjmp.h.
+   Newer Opus versions (1.5+) include DISABLE_PTR_CHECK flag in the official codebase. */
+#define __opus_check_int(x) ((opus_int32)(x))
 #define __opus_check_int_ptr(ptr) (ptr)
 #define __opus_check_uint_ptr(ptr) (ptr)
 #define __opus_check_val16_ptr(ptr) (ptr)
