@@ -174,10 +174,21 @@ extern "C" {
 #define OPUS_HAVE_OPUS_PROJECTION_H
 
 /* Macros to trigger compilation errors when the wrong types are provided to a CTL */
+#if defined(_MSC_VER)
+/* Simplified macros for MSVC to avoid preprocessor corruption with setjmp.h.
+   The complex pointer arithmetic in the original macros corrupts MSVC's preprocessor state,
+   causing SAL annotation parsing errors in system headers like setjmp.h.
+   This issue persists in Opus 1.3.1; newer versions (1.5+) provide DISABLE_PTR_CHECK flag. */
+#define __opus_check_int(x) (x)
+#define __opus_check_int_ptr(ptr) (ptr)
+#define __opus_check_uint_ptr(ptr) (ptr)
+#define __opus_check_val16_ptr(ptr) (ptr)
+#else
 #define __opus_check_int(x) (((void)((x) == (opus_int32)0)), (opus_int32)(x))
 #define __opus_check_int_ptr(ptr) ((ptr) + ((ptr) - (opus_int32*)(ptr)))
 #define __opus_check_uint_ptr(ptr) ((ptr) + ((ptr) - (opus_uint32*)(ptr)))
 #define __opus_check_val16_ptr(ptr) ((ptr) + ((ptr) - (opus_val16*)(ptr)))
+#endif
 /** @endcond */
 
 /** @defgroup opus_ctlvalues Pre-defined values for CTL interface
