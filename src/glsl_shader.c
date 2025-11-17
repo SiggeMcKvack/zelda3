@@ -4,6 +4,7 @@
 #include "util.h"
 #include "config.h"
 #include "platform.h"
+#include "logging.h"
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
@@ -116,7 +117,7 @@ static bool GlslShader_InitializePasses(GlslShader *gs, int passes) {
   gs->n_pass = passes;
   gs->pass = (GlslPass *)calloc(gs->n_pass + 1, sizeof(GlslPass));
   if (!gs->pass) {
-    fprintf(stderr, "Failed to allocate memory for %d shader passes\n", passes);
+    LogError("Failed to allocate memory for %d shader passes", passes);
     gs->n_pass = 0;
     return false;
   }
@@ -134,7 +135,7 @@ static bool GlslShader_ReadPresetFile(GlslShader *gs, const char *filename) {
     char *value = SplitKeyValue(line), *t;
     if (value == NULL) {
       if (*line)
-        fprintf(stderr, "%s:%d: Expecting key=value\n", filename, lineno);
+        LogError("%s:%d: Expecting key=value", filename, lineno);
       continue;
     }
     if (*value == '"') {
@@ -144,7 +145,7 @@ static bool GlslShader_ReadPresetFile(GlslShader *gs, const char *filename) {
 
     if (gs->n_pass == 0) {
       if (strcmp(line, "shaders") != 0) {
-        fprintf(stderr, "%s:%d: Expecting 'shaders'\n", filename, lineno);
+        LogError("%s:%d: Expecting 'shaders'", filename, lineno);
         break;
       }
       int passes = strtoul(value, NULL, 10);
@@ -187,7 +188,7 @@ static bool GlslShader_ReadPresetFile(GlslShader *gs, const char *filename) {
     else if (strcmp(line, "parameters") == 0)
       ParseParameters(gs, value);
     else if (!ParseTextureKeyValue(gs, line, value) && !ParseParameterKeyValue(gs, line, value))
-      fprintf(stderr, "%s:%d: Unknown key '%s'\n", filename, lineno, line);
+      LogError("%s:%d: Unknown key '%s'", filename, lineno, line);
   }
   free(data_org);
   return gs->n_pass != 0;
@@ -196,7 +197,7 @@ static bool GlslShader_ReadPresetFile(GlslShader *gs, const char *filename) {
 void GlslShader_ReadShaderFile(GlslShader *gs, const char *filename, ByteArray *result) {
   char *data = (char *)Platform_ReadWholeFile(filename, NULL), *data_org = data, *line;
   if (data == NULL) {
-    fprintf(stderr, "Unable to read file '%s'\n", filename);
+    LogError("Unable to read file '%s'", filename);
     return;
   }
   while ((line = NextDelim(&data, '\n')) != NULL) {
@@ -294,9 +295,9 @@ static bool GlslPass_Compile(GlslPass *p, uint type, const uint8 *data, size_t s
   buffer[0] = 0;
   glGetShaderInfoLog(shader, sizeof(buffer), NULL, buffer);
   if (compile_status != GL_TRUE || buffer[0]) {
-    fprintf(stderr, "%s compiling %s shader in file '%s':\n%s\n",
-            compile_status != GL_TRUE ? "Error" : "While",
-            type == GL_VERTEX_SHADER ? "vertex" : "fragment", p->filename, buffer);
+    const char *severity = compile_status != GL_TRUE ? "Error" : "While";
+    const char *shader_type = type == GL_VERTEX_SHADER ? "vertex" : "fragment";
+    LogError("%s compiling %s shader in file '%s':\n%s", severity, shader_type, p->filename, buffer);
   }
   if (compile_status == GL_TRUE)
     glAttachShader(p->gl_program, shader);
@@ -379,7 +380,7 @@ static void GlslShader_LoadTextures(GlslShader *gs, const char *base_filename) {
       int imw, imh, imn;
       unsigned char *data = stbi_load(new_filename, &imw, &imh, &imn, 0);
       if (!data) {
-        fprintf(stderr, "Unable to read PNG '%s'\n", new_filename);
+        LogError("Unable to read PNG '%s'", new_filename);
       } else {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, imw, imh, 0,
                      (imn == 4) ? GL_RGBA : (imn == 3) ? GL_RGB : GL_LUMINANCE, GL_UNSIGNED_BYTE, data);
@@ -406,13 +407,13 @@ GlslShader *GlslShader_CreateFromFile(const char *filename, bool opengl_es) {
       goto FAIL;
     gs->pass[1].filename = strdup(filename);
     if (!gs->pass[1].filename) {
-      fprintf(stderr, "Failed to allocate memory for shader filename\n");
+      LogError("Failed to allocate memory for shader filename");
       goto FAIL;
     }
     filename = "";
   } else {
     if (!GlslShader_ReadPresetFile(gs, filename)) {
-      fprintf(stderr, "Unable to read file '%s'\n", filename);
+      LogError("Unable to read file '%s'", filename);
       goto FAIL;
     }
   }
@@ -421,7 +422,7 @@ GlslShader *GlslShader_CreateFromFile(const char *filename, bool opengl_es) {
     shader_code.size = 0;
 
     if (p->filename == NULL) {
-      fprintf(stderr, "shader%d attribute missing\n", i - 1);
+      LogError("shader%d attribute missing", i - 1);
       goto FAIL;
     }
 
@@ -430,7 +431,7 @@ GlslShader *GlslShader_CreateFromFile(const char *filename, bool opengl_es) {
     free(new_filename);
 
     if (shader_code.size == 0) {
-      fprintf(stderr, "Couldn't read shader in file '%s'\n", p->filename);
+      LogError("Couldn't read shader in file '%s'", p->filename);
       goto FAIL;
     }
     p->gl_program = glCreateProgram();
@@ -442,9 +443,10 @@ GlslShader *GlslShader_CreateFromFile(const char *filename, bool opengl_es) {
     glGetProgramiv(p->gl_program, GL_LINK_STATUS, &link_status);
     buffer[0] = 0;
     glGetProgramInfoLog(p->gl_program, sizeof(buffer), NULL, buffer);
-    if (link_status != GL_TRUE || buffer[0])
-      fprintf(stderr, "%s linking shader in file '%s':\n%s\n",
-              link_status != GL_TRUE ? "Error" : "While", p->filename, buffer);
+    if (link_status != GL_TRUE || buffer[0]) {
+      const char *severity = link_status != GL_TRUE ? "Error" : "While";
+      LogError("%s linking shader in file '%s':\n%s", severity, p->filename, buffer);
+    }
     if (link_status != GL_TRUE)
       goto FAIL;
     glGenFramebuffers(1, &p->gl_fbo);

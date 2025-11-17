@@ -110,9 +110,11 @@ int cpu_runOpcode(Cpu* cpu) {
   }
   // not stopped or waiting, execute a opcode or go to interrupt
   if((!cpu->i && cpu->irqWanted) || cpu->nmiWanted) {
+#ifndef NDEBUG
     if (cpu->in_emu) {
       printf("nmi while in emu!\n");
     }
+#endif  // NDEBUG
 
     cpu->cyclesUsed = 7; // interrupt: at least 7 cycles
     if(cpu->nmiWanted) {

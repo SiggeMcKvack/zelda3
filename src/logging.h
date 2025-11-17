@@ -22,17 +22,17 @@ void LogPrint(LogLevel level, const char *file, int line, const char *fmt, ...);
 void LogPrintV(LogLevel level, const char *file, int line, const char *fmt, va_list args);
 
 // Convenience macros with file/line info in debug builds
-#ifdef _DEBUG
+#ifndef NDEBUG
   #define LogError(fmt, ...) LogPrint(LOG_ERROR, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
   #define LogWarn(fmt, ...)  LogPrint(LOG_WARN,  __FILE__, __LINE__, fmt, ##__VA_ARGS__)
   #define LogInfo(fmt, ...)  LogPrint(LOG_INFO,  __FILE__, __LINE__, fmt, ##__VA_ARGS__)
   #define LogDebug(fmt, ...) LogPrint(LOG_DEBUG, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
-#else
+#else  // NDEBUG
   #define LogError(fmt, ...) LogPrint(LOG_ERROR, NULL, 0, fmt, ##__VA_ARGS__)
   #define LogWarn(fmt, ...)  LogPrint(LOG_WARN,  NULL, 0, fmt, ##__VA_ARGS__)
   #define LogInfo(fmt, ...)  LogPrint(LOG_INFO,  NULL, 0, fmt, ##__VA_ARGS__)
   #define LogDebug(fmt, ...) LogPrint(LOG_DEBUG, NULL, 0, fmt, ##__VA_ARGS__)
-#endif
+#endif  // NDEBUG
 
 // Initialize logging subsystem (call from main)
 void InitializeLogging(void);

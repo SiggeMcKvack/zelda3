@@ -9,6 +9,7 @@
 #include "cart.h"
 #include "ppu.h"
 #include "dsp.h"
+#include "../src/logging.h"
 
 typedef struct CartHeader {
   // normal header
@@ -43,7 +44,7 @@ static void readHeader(uint8_t* data, int location, CartHeader* header);
 bool snes_loadRom(Snes* snes, uint8_t* data, int length) {
   // if smaller than smallest possible, don't load
   if(length < 0x8000) {
-    printf("Failed to load rom: rom to small (%d bytes)\n", length);
+    LogError("Failed to load rom: rom to small (%d bytes)", length);
     return false;
   }
   // check headers
@@ -72,7 +73,7 @@ bool snes_loadRom(Snes* snes, uint8_t* data, int length) {
   }
   // check if we can load it
   if(headers[used].cartType > 2) {
-    printf("Failed to load rom: unsupported type (%d)\n", headers[used].cartType);
+    LogError("Failed to load rom: unsupported type (%d)", headers[used].cartType);
     return false;
   }
   // expand to a power of 2
@@ -94,7 +95,8 @@ bool snes_loadRom(Snes* snes, uint8_t* data, int length) {
     test *= 2;
   }
   // load it
-  printf("Loaded %s rom\n\"%s\"\n", headers[used].cartType == 2 ? "HiROM" : "LoROM", headers[used].name);
+  const char *romType = headers[used].cartType == 2 ? "HiROM" : "LoROM";
+  LogInfo("Loaded %s rom: \"%s\"", romType, headers[used].name);
   cart_load(
     snes->cart, headers[used].cartType,
     newData, newLength, headers[used].chips > 0 ? headers[used].ramSize : 0

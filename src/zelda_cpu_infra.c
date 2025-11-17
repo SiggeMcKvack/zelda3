@@ -114,15 +114,16 @@ static void VerifySnapshotsEq(Snapshot *b, Snapshot *a, Snapshot *prev) {
   a->ram[0x654] = b->ram[0x654];  // msu_volume
 
   memcpy(a->ram + 0x1CDD, b->ram + 0x1CDD, 2);  // dialogue_msg_src_offs
-  
+
   if (memcmp(b->ram, a->ram, 0x20000)) {
+#ifndef NDEBUG
     fprintf(stderr, "@%d: Memory compare failed (mine != theirs, prev):\n", frame_counter);
     int j = 0;
     for (size_t i = 0; i < 0x20000; i++) {
       if (a->ram[i] != b->ram[i]) {
         if (++j < 128) {
           if ((i&1) == 0 && a->ram[i + 1] != b->ram[i + 1]) {
-            fprintf(stderr, "0x%.6X: %.4X != %.4X (%.4X)\n", (int)i, 
+            fprintf(stderr, "0x%.6X: %.4X != %.4X (%.4X)\n", (int)i,
               WORD(b->ram[i]), WORD(a->ram[i]), WORD(prev->ram[i]));
             i++, j++;
           } else {
@@ -134,16 +135,20 @@ static void VerifySnapshotsEq(Snapshot *b, Snapshot *a, Snapshot *prev) {
     if (j)
       g_fail = true;
     fprintf(stderr, "  total of %d failed bytes\n", (int)j);
+#else
+    g_fail = true;
+#endif  // NDEBUG
   }
 
   if (memcmp(b->sram, a->sram, 0x2000)) {
+#ifndef NDEBUG
     fprintf(stderr, "@%d: SRAM compare failed (mine != theirs, prev):\n", frame_counter);
     int j = 0;
     for (size_t i = 0; i < 0x2000; i++) {
       if (a->sram[i] != b->sram[i]) {
         if (++j < 128) {
           if ((i&1) == 0 && a->sram[i + 1] != b->sram[i + 1]) {
-            fprintf(stderr, "0x%.6X: %.4X != %.4X (%.4X)\n", (int)i, 
+            fprintf(stderr, "0x%.6X: %.4X != %.4X (%.4X)\n", (int)i,
               WORD(b->sram[i]), WORD(a->sram[i]), WORD(prev->sram[i]));
             i++, j++;
           } else {
@@ -155,9 +160,13 @@ static void VerifySnapshotsEq(Snapshot *b, Snapshot *a, Snapshot *prev) {
     if (j)
       g_fail = true;
     fprintf(stderr, "  total of %d failed bytes\n", (int)j);
+#else
+    g_fail = true;
+#endif  // NDEBUG
   }
 
   if (memcmp(b->vram, a->vram, sizeof(uint16) * 0x8000)) {
+#ifndef NDEBUG
     fprintf(stderr, "@%d: VRAM compare failed (mine != theirs, prev):\n", frame_counter);
     for (size_t i = 0, j = 0; i < 0x8000; i++) {
       if (a->vram[i] != b->vram[i]) {
@@ -167,6 +176,9 @@ static void VerifySnapshotsEq(Snapshot *b, Snapshot *a, Snapshot *prev) {
           break;
       }
     }
+#else
+    g_fail = true;
+#endif  // NDEBUG
   }
 }
 
@@ -218,11 +230,13 @@ void RunEmulatedFuncSilent(uint32 pc, uint16 a, uint16 x, uint16 y, bool mf, boo
   g_cpu->xf = xf;
   g_calling_asm_from_c = true;
   while (g_calling_asm_from_c) {
+#ifndef NDEBUG
     if (g_snes->debug_cycles) {
       char line[80];
       getProcessorStateCpu(g_snes, line);
       puts(line);
     }
+#endif  // NDEBUG
     cpu_runOpcode(g_cpu);
     while (g_snes->dma->dmaBusy)
       dma_doDma(g_snes->dma);
@@ -335,7 +349,9 @@ void EmuRunFrameWithCompare(uint16 input_state, int run_what) {
   // Compare both snapshots before we run the frame, to see they match
   VerifySnapshotsEq(&g_snapshot_mine, &g_snapshot_theirs, &g_snapshot_before);
   if (g_fail) {
+#ifndef NDEBUG
     printf("early fail\n");
+#endif  // NDEBUG
     assert(0);
     //return turbo;
   }

@@ -3628,7 +3628,9 @@ void Link_PerformDash() {  // 87b281
   link_moving_against_diag_tile = 0;
 
   if (follower_indicator == kTagalongArr1[follower_indicator]) {
+#ifndef NDEBUG
     printf("Warning: Write to CART!\n");
+#endif  // NDEBUG
     link_speed_setting = 0;
     timer_tagalong_reacquire = 64;
   }
