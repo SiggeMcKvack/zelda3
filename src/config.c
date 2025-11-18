@@ -617,7 +617,7 @@ void ParseConfigFile(const char *filename) {
   if (g_config.shader) {
     ValidatePathWithCaseSuggestion(g_config.shader, "Shader");
   }
-  if (g_config.msu_path) {
+  if (g_config.enable_msu && g_config.msu_path) {
     // For MSU, we need to validate the directory part only (before the track prefix)
     // MSU path format is like "msu/alttp_msu-" where files are "msu/alttp_msu-1.pcm", etc.
     // We'll validate just the directory portion
