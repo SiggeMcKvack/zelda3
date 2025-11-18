@@ -428,6 +428,14 @@ void LoadOverworldMapPalette() {
 
 void EraseTileMaps_triforce() {  // 808333
   EraseTileMaps(0xa9, 0x7f);
+
+  // Fill BG1 tilemap (64×32 at VRAM 0x1000) with green brick pattern for widescreen
+  static const uint16 kBrickPattern[4] = {0x3581, 0x3582, 0x3591, 0x3592};
+  uint16 *dst = g_zenv.vram + 0x1000;
+  for (int i = 0; i < 2048; i++) {
+    int pattern_idx = ((i & 0x20) >> 4) + (i & 1);
+    *dst++ = kBrickPattern[pattern_idx];
+  }
 }
 
 void EraseTileMaps_dungeonmap() {  // 80833f

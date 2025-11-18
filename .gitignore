@@ -40,3 +40,9 @@ CMakeFiles/
 cmake_install.cmake
 install_manifest.txt
 .claude/settings.local.json
+
+# Build scripts (user-specific)
+build_debug.sh
+build_release.sh
+# run_debug.sh is tracked as a convenience script
+run_debug.sh
