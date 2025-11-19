@@ -3,9 +3,14 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <errno.h>
 #include <SDL.h>
 
 #include "platform_detect.h"
+
+#ifdef PLATFORM_ANDROID
+#include <android/log.h>
+#endif
 
 #ifdef PLATFORM_WINDOWS
 #include "platform/win32/volume_control.h"
@@ -226,7 +231,7 @@ static SDL_Rect g_sdl_renderer_rect;
 static bool SdlRenderer_Init(SDL_Window *window) {
 
   if (g_config.shader)
-    LogWarn("Warning: Shaders are supported only with the OpenGL backend");
+    LogWarn("Warning: Shaders are supported only with the OpenGL and Vulkan backends");
 
   SDL_Renderer *renderer = SDL_CreateRenderer(g_window, -1,
                                               g_config.output_method == kOutputMethod_SDLSoftware ? SDL_RENDERER_SOFTWARE :
@@ -285,31 +290,100 @@ static void SdlRenderer_EndDraw() {
   SDL_RenderPresent(g_renderer); // vsyncs to 60 FPS?
 }
 
+static void SdlRenderer_OnResize(int width, int height) {
+  // SDL_Renderer handles resize automatically
+  // No action needed - stub for interface compatibility
+}
+
 static const struct RendererFuncs kSdlRendererFuncs  = {
   &SdlRenderer_Init,
   &SdlRenderer_Destroy,
   &SdlRenderer_BeginDraw,
   &SdlRenderer_EndDraw,
+  &SdlRenderer_OnResize,
 };
 
 void OpenGLRenderer_Create(struct RendererFuncs *funcs, bool use_opengl_es);
 
+// On Android, SDL needs the function to be named SDL_main, not main
+// SDL.h defines a macro that renames main to SDL_main, so don't undef it
+#ifndef PLATFORM_ANDROID
 #undef main
+#endif
 int main(int argc, char** argv) {
+#ifdef PLATFORM_ANDROID
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Main", "main() entered, argc=%d", argc);
+#endif
   argc--, argv++;
 
+#ifdef PLATFORM_ANDROID
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Main", "About to InitializeLogging");
+#endif
   // Initialize logging system early
   InitializeLogging();
+#ifdef PLATFORM_ANDROID
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Main", "InitializeLogging() complete");
+#endif
 
+#ifdef PLATFORM_ANDROID
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Main", "About to check config_file");
+#endif
   const char *config_file = NULL;
   if (argc >= 2 && strcmp(argv[0], "--config") == 0) {
     config_file = argv[1];
     argc -= 2, argv += 2;
   } else {
+#ifdef PLATFORM_ANDROID
+    // On Android, change to SDL's external files directory where assets are stored
+    const char *external_path = SDL_AndroidGetExternalStoragePath();
+    if (external_path) {
+      __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Main",
+                          "Changing working directory to: %s", external_path);
+      if (chdir(external_path) != 0) {
+        __android_log_print(ANDROID_LOG_ERROR, "Zelda3Main",
+                            "Failed to chdir to %s (errno=%d: %s)",
+                            external_path, errno, strerror(errno));
+      }
+    } else {
+      __android_log_print(ANDROID_LOG_ERROR, "Zelda3Main",
+                          "SDL_AndroidGetExternalStoragePath returned NULL");
+    }
+#else
     SwitchDirectory();
+#endif
   }
+#ifdef PLATFORM_ANDROID
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Main", "About to ParseConfigFile");
+#endif
   ParseConfigFile(config_file);
+
+  // Create audio mutex BEFORE SDL_Init to prevent race condition with SDL audio threads
+  g_audio_mutex = SDL_CreateMutex();
+  if (!g_audio_mutex) Die("No mutex");
+#ifdef PLATFORM_ANDROID
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Main", "Audio mutex created");
+#endif
+
+  // Initialize SDL early, before LoadAssets, to ensure subsystems are ready
+#ifdef PLATFORM_ANDROID
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Main", "About to SDL_Init");
+#endif
+  if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) {
+    SDL_DestroyMutex(g_audio_mutex);
+    LogError("Failed to init SDL: %s", SDL_GetError());
+    return 1;
+  }
+#ifdef PLATFORM_ANDROID
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Main", "SDL_Init complete");
+#endif
+
+#ifdef PLATFORM_ANDROID
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Main", "About to LoadAssets");
+#endif
   LoadAssets();
+#ifdef PLATFORM_ANDROID
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Main", "About to LoadLinkGraphics");
+#endif
   LoadLinkGraphics();
 
   ZeldaInitialize();
@@ -348,20 +422,77 @@ int main(int argc, char** argv) {
   if (g_config.audio_samples <= 0 || ((g_config.audio_samples & (g_config.audio_samples - 1)) != 0))
     g_config.audio_samples = kDefaultSamples;
 
-  // set up SDL
-  if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) != 0) {
-    LogError("Failed to init SDL: %s", SDL_GetError());
-    return 1;
-  }
+  // Note: SDL_Init was already called earlier (before LoadAssets) to prevent race conditions
 
   bool custom_size  = g_config.window_width != 0 && g_config.window_height != 0;
   int window_width  = custom_size ? g_config.window_width  : g_current_window_scale * g_snes_width;
   int window_height = custom_size ? g_config.window_height : g_current_window_scale * g_snes_height;
 
+  // Check for Vulkan on Android - not yet supported
+#ifdef PLATFORM_ANDROID
+  if (g_config.output_method == kOutputMethod_Vulkan) {
+    LogWarn("Vulkan renderer not yet available on Android, falling back to OpenGL ES");
+    g_config.output_method = kOutputMethod_OpenGL_ES;
+
+    // Show Toast notification to user
+    extern void Android_ShowToast(const char* message);
+    Android_ShowToast("Vulkan could not be enabled, switching to OpenGL ES...");
+
+    // Update zelda3.ini to persist the fallback
+    FILE *ini_file = fopen("zelda3.ini", "r+");
+    if (ini_file) {
+      char line[512];
+      char *file_content = NULL;
+      size_t total_size = 0;
+      bool found = false;
+
+      // Read entire file
+      while (fgets(line, sizeof(line), ini_file)) {
+        char *new_line = line;
+        // Replace OutputMethod = Vulkan with OutputMethod = OpenGL ES
+        if (strstr(line, "OutputMethod") && strstr(line, "Vulkan")) {
+          strcpy(line, "OutputMethod = OpenGL ES\n");
+          found = true;
+        }
+        size_t line_len = strlen(new_line);
+        file_content = realloc(file_content, total_size + line_len + 1);
+        if (file_content) {
+          memcpy(file_content + total_size, new_line, line_len);
+          total_size += line_len;
+        }
+      }
+
+      if (found && file_content) {
+        file_content[total_size] = '\0';
+        fseek(ini_file, 0, SEEK_SET);
+        fwrite(file_content, 1, total_size, ini_file);
+        ftruncate(fileno(ini_file), total_size);
+        LogInfo("Updated zelda3.ini: OutputMethod = OpenGL ES");
+      }
+
+      free(file_content);
+      fclose(ini_file);
+    }
+  }
+#endif
+
+#ifdef PLATFORM_ANDROID
+  // Android's SDL backend requires OpenGL window flag for SDL_Renderer and OpenGL ES
+  // (but NOT for Vulkan)
+  if (g_config.output_method != kOutputMethod_Vulkan) {
+    g_win_flags |= SDL_WINDOW_OPENGL;
+  }
+#endif
+
   if (g_config.output_method == kOutputMethod_OpenGL ||
       g_config.output_method == kOutputMethod_OpenGL_ES) {
     g_win_flags |= SDL_WINDOW_OPENGL;
     OpenGLRenderer_Create(&g_renderer_funcs, (g_config.output_method == kOutputMethod_OpenGL_ES));
+  } else if (g_config.output_method == kOutputMethod_Vulkan) {
+    g_win_flags |= SDL_WINDOW_VULKAN;
+    // VulkanRenderer_Create(&g_renderer_funcs);  // To be implemented in Phase 3
+    LogWarn("Vulkan renderer not yet implemented, falling back to SDL");
+    g_renderer_funcs = kSdlRendererFuncs;
   } else {
     g_renderer_funcs = kSdlRendererFuncs;
   }
@@ -379,8 +510,7 @@ int main(int argc, char** argv) {
 
   SDL_AudioDeviceID device = 0;
   SDL_AudioSpec want = { 0 }, have;
-  g_audio_mutex = SDL_CreateMutex();
-  if (!g_audio_mutex) Die("No mutex");
+  // Note: g_audio_mutex was already created earlier to prevent race conditions
 
   if (g_config.enable_audio) {
     want.freq = g_config.audio_freq;
@@ -438,6 +568,13 @@ int main(int argc, char** argv) {
           HandleGamepadInput(b, event.type == SDL_CONTROLLERBUTTONDOWN);
         break;
       }
+      case SDL_WINDOWEVENT:
+        if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+          if (g_renderer_funcs.OnResize) {
+            g_renderer_funcs.OnResize(event.window.data1, event.window.data2);
+          }
+        }
+        break;
       case SDL_MOUSEWHEEL:
         if (SDL_GetModState() & KMOD_CTRL && event.wheel.y != 0)
           ChangeWindowScale(event.wheel.y > 0 ? 1 : -1);
@@ -611,11 +748,11 @@ static void HandleCommand(uint32 j, bool pressed) {
 }
 
 void ZeldaApuLock() {
-  SDL_LockMutex(g_audio_mutex);
+  if (g_audio_mutex) SDL_LockMutex(g_audio_mutex);
 }
 
 void ZeldaApuUnlock() {
-  SDL_UnlockMutex(g_audio_mutex);
+  if (g_audio_mutex) SDL_UnlockMutex(g_audio_mutex);
 }
 
 
@@ -824,6 +961,18 @@ const uint8 *g_asset_ptrs[kNumberOfAssets];
 uint32 g_asset_sizes[kNumberOfAssets];
 
 static void LoadAssets() {
+#ifdef PLATFORM_ANDROID
+  // Log current working directory to diagnose path issues
+  char cwd[1024];
+  if (getcwd(cwd, sizeof(cwd)) != NULL) {
+    __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Main",
+                        "LoadAssets: Current working directory is '%s'", cwd);
+  } else {
+    __android_log_print(ANDROID_LOG_ERROR, "Zelda3Main",
+                        "LoadAssets: Failed to get current working directory");
+  }
+#endif
+
   size_t length = 0;
   uint8 *data = Platform_ReadWholeFile("zelda3_assets.dat", &length);
   if (!data) {

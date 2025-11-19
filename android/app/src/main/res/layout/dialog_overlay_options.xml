@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_enable_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Enable overlay"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <TextView
+        android:id="@+id/option_edit_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Edit overlay position"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="16dp"
+        android:textSize="16sp"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true" />
+
+    <TextView
+        android:id="@+id/option_adjust_controls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Adjust controls"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="16dp"
+        android:textSize="16sp"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true" />
+
+    <TextView
+        android:id="@+id/option_toggle_controls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Toggle controls"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="16dp"
+        android:textSize="16sp"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_dpad_slide"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="D-pad slide"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_haptic_feedback"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Haptic feedback"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <TextView
+        android:id="@+id/option_reset_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Reset overlay"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="16dp"
+        android:textSize="16sp"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true" />
+
+</LinearLayout>
+
+</ScrollView>

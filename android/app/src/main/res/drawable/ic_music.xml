@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- Material Icons: music_note -->
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M380,868 Q313,868 266.5,821.5 Q220,775 220,708 Q220,641 266.5,594.5 Q313,548 380,548 Q405,548 429,554 Q453,560 473,572 L473,92 L740,92 L740,252 L553,252 L553,708 Q553,775 506.5,821.5 Q460,868 393,868 Q326,868 279.5,821.5 Q233,775 233,708 Q233,641 279.5,594.5 Q326,548 393,548 L380,548 L380,708 Q380,735 359.5,755.5 Q339,776 312,776 Q285,776 264.5,755.5 Q244,735 244,708 Q244,681 264.5,660.5 Q285,640 312,640 Q339,640 359.5,660.5 Q380,681 380,708 L380,868 Z"/>
+</vector>

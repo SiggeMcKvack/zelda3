@@ -1,14 +1,20 @@
 # Building Zelda3
 
-Complete build instructions for all supported platforms.
+Complete build instructions for all supported platforms: Linux, macOS, Windows, Nintendo Switch, and Android.
 
 ## Prerequisites
 
-### All Platforms
+### Desktop Platforms (Linux, macOS, Windows)
 - **Python 3.x** with pip
 - **SDL2** development libraries
 - **Opus** audio codec library
 - **CMake 3.10+**
+
+### Android Platform
+- **Android SDK** (API 26+)
+- **Android NDK** (r21e+)
+- **Java 17+**
+- See "Platform-Specific Builds → Android" section below
 
 ### Platform-Specific Dependencies
 
@@ -156,6 +162,92 @@ nxlink -s zelda3.nro
 ```
 
 **Note:** Switch uses its own Makefile (devkitPro toolchain), not CMake.
+
+### Android
+
+Android build uses Gradle with JNI integration. Requires Android Studio or command-line tools.
+
+**Prerequisites:**
+- **Android SDK** (API level 26+)
+- **Android NDK** (r21e or later recommended)
+- **Java 17+** (for Gradle 8.x)
+- `ANDROID_HOME` environment variable set
+- `zelda3_assets.dat` extracted (see Asset Extraction above)
+
+**Install Android Studio (recommended):**
+1. Download from https://developer.android.com/studio
+2. Install SDK and NDK via SDK Manager
+3. Set `ANDROID_HOME` in your shell profile
+
+**Or install command-line tools:**
+```bash
+# macOS/Linux
+wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+unzip commandlinetools-*.zip -d $HOME/android-sdk
+export ANDROID_HOME=$HOME/android-sdk
+$ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME \
+  "platform-tools" "platforms;android-33" "ndk;25.2.9519653"
+```
+
+**Build APK:**
+```bash
+cd android
+
+# Debug build (for development/testing)
+./gradlew assembleDebug
+# Output: android/app/build/outputs/apk/debug/app-debug.apk
+
+# Release build (signed, optimized)
+./gradlew assembleRelease
+# Output: android/app/build/outputs/apk/release/app-release.apk
+```
+
+**Install to device:**
+```bash
+# Connect Android device via USB with USB debugging enabled
+adb devices  # Verify device is detected
+
+# Install debug build
+./gradlew installDebug
+
+# Or manually install
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+**Deploy assets to device:**
+```bash
+# Copy zelda3_assets.dat to SDL external storage path
+adb push ../zelda3_assets.dat /sdcard/Android/data/com.yourpackage.zelda3/files/
+```
+
+**View logs:**
+```bash
+# Filter for Zelda3-related logs
+adb logcat | grep Zelda3
+
+# Or use Android Studio Logcat viewer
+```
+
+**Configuration:**
+- Edit `android/app/build.gradle` to change package name, version, etc.
+- NDK version specified in `android/app/build.gradle` (ndk.version)
+- Minimum SDK: API 26 (Android 8.0)
+- Target SDK: API 33+ recommended
+
+**Troubleshooting:**
+- **"SDK not found"**: Set `ANDROID_HOME` environment variable
+- **"NDK not found"**: Install NDK via SDK Manager or set `ndk.dir` in `local.properties`
+- **Java version mismatch**: Gradle 8.x requires Java 17+, use `./gradlew --version` to check
+- **Asset loading fails**: Ensure `zelda3_assets.dat` is in SDL external storage path
+- **Build fails with "undefined reference"**: Clean build with `./gradlew clean`
+
+**Performance Notes:**
+- Uses OpenGL ES renderer by default (faster than SDL software)
+- Vulkan renderer in development (not yet available)
+- Audio latency can be adjusted in `zelda3.ini` (samples: 512-2048)
+- For best performance, use release builds on physical devices
+
+**Note:** Android build system is independent of desktop CMake. Source files are shared, but build configuration is in Gradle.
 
 ## Troubleshooting
 

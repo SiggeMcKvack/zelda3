@@ -422,7 +422,8 @@ static bool HandleGraphicsConfig(const char *key, char *value) {
     g_config.output_method = StringEqualsNoCase(value, "SDL-Software") ? kOutputMethod_SDLSoftware :
                              StringEqualsNoCase(value, "OpenGL") ? kOutputMethod_OpenGL :
                              StringEqualsNoCase(value, "OpenGL ES") ? kOutputMethod_OpenGL_ES :
-                                                                      kOutputMethod_SDL;
+                             StringEqualsNoCase(value, "Vulkan") ? kOutputMethod_Vulkan :
+                                                                   kOutputMethod_SDL;
     return true;
   } else if (StringEqualsNoCase(key, "LinearFiltering")) {
     return ParseBool(value, &g_config.linear_filtering);

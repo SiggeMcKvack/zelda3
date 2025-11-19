@@ -46,3 +46,14 @@ build_debug.sh
 build_release.sh
 # run_debug.sh is tracked as a convenience script
 run_debug.sh
+ANDROID_MIGRATION_PLAN.md
+
+# Android build artifacts
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+android/.kotlin/
+*.log

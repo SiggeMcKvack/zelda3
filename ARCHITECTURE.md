@@ -10,28 +10,36 @@ This is a ~70-80kLOC C reimplementation of The Legend of Zelda: A Link to the Pa
 - Original behavior preserved for replay compatibility
 - Frame-by-frame verification against original ROM possible
 - Enhanced features are optional and disabled by default
-- Cross-platform via SDL2
+- Cross-platform via SDL2 (Linux, macOS, Windows, Switch, Android)
 
 ## Core Architecture
 
 ### Game Loop
 
 ```
-main.c
-  ├─ SDL initialization
+main.c (or SDL_main on Android)
+  ├─ Platform initialization
+  │   ├─ Desktop: Standard working directory
+  │   └─ Android: chdir to SDL external storage
+  ├─ Audio mutex creation (before SDL_Init on Android)
+  ├─ SDL initialization (audio/video/gamepad)
   ├─ Asset loading (zelda3_assets.dat)
+  ├─ Renderer initialization (SDL/OpenGL/OpenGL ES/Vulkan)
   ├─ Game loop (60 FPS)
-  │   ├─ Input handling
+  │   ├─ Input handling (keyboard/gamepad/touch)
   │   ├─ ZeldaRunFrame() → zelda_rtl.c
   │   ├─ PPU rendering → snes/ppu.c
+  │   ├─ Renderer draw (platform-specific)
   │   └─ Audio processing → snes/apu.c
   └─ Cleanup
 ```
 
 **Key Files:**
-- `src/main.c`: Entry point, SDL lifecycle, input
+- `src/main.c`: Entry point, SDL lifecycle, input, platform initialization
 - `src/zelda_rtl.c`: Runtime environment, frame execution
 - `src/zelda_cpu_infra.c`: Optional ROM verification mode
+- `src/platform.c`: Platform abstraction (file I/O, path validation)
+- `src/logging.c`: Cross-platform logging with platform detection
 
 ## Memory Architecture
 
@@ -203,14 +211,58 @@ const char* FindCmdName(int cmd);
 ```c
 PlatformFile *Platform_OpenFile(const char *filename, const char *mode);
 size_t Platform_ReadFile(void *ptr, size_t size, size_t count, PlatformFile *file);
+uint8_t *Platform_ReadWholeFile(const char *filename, size_t *length_out);
+char *Platform_FindFileWithCaseInsensitivity(const char *path);
 // ... etc
 ```
 
-Default implementation uses standard C `FILE*`. Future platforms can override.
+Default implementation uses standard C `FILE*`. Platforms can override for native APIs.
+
+**Platform Detection:** (`src/platform_detect.h`)
+```c
+#ifdef PLATFORM_ANDROID
+  // Android-specific code
+#elif defined(PLATFORM_WINDOWS)
+  // Windows-specific code
+#elif defined(PLATFORM_MACOS)
+  // macOS-specific code
+// ... etc
+```
 
 **Platform-Specific Code:**
 - `src/platform/win32/`: Windows volume control
 - `src/platform/switch/`: Nintendo Switch port
+- `src/platform/android/`: Android-specific utilities (if needed)
+- `android/`: Complete Android app with JNI integration (separate build system)
+
+**Android Platform:**
+- **Build system:** Gradle (independent of desktop CMake)
+- **Entry point:** `SDL_main()` (SDL macro replaces `main()`)
+- **Asset path:** `SDL_AndroidGetExternalStoragePath()` + chdir
+- **Logging:** `__android_log_print()` for early initialization, then standard logging
+- **Renderer:** OpenGL ES by default (Vulkan in progress)
+- **Threading:** Audio mutex created before SDL_Init to prevent race conditions
+- **Initialization order:**
+  1. Create audio mutex
+  2. SDL_Init (all subsystems)
+  3. LoadAssets (from SDL external storage)
+  4. Standard game initialization
+
+**Renderer Abstraction:** (`src/util.h`)
+```c
+struct RendererFuncs {
+  bool (*Init)(SDL_Window *window);
+  void (*Destroy)();
+  void (*BeginDraw)(int width, int height, uint8 **pixels, int *pitch);
+  void (*EndDraw)();
+  void (*OnResize)(int width, int height);  // Handle window resize
+};
+```
+
+**Implementations:**
+- SDL software renderer (`main.c`)
+- OpenGL/OpenGL ES (`src/opengl.c`)
+- Vulkan (in progress)
 
 ## Asset Pipeline
 
@@ -309,10 +361,12 @@ Each module has update functions called per-frame.
 5. Guard with feature check
 
 **Adding Platforms:**
-1. Create `src/platform/<name>/`
-2. Implement platform-specific overrides
-3. Add conditional compilation
-4. Update CMakeLists.txt
+1. Add platform detection in `src/platform_detect.h`
+2. Create `src/platform/<name>/` for platform-specific code
+3. Implement platform-specific overrides (File I/O, logging, etc.)
+4. Add conditional compilation guards (`#ifdef PLATFORM_<NAME>`)
+5. Desktop: Update `CMakeLists.txt`
+6. Mobile: Create separate build system (Gradle for Android, Xcode for iOS)
 
 **Adding Renderers:**
 1. Implement `RendererFuncs` interface

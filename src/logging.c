@@ -24,8 +24,14 @@ static LogLevel g_log_level = LOG_WARN;  // Default: show errors and warnings
 static bool g_use_colors = false;        // Detect terminal support at init
 
 void InitializeLogging(void) {
+#ifdef PLATFORM_ANDROID
+  // Android: Always disable colors (logcat doesn't support ANSI)
+  // Avoid isatty() call which may interact badly with Android graphics system
+  g_use_colors = false;
+#else
   // Check if stderr is a TTY (supports colors)
   g_use_colors = isatty(fileno(stderr));
+#endif
 
   // Allow environment variable to override log level
   const char *log_env = getenv("ZELDA3_LOG_LEVEL");

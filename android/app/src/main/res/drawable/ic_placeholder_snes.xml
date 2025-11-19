@@ -1,0 +1,29 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="128dp"
+    android:height="112dp"
+    android:viewportWidth="128"
+    android:viewportHeight="112">
+    <!-- SNES cartridge placeholder icon -->
+    <!-- Cartridge body -->
+    <path
+        android:fillColor="#808080"
+        android:pathData="M16,16h96v80h-96z"/>
+    <!-- Label area -->
+    <path
+        android:fillColor="#A0A0A0"
+        android:pathData="M24,24h80v40h-80z"/>
+    <!-- Text placeholder lines -->
+    <path
+        android:fillColor="#606060"
+        android:pathData="M32,32h64v4h-64z"/>
+    <path
+        android:fillColor="#606060"
+        android:pathData="M32,40h48v4h-48z"/>
+    <path
+        android:fillColor="#606060"
+        android:pathData="M32,48h56v4h-56z"/>
+    <!-- Cartridge notch -->
+    <path
+        android:fillColor="#606060"
+        android:pathData="M48,96h32v16h-32z"/>
+</vector>

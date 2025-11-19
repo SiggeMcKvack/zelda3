@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+
+    <!-- Restart warning (initially hidden) -->
+    <TextView
+        android:id="@+id/text_restart_warning"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="⚠️ Restart required for changes to take effect"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp"
+        android:textSize="14sp"
+        android:textColor="?attr/colorError"
+        android:visibility="gone" />
+
+    <!-- Gameplay Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="GAMEPLAY"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="8dp"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textStyle="bold" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_disable_low_health_beep"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Disable low health beep"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <!-- MSU Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="MSU"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="8dp"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textStyle="bold" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_enable_msu"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Enable MSU"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <!-- Info text showing MSU track count -->
+    <TextView
+        android:id="@+id/text_msu_info"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="No MSU files detected"
+        android:paddingHorizontal="24dp"
+        android:paddingBottom="12dp"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorPrimary" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_resume_msu"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Resume MSU"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <!-- MSU Volume slider with label -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="MSU Volume"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="4dp"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorSecondary" />
+
+    <com.google.android.material.slider.Slider
+        android:id="@+id/slider_msu_volume"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:valueFrom="0"
+        android:valueTo="100"
+        android:stepSize="1"
+        android:value="100" />
+
+    <!-- Volume value display -->
+    <TextView
+        android:id="@+id/text_volume_value"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="100%"
+        android:paddingHorizontal="24dp"
+        android:paddingBottom="8dp"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:textColor="?android:attr/textColorSecondary" />
+
+</LinearLayout>
+
+</ScrollView>

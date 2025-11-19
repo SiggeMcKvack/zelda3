@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+
+    <!-- Info text -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Select MSU files to delete:"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="8dp"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorSecondary" />
+
+    <!-- Scrollable list of MSU files with checkboxes -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:maxHeight="300dp">
+
+        <LinearLayout
+            android:id="@+id/msu_files_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="16dp" />
+
+    </ScrollView>
+
+    <!-- Delete selected button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/button_delete_selected"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Delete selected"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginTop="8dp"
+        style="@style/Widget.Material3.Button" />
+
+    <!-- Divider -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginVertical="16dp"
+        android:background="?android:attr/listDivider" />
+
+    <!-- Delete all button -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/button_delete_all"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Delete all MSU files"
+        android:layout_marginHorizontal="24dp"
+        style="@style/Widget.Material3.Button.TonalButton" />
+
+</LinearLayout>
