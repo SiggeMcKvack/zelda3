@@ -1,219 +1,147 @@
-# Zelda3
-A reimplementation of Zelda 3.
+# Zelda3 - A Link to the Past
 
-Our discord server is: https://discord.gg/AJJbJAzNNJ
+A reverse-engineered C reimplementation of The Legend of Zelda: A Link to the Past for SNES.
+
+[![Discord](https://img.shields.io/discord/XXXXXXXXXX?label=Discord&logo=discord)](https://discord.gg/AJJbJAzNNJ)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
 
 ## About
 
-This is a reverse engineered clone of Zelda 3 - A Link to the Past.
+This is a ~70-80kLOC C reimplementation of the original SNES game, reverse-engineered with function and variable names from community disassembly efforts. The game is fully playable from start to finish.
 
-It's around 70-80kLOC of C code, and reimplements all parts of the original game. The game is playable from start to end.
+**Supported Platforms:** Linux, macOS, Windows, Nintendo Switch, and Android
 
-Runs on Linux, macOS, Windows, Nintendo Switch, and Android.
+## Key Features
 
-You need a copy of the ROM to extract game resources (levels, images). Then once that's done, the ROM is no longer needed.
+- **Complete reimplementation** - All game logic recreated in portable C
+- **Frame-perfect verification** - Can run alongside original ROM for validation
+- **Enhanced features** - Optional widescreen support, MSU audio, pixel shaders
+- **Cross-platform** - Runs on desktop, mobile, and console platforms
+- **Snapshot system** - Save/load/replay game state with input history
+- **Multiple renderers** - SDL software, OpenGL/OpenGL ES, Vulkan support
 
-It uses the PPU and DSP implementation from [LakeSnes](https://github.com/elzo-d/LakeSnes), but with lots of speed optimizations.
-Additionally, it can be configured to also run the original machine code side by side. Then the RAM state is compared after each frame, to verify that the C implementation is correct.
+## Quick Start
 
-I got much assistance from spannerism's Zelda 3 JP disassembly and the other ones that documented loads of function names and variables.
+### 1. Get the Assets
 
-## Additional features
+You need a US region ROM to extract game assets:
 
-A bunch of features have been added that are not supported by the original game. Some of them are:
-
-Support for pixel shaders.
-
-Support for enhanced aspect ratios of 16:9 or 16:10.
-
-Higher quality world map.
-
-Support for MSU audio tracks.
-
-Secondary item slot on button X (Hold X in inventory to select).
-
-Switching current item with L/R keys.
-
-## How to Play:
-
-Option 1: Launcher by RadzPrower (windows only) https://github.com/ajohns6/Zelda-3-Launcher
-
-Option 2: Building it yourself
-
-Visit Wiki for more info on building the project: https://github.com/snesrev/zelda3/wiki
-
-## Building on Windows
-
-See [BUILDING.md](BUILDING.md) for detailed build instructions using CMake.
-
-**Quick start:**
-1. Install [Python](https://www.python.org/downloads/) with "Add to PATH" checked
-2. Install dependencies: `python -m pip install -r requirements.txt`
-3. Place your US ROM file named `zelda3.sfc` in the root directory
-4. Extract assets: `python assets/restool.py --extract-from-rom` (or use `extract_assets.bat`)
-5. Build with CMake:
-   ```cmd
-   mkdir build
-   cd build
-   cmake ..
-   cmake --build . --config Release
-   ```
-
-For Visual Studio IDE support, CMake can generate project files:
-```cmd
-cmake .. -G "Visual Studio 17 2022"
-```
-
-## Installing libraries on Linux/MacOS
-1. Open a terminal
-2. Install pip if not already installed
-```sh
-python3 -m ensurepip
-```
-3. Clone the repo and `cd` into it
-```sh
-git clone https://github.com/snesrev/zelda3
-cd zelda3
-```
-4. Install requirements using pip
-```sh
+```bash
+# Install Python dependencies
 python3 -m pip install -r requirements.txt
-```
-5. Install SDL2
-* Ubuntu/Debian `sudo apt install libsdl2-dev`
-* Fedora Linux `sudo dnf install SDL2-devel`
-* Arch Linux `sudo pacman -S sdl2`
-* macOS: `brew install sdl2` (you can get homebrew [here](https://brew.sh/))
 
-## Compiling on Linux/MacOS
-1. Place your US ROM file named `zelda3.sfc` in the root directory
-2. Extract assets:
-```sh
+# Place your zelda3.sfc ROM in the project root
+# SHA256: 66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb
+
+# Extract assets
 python3 assets/restool.py --extract-from-rom
 ```
-3. Compile with CMake:
-```sh
+
+This creates `zelda3_assets.dat` containing all game resources.
+
+### 2. Build
+
+**Linux/macOS:**
+```bash
+# Install dependencies
+# Ubuntu/Debian: sudo apt install libsdl2-dev libopus-dev cmake build-essential
+# macOS: brew install sdl2 opus cmake
+
+# Build
 mkdir build && cd build
-cmake ..
+cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build . -j$(nproc)
 ```
 
-<details>
-<summary>
-Advanced CMake usage ...
-</summary>
+**Windows:**
+```cmd
+# Using vcpkg for dependencies:
+vcpkg install sdl2:x64-windows opus:x64-windows
 
-```sh
-# Debug build
-cmake .. -DCMAKE_BUILD_TYPE=Debug
-
-# Use specific compiler
-cmake .. -DCMAKE_C_COMPILER=clang
-
-# Enable warnings as errors
-cmake .. -DENABLE_WERROR=ON
-
-# Clean build
-cd .. && rm -rf build
-```
-</details>
-
-## Nintendo Switch
-
-You need [DevKitPro](https://devkitpro.org/wiki/Getting_Started) and [Atmosphere](https://github.com/Atmosphere-NX/Atmosphere) installed.
-
-```sh
-(dkp-)pacman -S git switch-dev switch-sdl2 switch-tools
-cd src/platform/switch
-make # Add -j$(nproc) to build using all cores ( Optional )
-# You can test the build directly onto the switch ( Optional )
-nxlink -s zelda3.nro
+# Build with CMake
+mkdir build && cd build
+cmake .. -DCMAKE_TOOLCHAIN_FILE=C:/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build . --config Release
 ```
 
-## Android
+**See detailed instructions:** [Installation Guide](docs/installation.md) | [Platform-Specific Guides](docs/index.md#building--installation)
 
-Building for Android requires Android SDK, NDK, and Java 17+.
+### 3. Run
 
-**Quick start:**
-1. Install [Android Studio](https://developer.android.com/studio) or Android command-line tools
-2. Install Android SDK (API 26+) and NDK (r21e+)
-3. Set `ANDROID_HOME` environment variable
-4. Extract assets (see steps above) to get `zelda3_assets.dat`
-5. Build the APK:
-   ```sh
-   cd android
-   ./gradlew assembleDebug
-   ```
-6. Install to device:
-   ```sh
-   ./gradlew installDebug
-   # or: adb install app/build/outputs/apk/debug/app-debug.apk
-   ```
-7. Copy `zelda3_assets.dat` to your Android device:
-   ```sh
-   adb push ../zelda3_assets.dat /sdcard/Android/data/com.yourpackage.zelda3/files/
-   ```
+```bash
+./zelda3
+```
 
-See [BUILDING.md](BUILDING.md) for detailed Android build instructions, troubleshooting, and configuration.
+Or on Windows: `zelda3.exe`
 
-## More Compilation Help
+## Controls
 
-Look at the wiki at https://github.com/snesrev/zelda3/wiki for more help.
-
-The ROM needs to be named `zelda3.sfc` and has to be from the US region with this exact SHA256 hash
-`66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb`
-
-In case you're planning to move the executable to a different location, please include the file `zelda3_assets.dat`.
-
-## Usage and controls
-
-The game supports snapshots. The joypad input history is also saved in the snapshot. It's thus possible to replay a playthrough in turbo mode to verify that the game behaves correctly.
-
-The game is run with `./zelda3` and takes an optional path to the ROM-file, which will verify for each frame that the C code matches the original behavior.
-
-| Button | Key         |
-| ------ | ----------- |
-| Up     | Up arrow    |
-| Down   | Down arrow  |
-| Left   | Left arrow  |
-| Right  | Right arrow |
-| Start  | Enter       |
-| Select | Right shift |
+| Button | Default Key |
+|--------|-------------|
+| D-Pad  | Arrow Keys  |
 | A      | X           |
 | B      | Z           |
-| X      | S           |
-| Y      | A           |
-| L      | C           |
-| R      | V           |
+| Start  | Enter       |
+| Select | Right Shift |
 
-The keys can be reconfigured in zelda3.ini
+**Customize controls** in `zelda3.ini` after first run.
 
-Additionally, the following commands are available:
+**Useful shortcuts:**
+- `Alt+Enter` - Toggle fullscreen
+- `F1-F10` - Load snapshot
+- `Shift+F1-F10` - Save snapshot
+- `Tab` - Turbo mode
 
-| Key | Action                |
-| --- | --------------------- |
-| Tab | Turbo mode |
-| W   | Fill health/magic     |
-| Shift+W   | Fill rupees/bombs/arrows     |
-| Ctrl+E | Reset            |
-| P   | Pause (with dim)                |
-| Shift+P   | Pause (without dim)                |
-| Ctrl+Up   | Increase window size                |
-| Ctrl+Down   | Decrease window size                |
-| T   | Toggle replay turbo mode  |
-| O   | Set dungeon key to 1  |
-| K   | Clear all input history from the joypad log  |
-| L   | Stop replaying a shapshot  |
-| R   | Toggle between fast and slow renderer |
-| F   | Display renderer performance |
-| F1-F10 | Load snapshot      |
-| Alt+Enter | Toggle Fullscreen     |
-| Shift+F1-F10 | Save snapshot |
-| Ctrl+F1-F10 | Replay the snapshot |
-| 1-9 | Load a dungeons playthrough snapshot |
-| Ctrl+1-9 | Run a dungeons playthrough in turbo mode |
+[Full controls and features →](docs/usage.md)
 
+## Documentation
+
+- **[Getting Started](docs/getting-started.md)** - First-time setup guide
+- **[Installation](docs/installation.md)** - Detailed build instructions
+- **[Usage Guide](docs/usage.md)** - Controls, features, and configuration
+- **[Architecture](docs/architecture.md)** - Technical architecture overview
+- **[Contributing](CONTRIBUTING.md)** - How to contribute
+- **[Changelog](CHANGELOG.md)** - Recent updates
+
+[Browse all documentation →](docs/index.md)
+
+## Enhanced Features
+
+Optional enhancements not in the original game:
+
+- **Widescreen support** (16:9, 16:10 aspect ratios)
+- **MSU audio** (high-quality soundtrack tracks)
+- **Pixel shaders** (custom visual effects)
+- **Higher quality world map**
+- **Secondary item slot** on button X
+- **L/R item switching**
+
+All features are disabled by default to preserve original behavior. Enable in `zelda3.ini`.
+
+## Community
+
+- **Discord:** [https://discord.gg/AJJbJAzNNJ](https://discord.gg/AJJbJAzNNJ)
+- **Report bugs:** [GitHub Issues](https://github.com/snesrev/zelda3/issues)
+- **Wiki:** [https://github.com/snesrev/zelda3/wiki](https://github.com/snesrev/zelda3/wiki)
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+**Quick links:**
+- [Development Guide](docs/development.md)
+- [Code Architecture](docs/architecture.md)
+- [Debugging Tools](docs/debugging.md)
 
 ## License
 
-This project is licensed under the MIT license. See 'LICENSE.txt' for details.
+This project is licensed under the MIT License. See [LICENSE.txt](LICENSE.txt) for details.
+
+## Credits
+
+- Original game by Nintendo
+- Base C reimplementation by [snesrev/zelda3](https://github.com/snesrev/zelda3)
+- Community disassembly by [spannerisms](https://github.com/spannerisms/zelda3) and contributors
+- PPU/DSP implementation from [LakeSnes](https://github.com/elzo-d/LakeSnes)
+- Android port integration from [Waterdish/zelda3-android](https://github.com/Waterdish/zelda3-android)
+- Touchpad controls from [Eden emulator](https://git.eden-emu.dev/eden-emu/eden) project

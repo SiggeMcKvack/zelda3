@@ -2,6 +2,21 @@
 
 This file provides AI-specific guidance for Claude Code when working with this repository.
 
+**Note:** For personal AI development notes, use `CLAUDE.local.md` (git-ignored).
+
+## Table of Contents
+
+- [Project Overview](#project-overview)
+- [Quick Start for Development](#quick-start-for-development)
+- [Critical Architecture Concepts](#critical-architecture-concepts)
+- [Module Organization](#module-organization)
+- [Development Patterns](#development-patterns)
+- [File Locations](#file-locations)
+- [Common Tasks](#common-tasks)
+- [Important Notes](#important-notes)
+- [Recent Changes](#recent-changes)
+- [Getting Help](#getting-help)
+
 ## Project Overview
 
 Zelda3 is a reverse-engineered C reimplementation of The Legend of Zelda: A Link to the Past. ~70-80kLOC of C code reimplementing all game logic, using SDL2 for rendering/input and SNES hardware emulation (PPU/DSP).
@@ -13,9 +28,13 @@ Zelda3 is a reverse-engineered C reimplementation of The Legend of Zelda: A Link
 - Variable names from community disassembly efforts
 
 **Documentation:**
-- **[BUILDING.md](BUILDING.md)** - Build instructions, dependencies, troubleshooting
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed code architecture, modules, patterns
-- **[CHANGELOG.md](CHANGELOG.md)** - Recent changes, Android port integration
+- **[docs/installation.md](docs/installation.md)** - Build instructions, dependencies
+- **[docs/architecture.md](docs/architecture.md)** - Code architecture, modules, patterns
+- **[docs/development.md](docs/development.md)** - Development workflow and patterns
+- **[docs/debugging.md](docs/debugging.md)** - Debug console and troubleshooting
+- **[docs/platforms/](docs/platforms/)** - Platform-specific guides (Windows, Linux, macOS, Android, Switch)
+- **[docs/technical/](docs/technical/)** - Deep dives (memory layout, graphics, audio, renderers)
+- **[CHANGELOG.md](CHANGELOG.md)** - Recent changes and version history
 
 ## Quick Start for Development
 
@@ -30,7 +49,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Debug
 cmake --build . -j$(nproc)
 ```
 
-See [BUILDING.md](BUILDING.md) for full details.
+See [docs/installation.md](docs/installation.md) for full details and platform-specific guides in [docs/platforms/](docs/platforms/).
 
 ### Asset File
 `zelda3_assets.dat` must exist before building. Extract from ROM (see above). File must be co-located with executable when running.
@@ -92,7 +111,7 @@ Flags stored at unused RAM offsets (0x648+). Must be toggleable via `zelda3.ini`
 - Asset loading: SDL external storage path
 - Renderer: OpenGL ES or Vulkan 1.0
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for complete breakdown.
+See [docs/architecture.md](docs/architecture.md) for complete breakdown and [docs/technical/](docs/technical/) for deep dives.
 
 ## Development Patterns
 
@@ -197,6 +216,7 @@ Platform-specific files go in `src/platform/<name>/`
 - SNES emulation: `snes/`
 - Platform code: `src/platform/<name>/`
 - Android code: `android/app/jni/` or `android/app/src/`
+- Documentation: `docs/` (see [docs/contributing.md](docs/contributing.md) for structure)
 - Logging: Use `src/logging.h` for errors/warnings
 - File I/O: Use `Platform_ReadWholeFile()` from `src/platform.h`
 - Path validation: Use `Platform_FindFileWithCaseInsensitivity()` from `src/platform.h` for case-sensitive filesystem support
@@ -207,7 +227,7 @@ Platform-specific files go in `src/platform/<name>/`
 **Excluded from git (`.gitignore`):**
 - Build artifacts: `build/`, `android/build/`, `android/.gradle/`
 - IDE files: `android/.idea/`, `.vscode/`, `.vs/`
-- Local configs: `android/local.properties`
+- Local configs: `android/local.properties`, `CLAUDE.local.md`
 - Planning docs: `ANDROID_MIGRATION_PLAN.md` (internal development notes)
 
 **Logging:**
@@ -260,6 +280,7 @@ adb logcat | grep Zelda3       # View Android logs
 - Use `kDebugFlag` for debug-only code (types.h)
 - Frame counter: `frame_counter` macro (variables.h)
 - Snapshot system: F1-F10 save/load, Ctrl+F1-F10 replay
+- Debug console: See [docs/debugging.md](docs/debugging.md) for details
 
 ### Testing Changes
 - Must have `zelda3_assets.dat` extracted
@@ -295,7 +316,7 @@ adb logcat | grep Zelda3       # View Android logs
 - Auto-detects dependencies (SDL2, Opus, OpenGL, Vulkan)
 - Uses system libraries (no vendored dependencies)
 - Out-of-source builds (build/ directory for desktop)
-- See [BUILDING.md](BUILDING.md) for desktop details
+- See [docs/installation.md](docs/installation.md) and [docs/platforms/](docs/platforms/) for details
 - Android build: `./gradlew assembleDebug` from `android/` directory
 
 **Case-Sensitive Filesystems (Linux):**
@@ -356,10 +377,13 @@ See [CHANGELOG.md](CHANGELOG.md) for complete details.
 
 ## Getting Help
 
-- **Build issues:** See [BUILDING.md](BUILDING.md) troubleshooting
-- **Architecture questions:** See [ARCHITECTURE.md](ARCHITECTURE.md)
+- **Getting started:** See [docs/getting-started.md](docs/getting-started.md)
+- **Build issues:** See [docs/installation.md](docs/installation.md) and [docs/troubleshooting.md](docs/troubleshooting.md)
+- **Architecture questions:** See [docs/architecture.md](docs/architecture.md) and [docs/technical/](docs/technical/)
+- **Contributing:** See [docs/contributing.md](docs/contributing.md) and [docs/development.md](docs/development.md)
+- **Platform-specific:** See [docs/platforms/](docs/platforms/) (Windows, Linux, macOS, Android, Switch)
 - **Recent changes:** See [CHANGELOG.md](CHANGELOG.md)
-- **Android development:** See `android/` directory for Gradle build system
-- **Original project:** https://github.com/snesrev/zelda3
-- **Android fork:** https://github.com/Waterdish/zelda3-android (source of Android integration)
+- **Original project:** https://github.com/snesrev/zelda3 (base C reimplementation)
+- **Android integration:** https://github.com/Waterdish/zelda3-android
+- **Touchpad controls:** https://git.eden-emu.dev/eden-emu/eden (Eden emulator project)
 - **Discord:** https://discord.gg/AJJbJAzNNJ
