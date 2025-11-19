@@ -327,6 +327,11 @@ adb logcat | grep Zelda3       # View Android logs
 
 ## Recent Changes
 
+**Default configuration updates (November 2025):**
+- **Aspect ratio:** Changed default from 4:3 to `extend_y, 16:9` for widescreen experience
+- **Gamepad quick save/load:** Added L2+R3 (quick save slot 1) and L2+L3 (quick load slot 1) as default bindings
+- **Documentation:** Updated README, usage guide, and getting-started with gamepad defaults
+
 **Vulkan renderer integration (November 2025):**
 - **Cross-platform Vulkan 1.0:** Ported from zelda3-android, works on desktop and mobile
 - **MoltenVK support:** Auto-detects and enables VK_KHR_portability_enumeration/subset on macOS

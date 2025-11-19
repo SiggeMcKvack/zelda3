@@ -94,6 +94,14 @@ Zelda3 includes a powerful snapshot system that saves game state and input histo
 
 Zelda3 supports gamepad/controller input via SDL2. Gamepads are automatically detected.
 
+**Default Gamepad Mappings:**
+- **D-Pad:** Directional movement
+- **A/B/X/Y:** SNES buttons (B→A, A→B, Y→X, X→Y)
+- **Lb/Rb:** L/R shoulder buttons
+- **Start/Back:** Start/Select
+- **L2+R3:** Quick Save (slot 1)
+- **L2+L3:** Quick Load (slot 1)
+
 **To configure gamepad:**
 1. Edit `zelda3.ini`
 2. Find the `[GamepadMap]` section
@@ -444,7 +452,11 @@ Gamepad button mappings. All keyboard commands from [KeyMap] can be bound to gam
 # SNES controller buttons: Up, Down, Left, Right, Select, Start, A, B, X, Y, L, R
 Controls = DpadUp, DpadDown, DpadLeft, DpadRight, Back, Start, B, A, Y, X, Lb, Rb
 
-# Optional bindings (uncomment to use)
+# Quick Save/Load (enabled by default)
+Save = L2+R3
+Load = L2+L3
+
+# Additional save state slots (uncomment to use)
 # Save = L2+A, L2+B, L2+X, L2+Y
 # Load = R2+A, R2+B, R2+X, R2+Y
 # Turbo = L3

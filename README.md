@@ -84,6 +84,8 @@ Or on Windows: `zelda3.exe`
 | Start  | Enter       |
 | Select | Right Shift |
 
+**Gamepad:** Plug-and-play support with quick save (L2+R3) and quick load (L2+L3).
+
 **Customize controls** in `zelda3.ini` after first run.
 
 **Useful shortcuts:**
