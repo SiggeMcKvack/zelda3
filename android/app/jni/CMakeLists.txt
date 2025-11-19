@@ -37,6 +37,7 @@ add_library(main SHARED
 # Include directories
 target_include_directories(main PRIVATE
     ${ZELDA3_SRC_DIR}
+    ${ZELDA3_SRC_DIR}/platform/android
     ${ZELDA3_SNES_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../
     ${CMAKE_CURRENT_SOURCE_DIR}/SDL2/include
