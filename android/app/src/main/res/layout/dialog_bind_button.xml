@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:focusable="true"
+    android:focusableInTouchMode="true"
+    android:focusedByDefault="true"
+    android:defaultFocusHighlightEnabled="false">
+
+    <!-- Instruction Text -->
+    <TextView
+        android:id="@+id/text_instruction"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Press button(s) on your controller..."
+        android:textSize="16sp"
+        android:textColor="?android:attr/textColorPrimary"
+        android:gravity="center"
+        android:paddingBottom="16dp" />
+
+    <!-- Detected Buttons (ChipGroup) -->
+    <com.google.android.material.chip.ChipGroup
+        android:id="@+id/chip_group_buttons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        app:chipSpacing="8dp"
+        android:focusable="false"
+        android:focusableInTouchMode="false" />
+
+    <!-- Timer Display -->
+    <TextView
+        android:id="@+id/text_timer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Release all buttons to confirm combo"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:gravity="center"
+        android:paddingTop="8dp"
+        android:visibility="gone"
+        android:focusable="false"
+        android:focusableInTouchMode="false" />
+</LinearLayout>

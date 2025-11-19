@@ -10,6 +10,7 @@ struct RendererFuncs {
   void (*Destroy)();
   void (*BeginDraw)(int width, int height, uint8 **pixels, int *pitch);
   void (*EndDraw)();
+  void (*OnResize)(int width, int height);
 };
 
 

@@ -5,10 +5,15 @@
 #include <string.h>
 #include <stdint.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 #if defined(PLATFORM_POSIX)
 #include <dirent.h>
 #include <strings.h>  // For strcasecmp
+#endif
+
+#ifdef PLATFORM_ANDROID
+#include <android/log.h>
 #endif
 
 // Default implementation using standard C FILE*
@@ -81,9 +86,25 @@ int Platform_EofFile(PlatformFile *file) {
 }
 
 uint8_t *Platform_ReadWholeFile(const char *filename, size_t *length_out) {
+#ifdef PLATFORM_ANDROID
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Platform",
+                      "Platform_ReadWholeFile: Attempting to read '%s'", filename);
+#endif
+
   PlatformFile *file = Platform_OpenFile(filename, "rb");
-  if (!file)
+  if (!file) {
+#ifdef PLATFORM_ANDROID
+    __android_log_print(ANDROID_LOG_ERROR, "Zelda3Platform",
+                        "Platform_ReadWholeFile: Failed to open '%s' (errno=%d: %s)",
+                        filename, errno, strerror(errno));
+#endif
     return NULL;
+  }
+
+#ifdef PLATFORM_ANDROID
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Platform",
+                      "Platform_ReadWholeFile: Successfully opened '%s'", filename);
+#endif
 
   // Get file size
   Platform_SeekFile(file, 0, SEEK_END);

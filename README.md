@@ -9,6 +9,8 @@ This is a reverse engineered clone of Zelda 3 - A Link to the Past.
 
 It's around 70-80kLOC of C code, and reimplements all parts of the original game. The game is playable from start to end.
 
+Runs on Linux, macOS, Windows, Nintendo Switch, and Android.
+
 You need a copy of the ROM to extract game resources (levels, images). Then once that's done, the ROM is no longer needed.
 
 It uses the PPU and DSP implementation from [LakeSnes](https://github.com/elzo-d/LakeSnes), but with lots of speed optimizations.
@@ -127,6 +129,32 @@ make # Add -j$(nproc) to build using all cores ( Optional )
 # You can test the build directly onto the switch ( Optional )
 nxlink -s zelda3.nro
 ```
+
+## Android
+
+Building for Android requires Android SDK, NDK, and Java 17+.
+
+**Quick start:**
+1. Install [Android Studio](https://developer.android.com/studio) or Android command-line tools
+2. Install Android SDK (API 26+) and NDK (r21e+)
+3. Set `ANDROID_HOME` environment variable
+4. Extract assets (see steps above) to get `zelda3_assets.dat`
+5. Build the APK:
+   ```sh
+   cd android
+   ./gradlew assembleDebug
+   ```
+6. Install to device:
+   ```sh
+   ./gradlew installDebug
+   # or: adb install app/build/outputs/apk/debug/app-debug.apk
+   ```
+7. Copy `zelda3_assets.dat` to your Android device:
+   ```sh
+   adb push ../zelda3_assets.dat /sdcard/Android/data/com.yourpackage.zelda3/files/
+   ```
+
+See [BUILDING.md](BUILDING.md) for detailed Android build instructions, troubleshooting, and configuration.
 
 ## More Compilation Help
 

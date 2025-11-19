@@ -181,6 +181,11 @@ static bool OpenGLRenderer_Init(SDL_Window *window) {
 static void OpenGLRenderer_Destroy() {
 }
 
+static void OpenGLRenderer_OnResize(int width, int height) {
+  // OpenGL handles resize automatically via SDL_GL_GetDrawableSize()
+  // No action needed - stub for interface compatibility
+}
+
 static void OpenGLRenderer_BeginDraw(int width, int height, uint8 **pixels, int *pitch) {
   // Check for integer overflow: width * height * 4
   // Maximum safe dimensions: sqrt(SIZE_MAX / 4) ≈ 2^31 on 64-bit, 2^15 on 32-bit
@@ -269,6 +274,7 @@ static const struct RendererFuncs kOpenGLRendererFuncs = {
   &OpenGLRenderer_Destroy,
   &OpenGLRenderer_BeginDraw,
   &OpenGLRenderer_EndDraw,
+  &OpenGLRenderer_OnResize,
 };
 
 void OpenGLRenderer_Create(struct RendererFuncs *funcs, bool use_opengl_es) {

@@ -81,6 +81,15 @@ Flags stored at unused RAM offsets (0x648+). Must be toggleable via `zelda3.ini`
 **Platform:**
 - `src/platform.h/c` - File I/O abstraction
 - `src/config.c` - INI parsing, gamepad binding
+- `src/logging.h/c` - Logging system with platform detection
+- `src/platform_detect.h` - Platform/compiler/architecture detection
+
+**Android Integration:**
+- `android/` - Complete Gradle-based Android app
+- `android/app/jni/` - JNI glue code and SDL integration
+- Main entry point: `SDL_main` (macro defined by SDL)
+- Asset loading: SDL external storage path
+- Renderer: OpenGL ES (Vulkan in progress)
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for complete breakdown.
 
@@ -108,12 +117,44 @@ link_x_coord = new_x;
 - Subpixel precision: Separate variables (`link_subpixel_x`)
 - Widescreen offset: `kPpuExtraLeftRight` from `types.h`
 
+### Android Development
+When adding Android-specific code:
+1. **Early initialization order matters:**
+   - Create audio mutex BEFORE SDL_Init (prevents race conditions)
+   - Call SDL_Init BEFORE LoadAssets (ensures subsystems are ready)
+   - Use `SDL_AndroidGetExternalStoragePath()` and chdir before loading assets
+
+2. **Logging during initialization:**
+   - Use `__android_log_print()` for logs before `InitializeLogging()` is called
+   - Regular logging automatically disables ANSI colors on Android
+   - Tag convention: "Zelda3Main", "Zelda3Platform", etc.
+
+3. **Renderer setup:**
+   - Check for Vulkan support and fall back to OpenGL ES if unavailable
+   - Show Toast notifications to user for important fallbacks
+   - Update zelda3.ini to persist renderer changes
+   - Android requires SDL_WINDOW_OPENGL flag for SDL_Renderer and OpenGL ES
+
+4. **Thread safety:**
+   - Audio mutex must exist before SDL audio threads start
+   - Use ZeldaApuLock/ZeldaApuUnlock for audio state access
+   - Check mutex exists before locking (`if (g_audio_mutex) SDL_LockMutex(...)`)
+
+5. **File I/O:**
+   - All file access goes through Platform_* API
+   - Android logging in Platform_ReadWholeFile for debugging asset issues
+   - Working directory is SDL external storage path
+
 ### Platform-Specific Code
 Use semantic macros from `src/platform_detect.h`:
 ```c
 #include "platform_detect.h"
 
-#ifdef PLATFORM_WINDOWS
+#ifdef PLATFORM_ANDROID
+  // Android code
+  #include <android/log.h>
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3", "Message");
+#elif defined(PLATFORM_WINDOWS)
   // Windows code
 #elif defined(PLATFORM_MACOS)
   // macOS code
@@ -128,6 +169,14 @@ Use semantic macros from `src/platform_detect.h`:
 ```
 
 Platform-specific files go in `src/platform/<name>/`
+
+**Android-specific patterns:**
+- Use `SDL_AndroidGetExternalStoragePath()` for asset directory
+- Disable ANSI colors in logging (logcat doesn't support them)
+- Early SDL_Init before asset loading to prevent race conditions
+- Create audio mutex before SDL_Init to avoid threading issues
+- Main function must be named `SDL_main` (SDL.h handles macro)
+- Use `__android_log_print()` for critical early initialization logs
 
 ## File Locations
 
@@ -146,11 +195,19 @@ Platform-specific files go in `src/platform/<name>/`
 - Game logic: `src/`
 - SNES emulation: `snes/`
 - Platform code: `src/platform/<name>/`
+- Android code: `android/app/jni/` or `android/app/src/`
 - Logging: Use `src/logging.h` for errors/warnings
 - File I/O: Use `Platform_ReadWholeFile()` from `src/platform.h`
 - Path validation: Use `Platform_FindFileWithCaseInsensitivity()` from `src/platform.h` for case-sensitive filesystem support
 - Memory: Use `DYNARR_*` macros from `src/dynamic_array.h` for growable arrays
-- CMake auto-detects `.c` files via `file(GLOB ...)`
+- Desktop: CMake auto-detects `.c` files via `file(GLOB ...)`
+- Android: Update `android/app/build.gradle` for new JNI sources
+
+**Excluded from git (`.gitignore`):**
+- Build artifacts: `build/`, `android/build/`, `android/.gradle/`
+- IDE files: `android/.idea/`, `.vscode/`, `.vs/`
+- Local configs: `android/local.properties`
+- Planning docs: `ANDROID_MIGRATION_PLAN.md` (internal development notes)
 
 **Logging:**
 - Use `LogError()`, `LogWarn()`, `LogInfo()`, `LogDebug()` from `logging.h`
@@ -158,10 +215,20 @@ Platform-specific files go in `src/platform/<name>/`
 - Control via `ZELDA3_LOG_LEVEL` environment variable
 - No modules, no file I/O - follows YAGNI/KISS principles
 - Portable: stderr works on all platforms (Android, Switch, desktop)
+- Android: ANSI colors automatically disabled (logcat doesn't support)
+- Early initialization logging: Use `__android_log_print()` on Android before logging system is ready
+
+**Renderer abstraction:**
+- `src/util.h` - RendererFuncs interface with Init/Destroy/BeginDraw/EndDraw/OnResize callbacks
+- Implementations: SDL software, OpenGL, OpenGL ES, Vulkan (in progress)
+- OnResize callback: Handle window resize events (SDL_WINDOWEVENT_SIZE_CHANGED)
+- Android uses OpenGL ES by default
 
 ## Common Tasks
 
 ### Building
+
+**Desktop (CMake):**
 ```bash
 # Standard build
 mkdir build && cd build && cmake .. && cmake --build . -j$(nproc)
@@ -172,6 +239,20 @@ cmake .. -DCMAKE_BUILD_TYPE=Debug
 # Specific compiler
 cmake .. -DCMAKE_C_COMPILER=clang
 ```
+
+**Android (Gradle):**
+```bash
+# From android/ directory
+./gradlew assembleDebug        # Build debug APK
+./gradlew assembleRelease      # Build release APK
+./gradlew installDebug         # Install debug APK to device
+adb logcat | grep Zelda3       # View Android logs
+```
+
+**Prerequisites:**
+- Assets must be in SDL external storage path on Android
+- Use `SDL_AndroidGetExternalStoragePath()` to locate assets
+- Desktop: `zelda3_assets.dat` in same directory as executable
 
 ### Debugging
 - Use `kDebugFlag` for debug-only code (types.h)
@@ -207,11 +288,13 @@ cmake .. -DCMAKE_C_COMPILER=clang
 - Inline performance-critical functions
 
 **Build System:**
-- Uses CMake (Makefile removed)
+- **Desktop:** CMake (Makefile removed)
+- **Android:** Gradle with JNI integration (`android/` directory)
 - Auto-detects dependencies (SDL2, Opus, OpenGL, Vulkan)
 - Uses system libraries (no vendored dependencies)
-- Out-of-source builds (build/ directory)
-- See [BUILDING.md](BUILDING.md) for details
+- Out-of-source builds (build/ directory for desktop)
+- See [BUILDING.md](BUILDING.md) for desktop details
+- Android build: `./gradlew assembleDebug` from `android/` directory
 
 **Case-Sensitive Filesystems (Linux):**
 - MSU audio and shader paths must match exact capitalization
@@ -220,6 +303,21 @@ cmake .. -DCMAKE_C_COMPILER=clang
 - Error messages guide users to correct capitalization
 
 ## Recent Changes
+
+**Android platform integration (November 2025):**
+- **Android build system:** Complete Gradle-based Android app with JNI integration
+- **Platform detection:** Enhanced logging with Android-specific path handling
+- **SDL initialization:** Early SDL_Init before LoadAssets to prevent race conditions
+- **Audio mutex timing:** Create audio mutex before SDL_Init to avoid threading issues
+- **Working directory:** Automatic chdir to SDL external storage path on Android
+- **Renderer architecture:** Added OnResize callback to RendererFuncs interface
+- **Vulkan preparation:** Added kOutputMethod_Vulkan (implementation pending)
+- **OpenGL ES:** Android defaults to OpenGL ES renderer with automatic fallback
+- **Window events:** Handle SDL_WINDOWEVENT_SIZE_CHANGED for dynamic resizing
+- **Debug logging:** Android logcat integration via `__android_log_print()`
+- **File I/O:** Enhanced Platform_ReadWholeFile with Android-specific error logging
+- **Config updates:** Extended aspect ratio now defaults to `extend_y, 16:10` for mobile
+- **isatty() handling:** Disable ANSI colors on Android (logcat doesn't support)
 
 **Build system and Windows compatibility (November 2025):**
 - **Opus migration:** Switched from vendored Opus 1.3.1 to system library (-924KB)
@@ -252,5 +350,7 @@ See [CHANGELOG.md](CHANGELOG.md) for complete details.
 - **Build issues:** See [BUILDING.md](BUILDING.md) troubleshooting
 - **Architecture questions:** See [ARCHITECTURE.md](ARCHITECTURE.md)
 - **Recent changes:** See [CHANGELOG.md](CHANGELOG.md)
+- **Android development:** See `android/` directory for Gradle build system
 - **Original project:** https://github.com/snesrev/zelda3
+- **Android fork:** https://github.com/Waterdish/zelda3-android (source of Android integration)
 - **Discord:** https://discord.gg/AJJbJAzNNJ

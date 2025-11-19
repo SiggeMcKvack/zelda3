@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Main menu items (no checkable behavior - this is a settings drawer, not navigation) -->
+    <group android:id="@+id/group_main">
+        <item
+            android:id="@+id/nav_game"
+            android:icon="@drawable/ic_swords"
+            android:title="Return to game" />
+        <item
+            android:id="@+id/nav_pause"
+            android:icon="@drawable/ic_pause"
+            android:title="Pause" />
+        <item
+            android:id="@+id/nav_save_state"
+            android:icon="@drawable/ic_save"
+            android:title="Save state" />
+        <item
+            android:id="@+id/nav_load_state"
+            android:icon="@drawable/ic_load"
+            android:title="Load state" />
+        <item
+            android:id="@+id/nav_controller_settings"
+            android:icon="@drawable/ic_gamepad"
+            android:title="Controller settings" />
+        <item
+            android:id="@+id/nav_graphics"
+            android:icon="@drawable/ic_graphics"
+            android:title="Graphics options" />
+        <item
+            android:id="@+id/nav_audio"
+            android:icon="@drawable/ic_music"
+            android:title="Audio options" />
+        <item
+            android:id="@+id/nav_overlay_options"
+            android:icon="@android:drawable/ic_menu_manage"
+            android:title="Overlay options" />
+        <item
+            android:id="@+id/nav_reset_assets"
+            android:icon="@drawable/ic_delete"
+            android:title="Delete assets file" />
+    </group>
+
+    <!-- Footer items with divider -->
+    <group android:id="@+id/group_footer">
+        <item
+            android:id="@+id/nav_exit"
+            android:icon="@android:drawable/ic_menu_close_clear_cancel"
+            android:title="Exit" />
+    </group>
+</menu>

@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+
+    <!-- Restart warning (initially hidden) -->
+    <TextView
+        android:id="@+id/text_restart_warning"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="⚠️ Restart required for changes to take effect"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp"
+        android:textSize="14sp"
+        android:textColor="?attr/colorError"
+        android:visibility="gone" />
+
+    <!-- Renderer Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="RENDERER"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="8dp"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Select the graphics renderer backend"
+        android:paddingHorizontal="24dp"
+        android:paddingBottom="12dp"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorSecondary" />
+
+    <!-- Material Design 3 Segmented Button Group -->
+    <com.google.android.material.button.MaterialButtonToggleGroup
+        android:id="@+id/toggle_renderer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginBottom="16dp"
+        app:singleSelection="true"
+        app:selectionRequired="true">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/button_renderer_sdl"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="SDL"
+            style="@style/Widget.Material3.Button.OutlinedButton" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/button_renderer_opengl_es"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="OpenGL ES"
+            style="@style/Widget.Material3.Button.OutlinedButton" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/button_renderer_vulkan"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Vulkan"
+            style="@style/Widget.Material3.Button.OutlinedButton" />
+
+    </com.google.android.material.button.MaterialButtonToggleGroup>
+
+    <!-- Renderer Info -->
+    <TextView
+        android:id="@+id/text_renderer_info"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="SDL: Software or hardware accelerated rendering"
+        android:paddingHorizontal="24dp"
+        android:paddingBottom="16dp"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary" />
+
+</LinearLayout>
+
+</ScrollView>
