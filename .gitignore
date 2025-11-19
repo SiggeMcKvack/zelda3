@@ -40,6 +40,7 @@ CMakeFiles/
 cmake_install.cmake
 install_manifest.txt
 .claude/settings.local.json
+CLAUDE.local.md
 
 # Build scripts (user-specific)
 build_debug.sh
@@ -57,3 +58,5 @@ android/app/.cxx/
 android/local.properties
 android/.kotlin/
 *.log
+android/zelda3
+android/Makefile
