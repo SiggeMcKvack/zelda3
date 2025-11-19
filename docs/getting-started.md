@@ -87,6 +87,8 @@ zelda3.exe
 
 **Keyboard controls can be customized in `zelda3.ini`**
 
+**Gamepad support:** Controllers are automatically detected. Default bindings include quick save (L2+R3) and quick load (L2+L3). Customize in `[GamepadMap]` section of `zelda3.ini`.
+
 ### Common Shortcuts
 
 | Key           | Action                    |
