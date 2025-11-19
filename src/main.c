@@ -304,6 +304,7 @@ static const struct RendererFuncs kSdlRendererFuncs  = {
 };
 
 void OpenGLRenderer_Create(struct RendererFuncs *funcs, bool use_opengl_es);
+void VulkanRenderer_Create(struct RendererFuncs *funcs);
 
 // On Android, SDL needs the function to be named SDL_main, not main
 // SDL.h defines a macro that renames main to SDL_main, so don't undef it
@@ -428,54 +429,6 @@ int main(int argc, char** argv) {
   int window_width  = custom_size ? g_config.window_width  : g_current_window_scale * g_snes_width;
   int window_height = custom_size ? g_config.window_height : g_current_window_scale * g_snes_height;
 
-  // Check for Vulkan on Android - not yet supported
-#ifdef PLATFORM_ANDROID
-  if (g_config.output_method == kOutputMethod_Vulkan) {
-    LogWarn("Vulkan renderer not yet available on Android, falling back to OpenGL ES");
-    g_config.output_method = kOutputMethod_OpenGL_ES;
-
-    // Show Toast notification to user
-    extern void Android_ShowToast(const char* message);
-    Android_ShowToast("Vulkan could not be enabled, switching to OpenGL ES...");
-
-    // Update zelda3.ini to persist the fallback
-    FILE *ini_file = fopen("zelda3.ini", "r+");
-    if (ini_file) {
-      char line[512];
-      char *file_content = NULL;
-      size_t total_size = 0;
-      bool found = false;
-
-      // Read entire file
-      while (fgets(line, sizeof(line), ini_file)) {
-        char *new_line = line;
-        // Replace OutputMethod = Vulkan with OutputMethod = OpenGL ES
-        if (strstr(line, "OutputMethod") && strstr(line, "Vulkan")) {
-          strcpy(line, "OutputMethod = OpenGL ES\n");
-          found = true;
-        }
-        size_t line_len = strlen(new_line);
-        file_content = realloc(file_content, total_size + line_len + 1);
-        if (file_content) {
-          memcpy(file_content + total_size, new_line, line_len);
-          total_size += line_len;
-        }
-      }
-
-      if (found && file_content) {
-        file_content[total_size] = '\0';
-        fseek(ini_file, 0, SEEK_SET);
-        fwrite(file_content, 1, total_size, ini_file);
-        ftruncate(fileno(ini_file), total_size);
-        LogInfo("Updated zelda3.ini: OutputMethod = OpenGL ES");
-      }
-
-      free(file_content);
-      fclose(ini_file);
-    }
-  }
-#endif
-
 #ifdef PLATFORM_ANDROID
   // Android's SDL backend requires OpenGL window flag for SDL_Renderer and OpenGL ES
   // (but NOT for Vulkan)
@@ -490,9 +443,7 @@ int main(int argc, char** argv) {
     OpenGLRenderer_Create(&g_renderer_funcs, (g_config.output_method == kOutputMethod_OpenGL_ES));
   } else if (g_config.output_method == kOutputMethod_Vulkan) {
     g_win_flags |= SDL_WINDOW_VULKAN;
-    // VulkanRenderer_Create(&g_renderer_funcs);  // To be implemented in Phase 3
-    LogWarn("Vulkan renderer not yet implemented, falling back to SDL");
-    g_renderer_funcs = kSdlRendererFuncs;
+    VulkanRenderer_Create(&g_renderer_funcs);
   } else {
     g_renderer_funcs = kSdlRendererFuncs;
   }

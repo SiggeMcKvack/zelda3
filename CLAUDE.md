@@ -75,8 +75,9 @@ Flags stored at unused RAM offsets (0x648+). Must be toggleable via `zelda3.ini`
 
 **Graphics:**
 - `snes/ppu.c` - SNES PPU emulation
-- `src/opengl.c` - OpenGL renderer
-- `src/glsl_shader.c` - Shader support
+- `src/opengl.c` - OpenGL/OpenGL ES renderer
+- `src/vulkan.c` - Vulkan 1.0 renderer (cross-platform)
+- `src/glsl_shader.c` - OpenGL shader support
 
 **Platform:**
 - `src/platform.h/c` - File I/O abstraction
@@ -89,7 +90,7 @@ Flags stored at unused RAM offsets (0x648+). Must be toggleable via `zelda3.ini`
 - `android/app/jni/` - JNI glue code and SDL integration
 - Main entry point: `SDL_main` (macro defined by SDL)
 - Asset loading: SDL external storage path
-- Renderer: OpenGL ES (Vulkan in progress)
+- Renderer: OpenGL ES or Vulkan 1.0
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for complete breakdown.
 
@@ -130,10 +131,10 @@ When adding Android-specific code:
    - Tag convention: "Zelda3Main", "Zelda3Platform", etc.
 
 3. **Renderer setup:**
-   - Check for Vulkan support and fall back to OpenGL ES if unavailable
+   - Vulkan 1.0 and OpenGL ES both supported on Android
    - Show Toast notifications to user for important fallbacks
    - Update zelda3.ini to persist renderer changes
-   - Android requires SDL_WINDOW_OPENGL flag for SDL_Renderer and OpenGL ES
+   - Android requires SDL_WINDOW_OPENGL flag for SDL_Renderer and OpenGL ES (but NOT for Vulkan)
 
 4. **Thread safety:**
    - Audio mutex must exist before SDL audio threads start
@@ -220,9 +221,10 @@ Platform-specific files go in `src/platform/<name>/`
 
 **Renderer abstraction:**
 - `src/util.h` - RendererFuncs interface with Init/Destroy/BeginDraw/EndDraw/OnResize callbacks
-- Implementations: SDL software, OpenGL, OpenGL ES, Vulkan (in progress)
+- Implementations: SDL software, OpenGL, OpenGL ES, Vulkan 1.0
 - OnResize callback: Handle window resize events (SDL_WINDOWEVENT_SIZE_CHANGED)
-- Android uses OpenGL ES by default
+- Vulkan renderer requires VK_KHR_portability_enumeration and VK_KHR_portability_subset on MoltenVK (macOS)
+- Android uses OpenGL ES by default (Vulkan optional)
 
 ## Common Tasks
 
@@ -304,6 +306,14 @@ adb logcat | grep Zelda3       # View Android logs
 
 ## Recent Changes
 
+**Vulkan renderer integration (November 2025):**
+- **Cross-platform Vulkan 1.0:** Ported from zelda3-android, works on desktop and mobile
+- **MoltenVK support:** Auto-detects and enables VK_KHR_portability_enumeration/subset on macOS
+- **Shader loading:** Cross-platform (filesystem on desktop, APK assets on Android via JNI)
+- **Surface creation:** SDL_Vulkan_CreateSurface for cross-platform compatibility
+- **Shaders:** Pre-compiled SPIR-V shaders (vert.spv, frag.spv) with GLSL source
+- **Configuration:** Added Vulkan to zelda3.ini OutputMethod options
+
 **Android platform integration (November 2025):**
 - **Android build system:** Complete Gradle-based Android app with JNI integration
 - **Platform detection:** Enhanced logging with Android-specific path handling
@@ -311,8 +321,7 @@ adb logcat | grep Zelda3       # View Android logs
 - **Audio mutex timing:** Create audio mutex before SDL_Init to avoid threading issues
 - **Working directory:** Automatic chdir to SDL external storage path on Android
 - **Renderer architecture:** Added OnResize callback to RendererFuncs interface
-- **Vulkan preparation:** Added kOutputMethod_Vulkan (implementation pending)
-- **OpenGL ES:** Android defaults to OpenGL ES renderer with automatic fallback
+- **OpenGL ES:** Android defaults to OpenGL ES renderer with Vulkan as optional
 - **Window events:** Handle SDL_WINDOWEVENT_SIZE_CHANGED for dynamic resizing
 - **Debug logging:** Android logcat integration via `__android_log_print()`
 - **File I/O:** Enhanced Platform_ReadWholeFile with Android-specific error logging

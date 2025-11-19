@@ -4,6 +4,40 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## Recent Updates (November 2025)
 
+### Vulkan Renderer Integration
+
+**Major Changes:** Cross-platform Vulkan 1.0 renderer ported from zelda3-android fork
+
+Successfully integrated the Vulkan renderer from the zelda3-android fork, making it work on both desktop (via MoltenVK on macOS, native on Linux/Windows) and Android (native Vulkan API). The renderer uses simple fullscreen quad rendering with SPIR-V shaders, maintaining Vulkan 1.0 compatibility for maximum device support.
+
+**Vulkan Renderer Features:**
+- Vulkan 1.0 API (maximum compatibility: Android API 24+, macOS via MoltenVK, Linux/Windows native)
+- Pre-compiled SPIR-V shaders (vert.spv, frag.spv) with GLSL source for reference
+- Cross-platform surface creation via SDL2's Vulkan support
+- Automatic MoltenVK detection and portability extension handling on macOS
+- Swap chain management with automatic recreation on window resize
+- Double/triple buffering with proper synchronization (fences + semaphores)
+
+**Platform-Specific Handling:**
+- **macOS (MoltenVK):** Auto-enables VK_KHR_portability_enumeration and VK_KHR_portability_subset extensions
+- **Android:** Loads shaders from APK assets via JNI, native Vulkan 1.0 support (API 24+)
+- **Desktop (Linux/Windows):** Loads shaders from filesystem, native Vulkan drivers
+
+**Code Changes:**
+- Added `src/vulkan.c` (1,377 LOC) and `src/vulkan.h` - Vulkan 1.0 renderer implementation
+- Updated `src/main.c` - Wire Vulkan renderer into output method selection
+- Updated `android/app/jni/CMakeLists.txt` - Added platform/android include path for android_jni.h
+- Added `shaders/` directory - Pre-compiled SPIR-V shaders and compilation script
+- Updated `zelda3.ini` - Added Vulkan to OutputMethod documentation
+
+**Testing:**
+- ✅ Desktop (macOS): Apple M2 Pro via MoltenVK, 768x672 swap chain, 60 FPS
+- ✅ Android: All ABIs (arm64-v8a, armeabi-v7a, x86, x86_64), 20MB APK with Vulkan support
+- ✅ Shader loading: Filesystem (desktop) and APK assets (Android) both working
+
+**Configuration:**
+Set `OutputMethod = Vulkan` in zelda3.ini to use the Vulkan renderer. Falls back gracefully to SDL/OpenGL if Vulkan is unavailable.
+
 ### Build System Modernization & Windows Compatibility
 
 **Major Changes:** Switched from vendored Opus to system library, fixed Windows build failures
