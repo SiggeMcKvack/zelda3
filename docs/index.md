@@ -7,6 +7,7 @@ Welcome to the Zelda3 documentation! This is a reverse-engineered C reimplementa
 - **[Getting Started](getting-started.md)** - Get up and running quickly
 - **[Installation Guide](installation.md)** - Detailed build instructions for all platforms
 - **[Usage Guide](usage.md)** - Controls, features, and configuration
+- **[Launcher Guide](launcher.md)** - GTK3 settings editor (optional)
 - **[Changelog](../CHANGELOG.md)** - Recent updates and changes
 
 ## Building & Installation

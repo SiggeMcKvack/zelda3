@@ -631,3 +631,46 @@ void Android_ShowToast(const char* message) {
 
     LOGD("Android_ShowToast: Successfully showed toast: %s", message);
 }
+
+// Update renderer setting in zelda3.ini
+void Android_UpdateRendererConfig(const char *renderer) {
+    JNIEnv *env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    if (!env) {
+        LOGD("Android_UpdateRendererConfig: Failed to get JNI environment");
+        return;
+    }
+
+    // Get MainActivity class
+    jclass activityClass = (*env)->FindClass(env, "com/dishii/zelda3/MainActivity");
+    if (!activityClass) {
+        LOGD("Android_UpdateRendererConfig: Failed to find MainActivity class");
+        return;
+    }
+
+    // Get updateRendererSetting static method
+    jmethodID updateMethod = (*env)->GetStaticMethodID(env, activityClass,
+                                                        "updateRendererSetting",
+                                                        "(Ljava/lang/String;)V");
+    if (!updateMethod) {
+        LOGD("Android_UpdateRendererConfig: Failed to find updateRendererSetting method");
+        (*env)->DeleteLocalRef(env, activityClass);
+        return;
+    }
+
+    // Convert C string to Java string
+    jstring jRenderer = (*env)->NewStringUTF(env, renderer);
+    if (!jRenderer) {
+        LOGD("Android_UpdateRendererConfig: Failed to create Java string");
+        (*env)->DeleteLocalRef(env, activityClass);
+        return;
+    }
+
+    // Call static method
+    (*env)->CallStaticVoidMethod(env, activityClass, updateMethod, jRenderer);
+
+    // Cleanup
+    (*env)->DeleteLocalRef(env, jRenderer);
+    (*env)->DeleteLocalRef(env, activityClass);
+
+    LOGD("Android_UpdateRendererConfig: Successfully updated renderer to: %s", renderer);
+}

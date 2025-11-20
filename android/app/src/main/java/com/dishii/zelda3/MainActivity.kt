@@ -177,6 +177,29 @@ class MainActivity : SDLActivity() {
                 Log.d(TAG, "showToast: Displayed toast")
             }
         }
+
+        /**
+         * Update renderer setting in zelda3.ini from native C code.
+         * Called from JNI when falling back from Vulkan to OpenGL ES.
+         *
+         * @param renderer Renderer name ("SDL", "OpenGL ES", "Vulkan", etc.)
+         */
+        @JvmStatic
+        fun updateRendererSetting(renderer: String) {
+            Log.d(TAG, "updateRendererSetting called from JNI: renderer='$renderer'")
+
+            // Get singleton MainActivity instance
+            val activity = SDLActivity.getContext() as? MainActivity
+            if (activity == null) {
+                Log.e(TAG, "updateRendererSetting: Failed to get MainActivity instance")
+                return
+            }
+
+            // Launch coroutine to update config (fire-and-forget)
+            kotlinx.coroutines.GlobalScope.launch {
+                activity.updateRendererSetting(renderer)
+            }
+        }
     }
 
     // JNI function for hot-reloading audio config (pass settings directly, don't rely on file)

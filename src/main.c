@@ -10,6 +10,7 @@
 
 #ifdef PLATFORM_ANDROID
 #include <android/log.h>
+#include "platform/android/android_jni.h"
 #endif
 
 #ifdef PLATFORM_WINDOWS
@@ -456,8 +457,59 @@ int main(int argc, char** argv) {
   g_window = window;
   SDL_SetWindowHitTest(window, HitTestCallback, NULL);
 
+  // Try to initialize the renderer
+#ifdef PLATFORM_ANDROID
+  // Android: If Vulkan fails, automatically fall back to OpenGL ES
+  if (g_config.output_method == kOutputMethod_Vulkan) {
+    if (!g_renderer_funcs.Initialize(window)) {
+      // Vulkan initialization failed - fallback to OpenGL ES
+      LogWarn("Vulkan initialization failed, falling back to OpenGL ES");
+
+      // Show user notification
+      Android_ShowToast("Vulkan could not be enabled, switching to OpenGL ES...");
+
+      // Update config file for next launch
+      Android_UpdateRendererConfig("OpenGL ES");
+
+      // Destroy Vulkan window
+      SDL_DestroyWindow(window);
+      window = NULL;
+
+      // Recreate window with OpenGL flags
+      g_win_flags &= ~SDL_WINDOW_VULKAN;
+      g_win_flags |= SDL_WINDOW_OPENGL;
+
+      window = SDL_CreateWindow(kWindowTitle, SDL_WINDOWPOS_UNDEFINED,
+                                SDL_WINDOWPOS_UNDEFINED, window_width,
+                                window_height, g_win_flags);
+      if (window == NULL) {
+        LogError("Failed to recreate window for OpenGL ES fallback: %s", SDL_GetError());
+        return 1;
+      }
+      g_window = window;
+      SDL_SetWindowHitTest(window, HitTestCallback, NULL);
+
+      // Switch to OpenGL ES renderer
+      g_config.output_method = kOutputMethod_OpenGL_ES;
+      OpenGLRenderer_Create(&g_renderer_funcs, true);
+
+      if (!g_renderer_funcs.Initialize(window)) {
+        LogError("OpenGL ES fallback initialization also failed");
+        return 1;
+      }
+
+      LogInfo("Successfully fell back to OpenGL ES renderer");
+    }
+  } else {
+    // Non-Vulkan renderers on Android
+    if (!g_renderer_funcs.Initialize(window))
+      return 1;
+  }
+#else
+  // Desktop: No fallback, just fail
   if (!g_renderer_funcs.Initialize(window))
     return 1;
+#endif
 
   SDL_AudioDeviceID device = 0;
   SDL_AudioSpec want = { 0 }, have;
