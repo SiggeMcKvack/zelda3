@@ -35,6 +35,22 @@ void* Android_LoadAsset(const char *asset_path, int *out_size);
  */
 char* Android_ReadExternalShaderFile(const char *filename, size_t *out_size);
 
+/**
+ * Shows a Toast notification on Android.
+ * Called from main.c when displaying user notifications.
+ *
+ * @param message The message to display in the Toast
+ */
+void Android_ShowToast(const char* message);
+
+/**
+ * Updates the renderer setting in zelda3.ini.
+ * Called from main.c when falling back from Vulkan to OpenGL ES.
+ *
+ * @param renderer The renderer name ("SDL", "OpenGL ES", "Vulkan", etc.)
+ */
+void Android_UpdateRendererConfig(const char *renderer);
+
 // Note: The actual JNI function declarations are in android_jni.c
 // They are:
 // - Java_com_dishii_zelda3_MainActivity_nativeSaveState(JNIEnv* env, jobject obj, jint slot)

@@ -60,3 +60,4 @@ android/.kotlin/
 *.log
 android/zelda3
 android/Makefile
+docs/launcher-implementation.md
