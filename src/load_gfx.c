@@ -613,6 +613,7 @@ void LoadTransAuxGFX() {  // 80d66e
     len = Decomp_bg(dst + 0x600*3, aux_bg_subset_3);
     assert(len == 0x600);
   }
+  (void)len;  // Used only in asserts
   Gfx_LoadSpritesInner(dst + 0x600 * 4 );
 }
 
@@ -640,6 +641,7 @@ void Gfx_LoadSpritesInner(uint8 *dst) {  // 80d706
     sprite_gfx_subset_3 = p[3];
   len = Decomp_spr(dst + 0x600*3, sprite_gfx_subset_3);
   assert(len == 0x600);
+  (void)len;  // Used only in asserts
   incremental_counter_for_vram = 0;
 }
 
@@ -1000,7 +1002,6 @@ int Decomp_spr(uint8 *dst, int gfx) {  // 80e772
   if (gfx < 12)
     gfx = 12; // ensure it wont decode bad sheets.
   MemBlk blk = kSprGfx(gfx);
-  const uint8 *sprite_data = GetCompSpritePtr(gfx);
   // If the size is not 0x600 then it's compressed
   if (gfx >= 103 || blk.size != 0x600)
     return Decompress(dst, blk.ptr);

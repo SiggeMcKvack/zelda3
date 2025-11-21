@@ -103,10 +103,6 @@ static const uint16 kText_Positions[2] = {0x6125, 0x6244};
 static const uint16 kSrmOffsets[4] = {0, 0x500, 0xa00, 0xf00};
 static const int8 kText_InitializationData[32] = {0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0x39, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1c, 4, 0, 0, 0, 0, 0};
 static const uint16 kText_BorderTiles[9] = {0x28f3, 0x28f4, 0x68f3, 0x28c8, 0x387f, 0x68c8, 0xa8f3, 0xa8f4, 0xe8f3};
-static const uint8 kText_CommandLengths[25] = {
-  1, 1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1,
-  2, 2, 2, 2, 1, 1, 1, 1, 1,
-};
 static const uint8 kVWF_RenderCharacter_setMasks[8] = {0x80, 0x40, 0x20, 0x10, 8, 4, 2, 1};
 static const uint16 kVWF_RenderCharacter_renderPos[3] = {0, 0x2a0, 0x540};
 static const uint16 kVWF_RenderCharacter_linePositions[3] = {0, 0x40, 0x80};
@@ -2266,7 +2262,7 @@ void Text_LoadCharacterBuffer() {  // 8ec4e2
   MemBlk dictionary = FindIndexInMemblk(g_zenv.dialogue_blk, 0);
   MemBlk dialogue = FindIndexInMemblk(g_zenv.dialogue_blk, 1);
   MemBlk text_str = FindIndexInMemblk(dialogue, dialogue_message_index);
-  const uint8 *src = text_str.ptr, *src_end = src + text_str.size, *src_org = src;
+  const uint8 *src = text_str.ptr, *src_end = src + text_str.size;
   uint8 *dst = messaging_text_buffer;
   while (src < src_end) {
     uint8 c = *src++;
