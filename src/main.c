@@ -1027,10 +1027,8 @@ static void SwitchDirectory() {
 
   // Use platform-appropriate path separator
 #ifdef PLATFORM_WINDOWS
-  const char *path_sep = "\\";
   const char *ini_file = "\\zelda3.ini";
 #else
-  const char *path_sep = "/";
   const char *ini_file = "/zelda3.ini";
 #endif
 
