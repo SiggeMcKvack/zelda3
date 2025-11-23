@@ -51,11 +51,16 @@ static const char *kControlNames[12] = {
 static struct {
     // Graphics tab
     GtkWidget *output_method;
+    GtkWidget *window_size_mode;
     GtkWidget *window_width;
     GtkWidget *window_height;
+    GtkWidget *window_width_label;
+    GtkWidget *window_height_label;
     GtkWidget *window_scale;
+    GtkWidget *window_scale_label;
     GtkWidget *fullscreen;
     GtkWidget *aspect_ratio;
+    GtkWidget *ignore_aspect_ratio;
     GtkWidget *extend_y;
     GtkWidget *linear_filtering;
     GtkWidget *new_renderer;
@@ -175,13 +180,71 @@ static GtkWidget* create_hscale_with_label(GtkWidget *grid, int row, const char 
     return scale;
 }
 
-// Parse comma-separated control string into array
+// Parse comma-separated control string into array (keyboard controls)
 void LauncherUI_ParseControlString(const char *str, char **controls) {
     if (!str || !*str) {
         // Set defaults if no string
         const char *defaults[12] = {
             "Up", "Down", "Left", "Right", "Right Shift", "Return",
-            "x", "z", "s", "a", "c", "v"
+            "X", "Z", "S", "A", "C", "V"
+        };
+        for (int i = 0; i < 12; i++) {
+            controls[i] = strdup(defaults[i]);
+        }
+        return;
+    }
+
+    // Parse comma-separated values (preserves empty values between commas)
+    const char *p = str;
+    int i = 0;
+
+    while (*p && i < 12) {
+        // Find next comma or end of string
+        const char *comma = strchr(p, ',');
+        const char *end = comma ? comma : p + strlen(p);
+
+        // Extract substring
+        size_t len = end - p;
+        char *token = malloc(len + 1);
+        strncpy(token, p, len);
+        token[len] = '\0';
+
+        // Trim whitespace
+        char *trimmed = token;
+        while (isspace((unsigned char)*trimmed)) trimmed++;
+        if (*trimmed) {
+            char *trim_end = trimmed + strlen(trimmed) - 1;
+            while (trim_end > trimmed && isspace((unsigned char)*trim_end)) trim_end--;
+            trim_end[1] = '\0';
+        }
+
+        // Store value (even if empty)
+        controls[i++] = strdup(trimmed);
+        free(token);
+
+        // Move past comma
+        if (comma) {
+            p = comma + 1;
+        } else {
+            break;
+        }
+    }
+
+    // Fill remaining with empty strings
+    while (i < 12) {
+        controls[i++] = strdup("");
+    }
+}
+
+// Parse comma-separated control string into array (gamepad controls)
+void LauncherUI_ParseGamepadControlString(const char *str, char **controls) {
+    if (!str || !*str) {
+        // Set gamepad defaults if no string
+        // Mapping: Up, Down, Left, Right, Select, Start, A, B, X, Y, L, R
+        // Xbox-style controller layout (positional mapping for SNES buttons)
+        const char *defaults[12] = {
+            "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Back", "Start",
+            "B", "A", "Y", "X", "L1", "R1"
         };
         for (int i = 0; i < 12; i++) {
             controls[i] = strdup(defaults[i]);
@@ -215,23 +278,51 @@ void LauncherUI_ParseControlString(const char *str, char **controls) {
 // Format control array into comma-separated string
 char* LauncherUI_FormatControlString(char **controls) {
     size_t total_len = 0;
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 10; i++) {
         if (controls[i]) {
-            total_len += strlen(controls[i]) + 2;  // +2 for ", "
+            total_len += strlen(controls[i]);
         }
+        if (i > 0) total_len += 2;  // +2 for ", "
     }
 
     char *result = malloc(total_len + 1);
     result[0] = '\0';
 
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 10; i++) {
+        if (i > 0) strcat(result, ", ");
+        // Write value (or empty string if cleared)
         if (controls[i] && *controls[i]) {
-            if (i > 0) strcat(result, ", ");
             strcat(result, controls[i]);
         }
+        // else: leave empty between commas
     }
 
     return result;
+}
+
+// Signal handler for window size mode dropdown
+static void on_window_size_mode_changed(GtkComboBox *combo, gpointer user_data) {
+    (void)user_data;
+    int mode = gtk_combo_box_get_active(combo);
+    bool is_custom = (mode == 1);  // 0=Auto, 1=Custom
+
+    if (is_custom) {
+        // Custom mode: show width/height, hide scale
+        gtk_widget_show(g_widgets.window_width_label);
+        gtk_widget_show(g_widgets.window_width);
+        gtk_widget_show(g_widgets.window_height_label);
+        gtk_widget_show(g_widgets.window_height);
+        gtk_widget_hide(g_widgets.window_scale_label);
+        gtk_widget_hide(g_widgets.window_scale);
+    } else {
+        // Auto mode: show scale, hide width/height
+        gtk_widget_show(g_widgets.window_scale_label);
+        gtk_widget_show(g_widgets.window_scale);
+        gtk_widget_hide(g_widgets.window_width_label);
+        gtk_widget_hide(g_widgets.window_width);
+        gtk_widget_hide(g_widgets.window_height_label);
+        gtk_widget_hide(g_widgets.window_height);
+    }
 }
 
 // Create Graphics tab
@@ -249,22 +340,79 @@ static GtkWidget* create_graphics_tab(const Config *config) {
         "Output Method:", output_methods, 5);
     gtk_combo_box_set_active(GTK_COMBO_BOX(g_widgets.output_method), config->output_method);
 
-    // Window size
-    g_widgets.window_width = create_spin_button_with_label(grid, row++,
-        "Window Width:", 0, 3840, 1);
+    // Window Size Mode dropdown
+    const char *window_size_modes[] = {"Auto", "Custom"};
+    g_widgets.window_size_mode = create_combo_box_with_label(grid, row++,
+        "Window Size:", window_size_modes, 2);
+
+    // Determine initial mode: Auto if both width and height are 0
+    bool is_auto = (config->window_width == 0 && config->window_height == 0);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(g_widgets.window_size_mode), is_auto ? 0 : 1);
+
+    // Window Width (only visible in Custom mode)
+    g_widgets.window_width_label = gtk_label_new("Window Width:");
+    gtk_widget_set_halign(g_widgets.window_width_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), g_widgets.window_width_label, 0, row, 1, 1);
+
+    g_widgets.window_width = gtk_spin_button_new_with_range(0, 3840, 1);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(g_widgets.window_width), config->window_width);
+    gtk_grid_attach(GTK_GRID(grid), g_widgets.window_width, 1, row, 1, 1);
+    row++;
 
-    g_widgets.window_height = create_spin_button_with_label(grid, row++,
-        "Window Height:", 0, 2160, 1);
+    // Window Height (only visible in Custom mode)
+    g_widgets.window_height_label = gtk_label_new("Window Height:");
+    gtk_widget_set_halign(g_widgets.window_height_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), g_widgets.window_height_label, 0, row, 1, 1);
+
+    g_widgets.window_height = gtk_spin_button_new_with_range(0, 2160, 1);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(g_widgets.window_height), config->window_height);
+    gtk_grid_attach(GTK_GRID(grid), g_widgets.window_height, 1, row, 1, 1);
+    row++;
 
-    g_widgets.window_scale = create_spin_button_with_label(grid, row++,
-        "Window Scale:", 1, 10, 1);
+    // Window Scale (only visible in Auto mode)
+    g_widgets.window_scale_label = gtk_label_new("Window Scale:");
+    gtk_widget_set_halign(g_widgets.window_scale_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), g_widgets.window_scale_label, 0, row, 1, 1);
+
+    g_widgets.window_scale = gtk_spin_button_new_with_range(1, 10, 1);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(g_widgets.window_scale), config->window_scale);
+    gtk_grid_attach(GTK_GRID(grid), g_widgets.window_scale, 1, row, 1, 1);
+    row++;
+
+    // Mark widgets as manually controlled (won't be shown by gtk_widget_show_all)
+    gtk_widget_set_no_show_all(g_widgets.window_width_label, TRUE);
+    gtk_widget_set_no_show_all(g_widgets.window_width, TRUE);
+    gtk_widget_set_no_show_all(g_widgets.window_height_label, TRUE);
+    gtk_widget_set_no_show_all(g_widgets.window_height, TRUE);
+    gtk_widget_set_no_show_all(g_widgets.window_scale_label, TRUE);
+    gtk_widget_set_no_show_all(g_widgets.window_scale, TRUE);
+
+    // Set initial visibility based on mode
+    if (is_auto) {
+        // Auto mode: show scale, hide width/height
+        gtk_widget_show(g_widgets.window_scale_label);
+        gtk_widget_show(g_widgets.window_scale);
+        gtk_widget_hide(g_widgets.window_width_label);
+        gtk_widget_hide(g_widgets.window_width);
+        gtk_widget_hide(g_widgets.window_height_label);
+        gtk_widget_hide(g_widgets.window_height);
+    } else {
+        // Custom mode: show width/height, hide scale
+        gtk_widget_show(g_widgets.window_width_label);
+        gtk_widget_show(g_widgets.window_width);
+        gtk_widget_show(g_widgets.window_height_label);
+        gtk_widget_show(g_widgets.window_height);
+        gtk_widget_hide(g_widgets.window_scale_label);
+        gtk_widget_hide(g_widgets.window_scale);
+    }
+
+    // Connect signal handler for window size mode changes
+    g_signal_connect(g_widgets.window_size_mode, "changed",
+                     G_CALLBACK(on_window_size_mode_changed), NULL);
 
     // Fullscreen
-    const char *fullscreen_options[] = {"Off", "Desktop", "Exclusive"};
-    g_widgets.fullscreen = create_radio_buttons(grid, row++, "Fullscreen:", fullscreen_options, 3);
+    const char *fullscreen_options[] = {"Windowed", "Borderless Fullscreen", "Fullscreen"};
+    g_widgets.fullscreen = create_radio_buttons(grid, row++, "Display Mode:", fullscreen_options, 3);
 
     // Set active radio button based on config value
     GSList *fs_group = gtk_radio_button_get_group(GTK_RADIO_BUTTON(g_widgets.fullscreen));
@@ -278,19 +426,22 @@ static GtkWidget* create_graphics_tab(const Config *config) {
     gtk_combo_box_set_active(GTK_COMBO_BOX(g_widgets.aspect_ratio), config->extended_aspect_ratio);
 
     // Checkboxes
+    g_widgets.ignore_aspect_ratio = create_checkbox(grid, row++, "Stretch to fill window (ignore aspect ratio)");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.ignore_aspect_ratio), config->ignore_aspect_ratio);
+
     g_widgets.extend_y = create_checkbox(grid, row++, "Extend Y (240 lines)");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.extend_y), config->extend_y);
 
-    g_widgets.linear_filtering = create_checkbox(grid, row++, "Linear Filtering");
+    g_widgets.linear_filtering = create_checkbox(grid, row++, "Use linear filtering for smoother pixels");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.linear_filtering), config->linear_filtering);
 
-    g_widgets.new_renderer = create_checkbox(grid, row++, "New Renderer");
+    g_widgets.new_renderer = create_checkbox(grid, row++, "Use optimized SNES PPU renderer");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.new_renderer), config->new_renderer);
 
-    g_widgets.enhanced_mode7 = create_checkbox(grid, row++, "Enhanced Mode 7");
+    g_widgets.enhanced_mode7 = create_checkbox(grid, row++, "Display the world map with higher resolution (Enhanced Mode 7)");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.enhanced_mode7), config->enhanced_mode7);
 
-    g_widgets.no_sprite_limits = create_checkbox(grid, row++, "No Sprite Limits");
+    g_widgets.no_sprite_limits = create_checkbox(grid, row++, "Disable SNES sprite limit (8 sprites per scanline)");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.no_sprite_limits), config->no_sprite_limits);
 
     return grid;
@@ -308,8 +459,16 @@ static GtkWidget* create_sound_tab(const Config *config) {
     g_widgets.enable_audio = create_checkbox(grid, row++, "Enable Audio");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.enable_audio), config->enable_audio);
 
+    const char *channel_options[] = {"Mono", "Stereo"};
+    g_widgets.audio_channels = create_radio_buttons(grid, row++, "Audio Channels:", channel_options, 2);
+
+    // Set active based on config (1=Mono, 2=Stereo)
+    GSList *ch_group = gtk_radio_button_get_group(GTK_RADIO_BUTTON(g_widgets.audio_channels));
+    int ch_index = config->audio_channels == 2 ? 1 : 0;
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_slist_nth_data(ch_group, 1 - ch_index)), TRUE);
+
     // Audio frequency
-    const char *freqs[] = {"11025", "22050", "32000", "44100", "48000"};
+    const char *freqs[] = {"11025", "22050", "32000", "44100 (Use with PCM MSU)", "48000 (Use with OPUZ MSU)"};
     g_widgets.audio_freq = create_combo_box_with_label(grid, row++,
         "Audio Frequency:", freqs, 5);
     // Map freq to index
@@ -322,14 +481,6 @@ static GtkWidget* create_sound_tab(const Config *config) {
         case 48000: freq_idx = 4; break;
     }
     gtk_combo_box_set_active(GTK_COMBO_BOX(g_widgets.audio_freq), freq_idx);
-
-    const char *channel_options[] = {"Mono", "Stereo"};
-    g_widgets.audio_channels = create_radio_buttons(grid, row++, "Audio Channels:", channel_options, 2);
-
-    // Set active based on config (1=Mono, 2=Stereo)
-    GSList *ch_group = gtk_radio_button_get_group(GTK_RADIO_BUTTON(g_widgets.audio_channels));
-    int ch_index = config->audio_channels == 2 ? 1 : 0;
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_slist_nth_data(ch_group, 1 - ch_index)), TRUE);
 
     const char *sample_opts[] = {"256", "512", "1024", "2048", "4096"};
     int sample_values[] = {256, 512, 1024, 2048, 4096};
@@ -364,12 +515,12 @@ static GtkWidget* create_sound_tab(const Config *config) {
     }
     gtk_combo_box_set_active(GTK_COMBO_BOX(g_widgets.enable_msu), msu_idx);
 
-    g_widgets.resume_msu = create_checkbox(grid, row++, "Resume MSU position when re-entering overworld area");
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.resume_msu), config->resume_msu);
-
     g_widgets.msu_volume_spin = create_hscale_with_label(grid, row++,
         "MSU Volume:", 0, 100, 1);
     gtk_range_set_value(GTK_RANGE(g_widgets.msu_volume_spin), config->msuvolume);
+
+    g_widgets.resume_msu = create_checkbox(grid, row++, "Resume MSU position when re-entering overworld area");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.resume_msu), config->resume_msu);
 
     return grid;
 }
@@ -464,12 +615,56 @@ static gboolean on_key_press_capture(GtkWidget *widget, GdkEventKey *event, gpoi
     // Get GDK key name and convert to SDL scancode name
     const char *gdk_name = gdk_keyval_name(event->keyval);
 
+    // Skip if this is a modifier key itself (don't capture Ctrl, Shift, Alt alone)
+    if (gdk_name && (strstr(gdk_name, "Control") || strstr(gdk_name, "Shift") ||
+                     strstr(gdk_name, "Alt") || strstr(gdk_name, "Meta") ||
+                     strstr(gdk_name, "Super"))) {
+        return TRUE;  // Ignore modifier keys
+    }
+
+    // GDK to SDL key name mapping table
+    // GDK returns verbose names (e.g. "minus"), SDL expects symbols (e.g. "-")
+    static const struct {
+        const char *gdk;
+        const char *sdl;
+    } key_mapping[] = {
+        // Punctuation and symbols
+        {"minus", "-"},
+        {"equal", "="},
+        {"plus", "+"},
+        {"comma", ","},
+        {"period", "."},
+        {"slash", "/"},
+        {"backslash", "\\"},
+        {"semicolon", ";"},
+        {"apostrophe", "'"},
+        {"grave", "`"},
+        {"bracketleft", "["},
+        {"bracketright", "]"},
+        {"space", "Space"},
+        // Keep localized keys as-is (e.g., German "section" key)
+        // GDK "section" → SDL "section"
+        {NULL, NULL}  // Sentinel
+    };
+
     // Map GDK key name to SDL scancode name
     // SDL uses uppercase single letters, GDK uses lowercase
     char key_name[64] = {0};
     if (gdk_name) {
-        // Simple mapping: capitalize single letters
-        if (strlen(gdk_name) == 1 && gdk_name[0] >= 'a' && gdk_name[0] <= 'z') {
+        // Check mapping table first
+        const char *mapped_name = NULL;
+        for (int i = 0; key_mapping[i].gdk != NULL; i++) {
+            if (strcmp(gdk_name, key_mapping[i].gdk) == 0) {
+                mapped_name = key_mapping[i].sdl;
+                break;
+            }
+        }
+
+        if (mapped_name) {
+            // Use mapped name
+            strncpy(key_name, mapped_name, sizeof(key_name) - 1);
+        } else if (strlen(gdk_name) == 1 && gdk_name[0] >= 'a' && gdk_name[0] <= 'z') {
+            // Capitalize single letters
             key_name[0] = gdk_name[0] - 'a' + 'A';
             key_name[1] = '\0';
         } else {
@@ -478,17 +673,43 @@ static gboolean on_key_press_capture(GtkWidget *widget, GdkEventKey *event, gpoi
         }
     }
 
-    if (key_name[0] && g_captured_control_index >= 0) {
-        // Update control mapping
-        if (g_kbd_controls[g_captured_control_index]) {
-            free(g_kbd_controls[g_captured_control_index]);
+    if (key_name[0]) {
+        // Build full key string with modifiers
+        char full_key[128] = {0};
+
+        // Add modifiers (Ctrl, Shift, Alt)
+        if (event->state & GDK_CONTROL_MASK) {
+            strcat(full_key, "Ctrl+");
         }
-        g_kbd_controls[g_captured_control_index] = strdup(key_name);
+        if (event->state & GDK_SHIFT_MASK) {
+            strcat(full_key, "Shift+");
+        }
+        if (event->state & GDK_MOD1_MASK) {  // Alt key
+            strcat(full_key, "Alt+");
+        }
+
+        // Append the base key
+        strcat(full_key, key_name);
+
+        // Update control mapping if this is for indexed controls
+        if (g_captured_control_index >= 0) {
+            if (g_kbd_controls[g_captured_control_index]) {
+                free(g_kbd_controls[g_captured_control_index]);
+            }
+            g_kbd_controls[g_captured_control_index] = strdup(full_key);
+        }
+
+        // Update individual variable if attached (for Cheats/System buttons)
+        char **var_ptr = (char**)g_object_get_data(G_OBJECT(button), "variable_ptr");
+        if (var_ptr) {
+            if (*var_ptr) {
+                free(*var_ptr);
+            }
+            *var_ptr = strdup(full_key);
+        }
 
         // Update button label
-        char label[128];
-        snprintf(label, sizeof(label), "%s: %s", kControlNames[g_captured_control_index], key_name);
-        gtk_button_set_label(GTK_BUTTON(button), label);
+        gtk_button_set_label(GTK_BUTTON(button), full_key);
 
         g_key_captured = true;
         gtk_dialog_response(GTK_DIALOG(g_capture_dialog), GTK_RESPONSE_OK);
@@ -497,11 +718,9 @@ static gboolean on_key_press_capture(GtkWidget *widget, GdkEventKey *event, gpoi
     return TRUE;
 }
 
-// Keyboard button click handler
-static void on_keyboard_button_clicked(GtkWidget *button, gpointer user_data) {
-    int index = GPOINTER_TO_INT(user_data);
-    g_captured_control_index = index;
-    g_key_captured = false;
+// Generic keyboard button click handler
+static void on_key_button_clicked(GtkWidget *button, gpointer user_data) {
+    const char *prompt = (const char*)user_data;
 
     // Create capture dialog
     GtkWidget *parent = gtk_widget_get_toplevel(button);
@@ -516,8 +735,7 @@ static void on_keyboard_button_clicked(GtkWidget *button, gpointer user_data) {
     GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(g_capture_dialog));
     GtkWidget *label = gtk_label_new(NULL);
     char markup[256];
-    snprintf(markup, sizeof(markup), "<big><b>Press a key for: %s</b></big>\n\n(or Cancel to abort)",
-             kControlNames[index]);
+    snprintf(markup, sizeof(markup), "<big><b>Press a key for: %s</b></big>\n\n(supports Ctrl+, Shift+, Alt+ modifiers)\n(or Cancel to abort)", prompt);
     gtk_label_set_markup(GTK_LABEL(label), markup);
     gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
     gtk_container_add(GTK_CONTAINER(content), label);
@@ -530,7 +748,36 @@ static void on_keyboard_button_clicked(GtkWidget *button, gpointer user_data) {
     gtk_widget_destroy(g_capture_dialog);
 
     g_capture_dialog = NULL;
-    g_captured_control_index = -1;
+}
+
+// Structure to pass data to clear button handler
+typedef struct {
+    GtkWidget *button;  // The binding button to update
+    char **variable;    // Pointer to the variable to clear
+} ClearButtonData;
+
+// Clear button click handler
+static void on_clear_button_clicked(GtkWidget *widget, gpointer user_data) {
+    (void)widget;
+    ClearButtonData *data = (ClearButtonData*)user_data;
+
+    // Clear the variable (set to empty string)
+    if (data->variable && *data->variable) {
+        free(*data->variable);
+    }
+    *data->variable = strdup("");
+
+    // Update button label
+    gtk_button_set_label(GTK_BUTTON(data->button), "(not set)");
+}
+
+// Keyboard button click handler for controls
+static void on_keyboard_button_clicked(GtkWidget *button, gpointer user_data) {
+    int index = GPOINTER_TO_INT(user_data);
+    g_captured_control_index = index;
+    g_key_captured = false;
+
+    on_key_button_clicked(button, (gpointer)kControlNames[index]);
 }
 
 // Create KeyMap tab with interactive buttons
@@ -551,17 +798,23 @@ static GtkWidget* create_keymap_tab(const Config *config) {
     gtk_container_set_border_width(GTK_CONTAINER(controls_grid), 10);
 
     GtkWidget *controls_title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(controls_title), "<b>SNES Controller Buttons</b>\nClick to remap");
+    gtk_label_set_markup(GTK_LABEL(controls_title), "<b>SNES Controller Buttons</b>\nClick button to remap");
     gtk_grid_attach(GTK_GRID(controls_grid), controls_title, 0, 0, 2, 1);
 
     for (int i = 0; i < 12; i++) {
-        char label[128];
+        // Create label for control name
+        char label_text[64];
+        snprintf(label_text, sizeof(label_text), "%s:", kControlNames[i]);
+        GtkWidget *label = gtk_label_new(label_text);
+        gtk_widget_set_halign(label, GTK_ALIGN_END);
+        gtk_grid_attach(GTK_GRID(controls_grid), label, 0, i + 1, 1, 1);
+
+        // Create button showing only the key
         const char *key = g_kbd_controls[i] ? g_kbd_controls[i] : "(not set)";
-        snprintf(label, sizeof(label), "%s: %s", kControlNames[i], key);
-        GtkWidget *button = gtk_button_new_with_label(label);
-        gtk_widget_set_size_request(button, 200, 40);
+        GtkWidget *button = gtk_button_new_with_label(key);
+        gtk_widget_set_size_request(button, 150, 35);
         g_signal_connect(button, "clicked", G_CALLBACK(on_keyboard_button_clicked), GINT_TO_POINTER(i));
-        gtk_grid_attach(GTK_GRID(controls_grid), button, i / 6, i % 6 + 1, 1, 1);
+        gtk_grid_attach(GTK_GRID(controls_grid), button, 1, i + 1, 1, 1);
     }
 
     gtk_container_add(GTK_CONTAINER(controls_scroll), controls_grid);
@@ -596,21 +849,39 @@ static GtkWidget* create_keymap_tab(const Config *config) {
         snprintf(markup, sizeof(markup), "<b>%s:</b>", state_labels[type]);
         gtk_label_set_markup(GTK_LABEL(type_label), markup);
         gtk_widget_set_halign(type_label, GTK_ALIGN_START);
-        gtk_grid_attach(GTK_GRID(states_grid), type_label, 0, row++, 2, 1);
+        gtk_grid_attach(GTK_GRID(states_grid), type_label, 0, row++, 3, 1);
 
         for (int i = 0; i < 10; i++) {
-            char slot_label[16];
-            snprintf(slot_label, sizeof(slot_label), "Slot %d:", i + 1);
+            char slot_label[64];
+            snprintf(slot_label, sizeof(slot_label), "%s Slot %d:", state_labels[type], i + 1);
             GtkWidget *label = gtk_label_new(slot_label);
             gtk_widget_set_halign(label, GTK_ALIGN_END);
             gtk_grid_attach(GTK_GRID(states_grid), label, 0, row, 1, 1);
 
-            GtkWidget *entry = gtk_entry_new();
-            const char *value = state_arrays[type][i] ? state_arrays[type][i] : defaults[type][i];
-            gtk_entry_set_text(GTK_ENTRY(entry), value);
-            gtk_entry_set_width_chars(GTK_ENTRY(entry), 20);
-            gtk_grid_attach(GTK_GRID(states_grid), entry, 1, row, 1, 1);
-            g_object_set_data(G_OBJECT(states_grid), g_strdup_printf("state_%d_%d", type, i), entry);
+            const char *value;
+            if (!state_arrays[type][i] || !*state_arrays[type][i]) {
+                value = "(not set)";
+            } else {
+                value = state_arrays[type][i];
+            }
+            GtkWidget *button = gtk_button_new_with_label(value);
+            gtk_widget_set_size_request(button, 150, 35);
+            g_signal_connect(button, "clicked", G_CALLBACK(on_key_button_clicked), slot_label);
+            gtk_grid_attach(GTK_GRID(states_grid), button, 1, row, 1, 1);
+            g_object_set_data(G_OBJECT(states_grid), g_strdup_printf("state_%d_%d", type, i), button);
+
+            // Attach variable pointer to button for key capture
+            g_object_set_data(G_OBJECT(button), "variable_ptr", &state_arrays[type][i]);
+
+            // Add Clear button
+            GtkWidget *clear_button = gtk_button_new_with_label("Clear");
+            gtk_widget_set_size_request(clear_button, 80, 35);
+            ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
+            clear_data->button = button;
+            clear_data->variable = &state_arrays[type][i];
+            g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
+            gtk_grid_attach(GTK_GRID(states_grid), clear_button, 2, row, 1, 1);
+
             row++;
         }
     }
@@ -630,13 +901,13 @@ static GtkWidget* create_keymap_tab(const Config *config) {
 
     GtkWidget *cheats_title = gtk_label_new(NULL);
     gtk_label_set_markup(GTK_LABEL(cheats_title), "<b>Cheat Keys</b>");
-    gtk_grid_attach(GTK_GRID(cheats_grid), cheats_title, 0, 0, 2, 1);
+    gtk_grid_attach(GTK_GRID(cheats_grid), cheats_title, 0, 0, 3, 1);
 
     row = 1;
     struct { const char *label; char **ptr; const char *def; } cheats[] = {
-        {"Restore Life:", &g_kbd_cheat_life, "w"},
-        {"All Keys:", &g_kbd_cheat_keys, "o"},
-        {"Walk Through Walls:", &g_kbd_cheat_walkthrough, "Ctrl+e"}
+        {"Refill Health & Magic:", &g_kbd_cheat_life, "W"},
+        {"Set key count to 1:", &g_kbd_cheat_keys, "O"},
+        {"Toggle Walk Through Walls:", &g_kbd_cheat_walkthrough, "Ctrl+E"}
     };
 
     for (int i = 0; i < 3; i++) {
@@ -644,12 +915,30 @@ static GtkWidget* create_keymap_tab(const Config *config) {
         gtk_widget_set_halign(label, GTK_ALIGN_END);
         gtk_grid_attach(GTK_GRID(cheats_grid), label, 0, row, 1, 1);
 
-        GtkWidget *entry = gtk_entry_new();
-        const char *value = *cheats[i].ptr ? *cheats[i].ptr : cheats[i].def;
-        gtk_entry_set_text(GTK_ENTRY(entry), value);
-        gtk_entry_set_width_chars(GTK_ENTRY(entry), 20);
-        gtk_grid_attach(GTK_GRID(cheats_grid), entry, 1, row, 1, 1);
-        g_object_set_data(G_OBJECT(cheats_grid), g_strdup_printf("cheat_%d", i), entry);
+        const char *value;
+        if (!*cheats[i].ptr || !**cheats[i].ptr) {
+            value = "(not set)";
+        } else {
+            value = *cheats[i].ptr;
+        }
+        GtkWidget *button = gtk_button_new_with_label(value);
+        gtk_widget_set_size_request(button, 150, 35);
+        g_signal_connect(button, "clicked", G_CALLBACK(on_key_button_clicked), (gpointer)cheats[i].label);
+        gtk_grid_attach(GTK_GRID(cheats_grid), button, 1, row, 1, 1);
+        g_object_set_data(G_OBJECT(cheats_grid), g_strdup_printf("cheat_%d", i), button);
+
+        // Attach variable pointer to button for key capture
+        g_object_set_data(G_OBJECT(button), "variable_ptr", cheats[i].ptr);
+
+        // Add Clear button
+        GtkWidget *clear_button = gtk_button_new_with_label("Clear");
+        gtk_widget_set_size_request(clear_button, 80, 35);
+        ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
+        clear_data->button = button;
+        clear_data->variable = cheats[i].ptr;
+        g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
+        gtk_grid_attach(GTK_GRID(cheats_grid), clear_button, 2, row, 1, 1);
+
         row++;
     }
 
@@ -668,18 +957,18 @@ static GtkWidget* create_keymap_tab(const Config *config) {
 
     GtkWidget *system_title = gtk_label_new(NULL);
     gtk_label_set_markup(GTK_LABEL(system_title), "<b>System Control Keys</b>");
-    gtk_grid_attach(GTK_GRID(system_grid), system_title, 0, 0, 2, 1);
+    gtk_grid_attach(GTK_GRID(system_grid), system_title, 0, 0, 3, 1);
 
     row = 1;
     struct { const char *label; char **ptr; const char *def; } system_keys[] = {
-        {"Clear Key Log:", &g_kbd_clear_keylog, "k"},
-        {"Stop Replay:", &g_kbd_stop_replay, "l"},
+        {"Clear Key Log:", &g_kbd_clear_keylog, "K"},
+        {"Stop Replay:", &g_kbd_stop_replay, "L"},
         {"Toggle Fullscreen:", &g_kbd_fullscreen, "Alt+Return"},
-        {"Reset:", &g_kbd_reset, "Ctrl+r"},
-        {"Pause (Dimmed):", &g_kbd_pause_dimmed, "p"},
-        {"Pause:", &g_kbd_pause, "Shift+p"},
+        {"Reset:", &g_kbd_reset, "Ctrl+R"},
+        {"Pause (Dimmed):", &g_kbd_pause_dimmed, "P"},
+        {"Pause:", &g_kbd_pause, "Shift+P"},
         {"Turbo:", &g_kbd_turbo, "Tab"},
-        {"Replay Turbo:", &g_kbd_replay_turbo, "t"},
+        {"Replay Turbo:", &g_kbd_replay_turbo, "T"},
         {"Window Bigger:", &g_kbd_window_bigger, "Ctrl+Up"},
         {"Window Smaller:", &g_kbd_window_smaller, "Ctrl+Down"},
         {"Volume Up:", &g_kbd_volume_up, "Shift+="},
@@ -691,12 +980,30 @@ static GtkWidget* create_keymap_tab(const Config *config) {
         gtk_widget_set_halign(label, GTK_ALIGN_END);
         gtk_grid_attach(GTK_GRID(system_grid), label, 0, row, 1, 1);
 
-        GtkWidget *entry = gtk_entry_new();
-        const char *value = *system_keys[i].ptr ? *system_keys[i].ptr : system_keys[i].def;
-        gtk_entry_set_text(GTK_ENTRY(entry), value);
-        gtk_entry_set_width_chars(GTK_ENTRY(entry), 20);
-        gtk_grid_attach(GTK_GRID(system_grid), entry, 1, row, 1, 1);
-        g_object_set_data(G_OBJECT(system_grid), g_strdup_printf("system_%d", i), entry);
+        const char *value;
+        if (!*system_keys[i].ptr || !**system_keys[i].ptr) {
+            value = "(not set)";
+        } else {
+            value = *system_keys[i].ptr;
+        }
+        GtkWidget *button = gtk_button_new_with_label(value);
+        gtk_widget_set_size_request(button, 150, 35);
+        g_signal_connect(button, "clicked", G_CALLBACK(on_key_button_clicked), (gpointer)system_keys[i].label);
+        gtk_grid_attach(GTK_GRID(system_grid), button, 1, row, 1, 1);
+        g_object_set_data(G_OBJECT(system_grid), g_strdup_printf("system_%d", i), button);
+
+        // Attach variable pointer to button for key capture
+        g_object_set_data(G_OBJECT(button), "variable_ptr", system_keys[i].ptr);
+
+        // Add Clear button
+        GtkWidget *clear_button = gtk_button_new_with_label("Clear");
+        gtk_widget_set_size_request(clear_button, 80, 35);
+        ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
+        clear_data->button = button;
+        clear_data->variable = system_keys[i].ptr;
+        g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
+        gtk_grid_attach(GTK_GRID(system_grid), clear_button, 2, row, 1, 1);
+
         row++;
     }
 
@@ -883,8 +1190,16 @@ GtkWidget* LauncherUI_CreateWindow(Config *config) {
 void LauncherUI_UpdateConfigFromUI(Config *config) {
     // Graphics
     config->output_method = gtk_combo_box_get_active(GTK_COMBO_BOX(g_widgets.output_method));
-    config->window_width = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(g_widgets.window_width));
-    config->window_height = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(g_widgets.window_height));
+
+    // Window size: Auto (0) or Custom (1)
+    int window_size_mode = gtk_combo_box_get_active(GTK_COMBO_BOX(g_widgets.window_size_mode));
+    if (window_size_mode == 0) {  // Auto
+        config->window_width = 0;
+        config->window_height = 0;
+    } else {  // Custom
+        config->window_width = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(g_widgets.window_width));
+        config->window_height = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(g_widgets.window_height));
+    }
     config->window_scale = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(g_widgets.window_scale));
 
     // Read fullscreen from radio button group
@@ -897,6 +1212,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
     }
 
     config->extended_aspect_ratio = gtk_combo_box_get_active(GTK_COMBO_BOX(g_widgets.aspect_ratio));
+    config->ignore_aspect_ratio = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.ignore_aspect_ratio));
     config->extend_y = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.extend_y));
     config->linear_filtering = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.linear_filtering));
     config->new_renderer = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.new_renderer));
@@ -975,33 +1291,33 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
     if (g_gamepad_load) free(g_gamepad_load);
     g_gamepad_load = strdup(gtk_entry_get_text(GTK_ENTRY(g_widgets.gamepad_load_entry)));
 
-    // Read keyboard save state bindings (30 entries)
+    // Read keyboard save state bindings (30 buttons)
     char **state_arrays[] = {g_kbd_load, g_kbd_save, g_kbd_replay};
     for (int type = 0; type < 3; type++) {
         for (int i = 0; i < 10; i++) {
             char key[32];
             snprintf(key, sizeof(key), "state_%d_%d", type, i);
-            GtkWidget *entry = g_object_get_data(G_OBJECT(g_widgets.kbd_states_grid), key);
-            if (entry) {
+            GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.kbd_states_grid), key);
+            if (button) {
                 if (state_arrays[type][i]) free(state_arrays[type][i]);
-                state_arrays[type][i] = strdup(gtk_entry_get_text(GTK_ENTRY(entry)));
+                state_arrays[type][i] = strdup(gtk_button_get_label(GTK_BUTTON(button)));
             }
         }
     }
 
-    // Read keyboard cheat bindings (3 entries)
+    // Read keyboard cheat bindings (3 buttons)
     char **cheat_ptrs[] = {&g_kbd_cheat_life, &g_kbd_cheat_keys, &g_kbd_cheat_walkthrough};
     for (int i = 0; i < 3; i++) {
         char key[32];
         snprintf(key, sizeof(key), "cheat_%d", i);
-        GtkWidget *entry = g_object_get_data(G_OBJECT(g_widgets.kbd_cheats_grid), key);
-        if (entry) {
+        GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.kbd_cheats_grid), key);
+        if (button) {
             if (*cheat_ptrs[i]) free(*cheat_ptrs[i]);
-            *cheat_ptrs[i] = strdup(gtk_entry_get_text(GTK_ENTRY(entry)));
+            *cheat_ptrs[i] = strdup(gtk_button_get_label(GTK_BUTTON(button)));
         }
     }
 
-    // Read keyboard system bindings (12 entries)
+    // Read keyboard system bindings (12 buttons)
     char **system_ptrs[] = {
         &g_kbd_clear_keylog,
         &g_kbd_stop_replay,
@@ -1019,10 +1335,10 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
     for (int i = 0; i < 12; i++) {
         char key[32];
         snprintf(key, sizeof(key), "system_%d", i);
-        GtkWidget *entry = g_object_get_data(G_OBJECT(g_widgets.kbd_system_grid), key);
-        if (entry) {
+        GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.kbd_system_grid), key);
+        if (button) {
             if (*system_ptrs[i]) free(*system_ptrs[i]);
-            *system_ptrs[i] = strdup(gtk_entry_get_text(GTK_ENTRY(entry)));
+            *system_ptrs[i] = strdup(gtk_button_get_label(GTK_BUTTON(button)));
         }
     }
 }

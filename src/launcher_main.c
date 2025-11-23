@@ -23,11 +23,15 @@
 #include "config_reader.h"
 #include "config.h"
 #include "logging.h"
+#include "config_defaults_generated.h"
 
 // Global state
 static Config g_launcher_config;
 static GtkWidget *g_main_window = NULL;
 static char kConfigPath[1024] = "./zelda3.ini";  // Will be initialized to absolute path in main()
+
+// Forward declarations
+static GtkWidget* create_launcher_window(void);
 
 // Check if file exists
 static bool file_exists(const char *path) {
@@ -48,12 +52,27 @@ static bool load_or_create_config(Config *config) {
         }
         return true;
     } else {
-        LogInfo("No config found, creating defaults");
-        ConfigWriter_InitDefaults(config);
+        LogInfo("No config found, creating defaults from embedded template");
 
-        // Write defaults to file
-        if (!ConfigWriter_Write(kConfigPath, config)) {
+        // Write embedded default INI to file
+        FILE *f = fopen(kConfigPath, "w");
+        if (!f) {
+            LogError("Failed to open %s for writing", kConfigPath);
+            return false;
+        }
+
+        if (fputs(kDefaultConfigIni, f) == EOF) {
             LogError("Failed to write default config");
+            fclose(f);
+            return false;
+        }
+
+        fclose(f);
+        LogInfo("Created default config at %s", kConfigPath);
+
+        // Now read it back
+        if (!ConfigReader_Read(kConfigPath, config)) {
+            LogError("Failed to read newly created config");
             return false;
         }
 
@@ -228,33 +247,128 @@ static void on_cancel_clicked(GtkWidget *widget, gpointer data) {
     gtk_main_quit();
 }
 
+// Button callback: Reset to defaults
+static void on_reset_defaults_clicked(GtkWidget *widget, gpointer data) {
+    (void)widget;
+    (void)data;
+
+    // Show confirmation dialog
+    GtkWidget *dialog = gtk_message_dialog_new(
+        GTK_WINDOW(g_main_window),
+        GTK_DIALOG_MODAL,
+        GTK_MESSAGE_WARNING,
+        GTK_BUTTONS_NONE,
+        "Reset all settings to defaults?"
+    );
+    gtk_message_dialog_format_secondary_text(
+        GTK_MESSAGE_DIALOG(dialog),
+        "This will restore all settings to their default values. This cannot be undone."
+    );
+    gtk_dialog_add_button(GTK_DIALOG(dialog), "Cancel", GTK_RESPONSE_CANCEL);
+    gtk_dialog_add_button(GTK_DIALOG(dialog), "Reset", GTK_RESPONSE_OK);
+
+    int response = gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
+
+    if (response == GTK_RESPONSE_OK) {
+        LogInfo("Resetting configuration to defaults");
+
+        // Write embedded default INI to file
+        FILE *f = fopen(kConfigPath, "w");
+        if (!f) {
+            LogError("Failed to open %s for writing", kConfigPath);
+
+            GtkWidget *error_dialog = gtk_message_dialog_new(
+                GTK_WINDOW(g_main_window),
+                GTK_DIALOG_MODAL,
+                GTK_MESSAGE_ERROR,
+                GTK_BUTTONS_OK,
+                "Failed to reset configuration"
+            );
+            gtk_dialog_run(GTK_DIALOG(error_dialog));
+            gtk_widget_destroy(error_dialog);
+            return;
+        }
+
+        if (fputs(kDefaultConfigIni, f) == EOF) {
+            LogError("Failed to write default config");
+            fclose(f);
+
+            GtkWidget *error_dialog = gtk_message_dialog_new(
+                GTK_WINDOW(g_main_window),
+                GTK_DIALOG_MODAL,
+                GTK_MESSAGE_ERROR,
+                GTK_BUTTONS_OK,
+                "Failed to write default configuration"
+            );
+            gtk_dialog_run(GTK_DIALOG(error_dialog));
+            gtk_widget_destroy(error_dialog);
+            return;
+        }
+
+        fclose(f);
+        LogInfo("Reset config to defaults at %s", kConfigPath);
+
+        // Reload config
+        if (!ConfigReader_Read(kConfigPath, &g_launcher_config)) {
+            LogError("Failed to reload config after reset");
+            return;
+        }
+
+        // Disconnect destroy signal before destroying window (prevents gtk_main_quit)
+        g_signal_handlers_disconnect_by_func(g_main_window, G_CALLBACK(gtk_main_quit), NULL);
+
+        // Destroy and recreate window to reflect new values
+        gtk_widget_destroy(g_main_window);
+        g_main_window = create_launcher_window();
+        gtk_widget_show_all(g_main_window);
+        gtk_window_present(GTK_WINDOW(g_main_window));
+
+        LogInfo("Configuration reset to defaults successfully");
+    }
+}
+
 // Create full launcher window with tabs
 static GtkWidget* create_launcher_window(void) {
     GtkWidget *window = LauncherUI_CreateWindow(&g_launcher_config);
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
-    // Add button box to bottom of window
+    // Add button container to bottom of window
     GtkWidget *vbox = gtk_bin_get_child(GTK_BIN(window));
-    GtkWidget *button_box = gtk_button_box_new(GTK_ORIENTATION_HORIZONTAL);
-    gtk_button_box_set_layout(GTK_BUTTON_BOX(button_box), GTK_BUTTONBOX_END);
-    gtk_box_set_spacing(GTK_BOX(button_box), 5);
-    gtk_container_set_border_width(GTK_CONTAINER(button_box), 5);
-    gtk_box_pack_end(GTK_BOX(vbox), button_box, FALSE, FALSE, 0);
+    GtkWidget *button_container = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+    gtk_container_set_border_width(GTK_CONTAINER(button_container), 5);
+    gtk_box_pack_end(GTK_BOX(vbox), button_container, FALSE, FALSE, 0);
+
+    // Left side: Reset to Defaults button
+    GtkWidget *left_box = gtk_button_box_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_button_box_set_layout(GTK_BUTTON_BOX(left_box), GTK_BUTTONBOX_START);
+    gtk_box_set_spacing(GTK_BOX(left_box), 5);
+    gtk_box_pack_start(GTK_BOX(button_container), left_box, TRUE, TRUE, 0);
+
+    GtkWidget *reset_btn = gtk_button_new_with_label("Reset to Defaults");
+    g_signal_connect(reset_btn, "clicked", G_CALLBACK(on_reset_defaults_clicked), NULL);
+    gtk_container_add(GTK_CONTAINER(left_box), reset_btn);
+
+    // Right side: Close, Apply, Apply & Launch buttons
+    GtkWidget *right_box = gtk_button_box_new(GTK_ORIENTATION_HORIZONTAL);
+    gtk_button_box_set_layout(GTK_BUTTON_BOX(right_box), GTK_BUTTONBOX_END);
+    gtk_box_set_spacing(GTK_BOX(right_box), 5);
+    gtk_box_pack_end(GTK_BOX(button_container), right_box, TRUE, TRUE, 0);
 
     // Close button
     GtkWidget *cancel_btn = gtk_button_new_with_label("Close");
     g_signal_connect(cancel_btn, "clicked", G_CALLBACK(on_cancel_clicked), NULL);
-    gtk_container_add(GTK_CONTAINER(button_box), cancel_btn);
+    gtk_container_add(GTK_CONTAINER(right_box), cancel_btn);
 
     // Apply button (saves without closing)
     GtkWidget *save_btn = gtk_button_new_with_label("Apply");
     g_signal_connect(save_btn, "clicked", G_CALLBACK(on_save_clicked), NULL);
-    gtk_container_add(GTK_CONTAINER(button_box), save_btn);
+    gtk_container_add(GTK_CONTAINER(right_box), save_btn);
 
     // Apply & Launch button
     GtkWidget *launch_btn = gtk_button_new_with_label("Apply & Launch");
     g_signal_connect(launch_btn, "clicked", G_CALLBACK(on_save_and_launch_clicked), NULL);
-    gtk_container_add(GTK_CONTAINER(button_box), launch_btn);
+    gtk_container_add(GTK_CONTAINER(right_box), launch_btn);
 
     return window;
 }
