@@ -38,6 +38,68 @@ Successfully integrated the Vulkan renderer from the zelda3-android fork, making
 **Configuration:**
 Set `OutputMethod = Vulkan` in zelda3.ini to use the Vulkan renderer. Falls back gracefully to SDL/OpenGL if Vulkan is unavailable.
 
+### GTK3 Launcher UI Enhancements
+
+**Major Updates:** Path selection browsers and comprehensive gamepad configuration UI
+
+Significantly enhanced the GTK3 launcher with file/folder browsers for asset paths and a complete gamepad remapping interface organized into logical categories.
+
+**Path Selection Features:**
+- **MSU Folder Browser** (Sound tab) - GTK folder chooser for selecting MSU audio directory
+  - Click "Browse..." button opens native folder selection dialog
+  - Selected path automatically saved to zelda3.ini with `/alttp_msu-` suffix
+  - Cross-platform compatibility (macOS, Linux, Windows)
+
+- **Shader File Browser** (Graphics tab) - GTK file chooser for selecting GLSL shader files
+  - Click "Browse..." button opens native file selection dialog
+  - Filters for .glsl and .glslp files
+  - Selected path automatically saved to zelda3.ini
+  - Cross-platform file dialogs via GTK3
+
+**Gamepad UI Restructure:**
+- Reorganized gamepad tab into 4 logical subtabs matching keyboard layout:
+  1. **Controls** - Core SNES buttons (D-pad, A/B/X/Y/L/R, Start/Select)
+  2. **Save States** - Load/Save/Replay bindings for F1-F10 slots
+  3. **Cheats** - CheatLife, CheatKeys, CheatWalkThroughWalls
+  4. **System** - Fullscreen, Reset, Pause, Turbo, Window controls, Replay controls
+
+- Full button detection UI for each binding:
+  - Click binding button → "Press button..." state
+  - Press gamepad button → Detected and displayed
+  - Supports modifier combos (L2+A, R2+B, etc.)
+  - Clear button for each binding to remove assignment
+
+**Keyboard UI Enhancements:**
+- Added clear buttons for all keyboard bindings
+- Matches gamepad tab organization for consistency
+
+**Configuration Updates:**
+- Updated all INI files (zelda3.ini, android/.../zelda3.ini, platform/switch/zelda3.ini)
+- Complete [GamepadMap] structure with all command categories
+- Comprehensive inline comments explaining binding syntax
+
+**UI Polish:**
+- Left-aligned section headings for better readability
+- Renamed sections for clarity ("SNES Controller Buttons" → "SNES Controller")
+- Removed "Click button to remap" subtitle text
+- Consistent widget spacing across all tabs
+
+**Code Changes:**
+- `src/launcher_ui.c` (+577 lines) - Path browsers, gamepad subtabs, clear buttons, UI refinements
+- `src/launcher_ui.h` - Updated global variable declarations for gamepad bindings
+- `src/config_writer.c` (+167 lines) - Enhanced INI generation with complete gamepad structure
+- `src/config_reader.c` (+71 lines) - Improved parsing for new binding categories
+- All INI files (+65-89 lines) - Complete gamepad binding documentation
+
+**User Impact:**
+- No more manual INI editing for MSU/Shader paths - use native file browsers
+- Complete gamepad remapping without leaving launcher
+- Organized UI makes finding specific bindings much easier
+- Clear buttons provide quick way to unbind unwanted keys/buttons
+
+**Configuration:**
+All settings are immediately saved to zelda3.ini when clicking "Save" or "Save & Launch". The launcher provides visual feedback for all path selections and binding detections.
+
 ### Build System Modernization & Windows Compatibility
 
 **Major Changes:** Switched from vendored Opus to system library, fixed Windows build failures

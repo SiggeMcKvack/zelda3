@@ -118,6 +118,11 @@ Configure visual rendering options:
 - **Linear Filtering** - Smooth scaling (on/off)
 - **Integer Scaling** - Pixel-perfect scaling (on/off)
 
+- **Shader File** - GLSL shader for visual effects:
+  - Click "Browse..." to open file chooser
+  - Supports .glsl and .glslp shader files
+  - Selected path saved to zelda3.ini
+
 **Recommendations:**
 - For modern displays: OpenGL or Vulkan with 16:9 extended aspect ratio
 - For retro feel: SDL with 2x/3x window size and integer scaling
@@ -130,6 +135,11 @@ Adjust audio settings:
 - **SFX Volume** (0-128) - Sound effects volume
 - **MSU Audio Volume** (0-255) - CD-quality audio track volume (if using MSU-1 audio pack)
 - **Stereo** (on/off) - Enable stereo audio
+
+- **MSU Folder** - Directory containing MSU audio tracks:
+  - Click "Browse..." to open folder chooser
+  - Select directory with MSU audio files
+  - Path automatically saved to zelda3.ini with `/alttp_msu-` suffix
 
 **Note:** MSU Audio is an enhanced audio pack with CD-quality music tracks. See the main documentation for details on obtaining MSU audio files.
 
@@ -165,7 +175,7 @@ Configure keyboard controls:
 - **A/B/X/Y** - Action buttons
 - **L/R** - Shoulder buttons
 
-Click each input field and press the desired key to bind it.
+Click each input field and press the desired key to bind it. Each binding has a "Clear" button to remove the assignment.
 
 **Default controls:**
 - Arrow Keys - Movement
@@ -175,19 +185,63 @@ Click each input field and press the desired key to bind it.
 - X - A Button
 - A/S - L/R Buttons
 
+**Clear Bindings:**
+Every keyboard binding includes a "Clear" button to unbind the key without assigning a new one. This is useful when you want to disable specific controls.
+
 ### Gamepad
 
-Configure game controller mappings:
+Configure game controller mappings with full button remapping UI.
 
+The Gamepad tab is organized into 4 subtabs matching the keyboard layout:
+
+#### Controls Subtab
+Map the core SNES controller buttons:
+- **Up/Down/Left/Right** - D-pad movement
+- **Select/Start** - Menu navigation
+- **A/B/X/Y** - Action buttons
+- **L/R** - Shoulder buttons
+
+#### Save States Subtab
+Configure snapshot controls:
+- **Load (F1-F10)** - Load save state slots
+- **Save (Shift+F1-F10)** - Save state slots
+- **Replay (Ctrl+F1-F10)** - Replay recordings
+
+#### Cheats Subtab
+Map cheat activation buttons:
+- **CheatLife** - Refill health and magic
+- **CheatKeys** - Set dungeon key count
+- **CheatWalkThroughWalls** - Enable no-clip mode
+
+#### System Subtab
+Map system control buttons:
+- **Fullscreen** - Toggle fullscreen mode
+- **Reset** - Reset the game
+- **Pause/PauseDimmed** - Pause with/without dimming
+- **Turbo/ReplayTurbo** - Fast-forward controls
+- **WindowBigger/WindowSmaller** - Resize window
+- **VolumeUp/VolumeDown** - Adjust audio volume
+- **StopReplay** - Stop replay playback
+- **ClearKeyLog** - Clear input recording log (debug)
+
+**Binding Buttons:**
+1. Click any binding button - it shows "Press button..."
+2. Press a gamepad button or trigger
+3. The detected button is displayed and saved
+4. For modifier combos (e.g., L2+A), hold L2 first, then press A
+
+**Clear Bindings:**
+Each gamepad binding has a "Clear" button to remove the assignment without rebinding.
+
+**Gamepad Settings:**
 - **Enable Gamepad** - Turn gamepad support on/off
 - **Controller Port** - Select which controller to use (0-3)
 
-**Button mappings:**
-- Standard SNES controller layout supported
-- SDL2 GameController API used for broad compatibility
-- Supports Xbox, PlayStation, Switch Pro, and other standard controllers
-
-**Current Limitation:** Gamepad button remapping UI is not yet implemented. To customize gamepad bindings, edit the `[GamepadMap]` section in `zelda3.ini` manually.
+**Supported Controllers:**
+- Xbox controllers (One, Series X/S)
+- PlayStation controllers (DualShock 4, DualSense)
+- Nintendo Switch Pro Controller
+- Any SDL2-compatible gamepad
 
 ## First Run
 
