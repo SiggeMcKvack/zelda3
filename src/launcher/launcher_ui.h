@@ -1,7 +1,7 @@
 #pragma once
 
 #include <gtk/gtk.h>
-#include "config.h"
+#include "../config.h"
 
 // Control mapping storage (12 SNES controls: Up, Down, Left, Right, Select, Start, A, B, X, Y, L, R)
 // These are stored separately from Config since they're just pass-through strings to INI

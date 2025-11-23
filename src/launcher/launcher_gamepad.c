@@ -1,5 +1,5 @@
 #include "launcher_gamepad.h"
-#include "logging.h"
+#include "../logging.h"
 #include <SDL.h>
 #include <stdbool.h>
 #include <string.h>

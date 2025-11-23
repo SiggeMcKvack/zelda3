@@ -21,9 +21,9 @@
 #include "launcher_ui.h"
 #include "config_writer.h"
 #include "config_reader.h"
-#include "config.h"
-#include "logging.h"
-#include "config_defaults_generated.h"
+#include "../config.h"
+#include "../logging.h"
+#include "../config_defaults_generated.h"
 
 // Global state
 static Config g_launcher_config;

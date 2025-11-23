@@ -213,6 +213,7 @@ Platform-specific files go in `src/platform/<name>/`
 
 **When adding files:**
 - Game logic: `src/`
+- Launcher UI: `src/launcher/`
 - SNES emulation: `snes/`
 - Platform code: `src/platform/<name>/`
 - Android code: `android/app/jni/` or `android/app/src/`

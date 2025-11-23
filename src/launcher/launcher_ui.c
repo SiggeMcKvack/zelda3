@@ -1,8 +1,8 @@
 #include "launcher_ui.h"
-#include "config.h"
-#include "features.h"
+#include "../config.h"
+#include "../features.h"
 #include "launcher_gamepad.h"
-#include "logging.h"
+#include "../logging.h"
 #include <gtk/gtk.h>
 #include <SDL.h>
 #include <stdio.h>

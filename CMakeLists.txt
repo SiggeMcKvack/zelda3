@@ -75,16 +75,11 @@ else()
     set(HAVE_GTK3 OFF)
 endif()
 
-# Collect all source files (exclude launcher files)
+# Collect all source files (launcher files now in separate directory)
 file(GLOB GAME_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/snes/*.c"
 )
-
-# Exclude launcher files from main game
-list(FILTER GAME_SOURCES EXCLUDE REGEX ".*launcher_.*\.c$")
-list(FILTER GAME_SOURCES EXCLUDE REGEX ".*/config_reader\.c$")
-list(FILTER GAME_SOURCES EXCLUDE REGEX ".*/config_writer\.c$")
 
 # Third-party sources
 set(THIRD_PARTY_SOURCES
@@ -223,11 +218,11 @@ message(STATUS "Generated config defaults header from zelda3.ini")
 if(HAVE_GTK3)
     # Launcher source files (will add more as we implement)
     set(LAUNCHER_SOURCES
-        src/launcher_main.c
-        src/launcher_ui.c
-        src/launcher_gamepad.c
-        src/config_writer.c
-        src/config_reader.c
+        src/launcher/launcher_main.c
+        src/launcher/launcher_ui.c
+        src/launcher/launcher_gamepad.c
+        src/launcher/config_writer.c
+        src/launcher/config_reader.c
         src/platform.c
         src/logging.c
     )
@@ -243,6 +238,7 @@ if(HAVE_GTK3)
     # Include directories for launcher
     target_include_directories(zelda3-launcher PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/launcher
         ${SDL2_INCLUDE_DIRS}
         ${GTK3_INCLUDE_DIRS}
     )

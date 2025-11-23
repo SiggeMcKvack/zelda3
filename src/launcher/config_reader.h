@@ -1,6 +1,6 @@
 #pragma once
 
-#include "config.h"
+#include "../config.h"
 #include <stdbool.h>
 
 // Simple INI parser for launcher
