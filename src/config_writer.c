@@ -633,65 +633,154 @@ static bool WriteGamepadMapSection(FILE *f, const Config *config) {
   if (!result) return false;
 
   if (!WriteLine(f, "# ------------------------------------------------------------------------------\n")) return false;
-  if (!WriteLine(f, "# Quick Save/Load\n")) return false;
+  if (!WriteLine(f, "# Save State Management\n")) return false;
   if (!WriteLine(f, "# ------------------------------------------------------------------------------\n\n")) return false;
 
-  // Quick save/load bindings
-  if (!WriteLine(f, "# Quick Save to slot 1 (L2+R3)\n")) return false;
-  if (g_gamepad_save && *g_gamepad_save) {
-    if (!WriteLine(f, "Save = %s\n\n", g_gamepad_save)) return false;
+  // Load save states
+  if (!WriteLine(f, "# Load save states (10 slots)\n")) return false;
+  if (!WriteLine(f, "# Quick load slot 1 = L2+L3 (default), rest unset\n")) return false;
+  char *load_str = LauncherUI_FormatControlString(g_gamepad_load);
+  result = WriteLine(f, "Load = %s\n\n", load_str);
+  free(load_str);
+  if (!result) return false;
+
+  // Save states
+  if (!WriteLine(f, "# Save states (10 slots)\n")) return false;
+  if (!WriteLine(f, "# Quick save slot 1 = L2+R3 (default), rest unset\n")) return false;
+  char *save_str = LauncherUI_FormatControlString(g_gamepad_save);
+  result = WriteLine(f, "Save = %s\n\n", save_str);
+  free(save_str);
+  if (!result) return false;
+
+  // Replay states
+  if (!WriteLine(f, "# Replay states (10 slots)\n")) return false;
+  char *replay_str = LauncherUI_FormatControlString(g_gamepad_replay);
+  result = WriteLine(f, "Replay = %s\n\n", replay_str);
+  free(replay_str);
+  if (!result) return false;
+
+  // LoadRef and ReplayRef
+  if (!WriteLine(f, "# Load reference saves (13 slots, advanced feature)\n")) return false;
+  if (!WriteLine(f, "LoadRef =\n\n")) return false;
+
+  if (!WriteLine(f, "# Replay reference saves (13 slots, advanced feature)\n")) return false;
+  if (!WriteLine(f, "ReplayRef =\n\n")) return false;
+
+  if (!WriteLine(f, "# ------------------------------------------------------------------------------\n")) return false;
+  if (!WriteLine(f, "# Cheat Keys (Development/Testing)\n")) return false;
+  if (!WriteLine(f, "# ------------------------------------------------------------------------------\n\n")) return false;
+
+  if (!WriteLine(f, "# Refill health and magic to full\n")) return false;
+  if (g_gamepad_cheat_life && *g_gamepad_cheat_life) {
+    if (!WriteLine(f, "CheatLife = %s\n\n", g_gamepad_cheat_life)) return false;
   } else {
-    if (!WriteLine(f, "Save = L2+R3\n\n")) return false;  // default
+    if (!WriteLine(f, "CheatLife =\n\n")) return false;
   }
 
-  if (!WriteLine(f, "# Quick Load from slot 1 (L2+L3)\n")) return false;
-  if (g_gamepad_load && *g_gamepad_load) {
-    if (!WriteLine(f, "Load = %s\n\n", g_gamepad_load)) return false;
+  if (!WriteLine(f, "# Set key count to 1\n")) return false;
+  if (g_gamepad_cheat_keys && *g_gamepad_cheat_keys) {
+    if (!WriteLine(f, "CheatKeys = %s\n\n", g_gamepad_cheat_keys)) return false;
   } else {
-    if (!WriteLine(f, "Load = L2+L3\n\n")) return false;  // default
+    if (!WriteLine(f, "CheatKeys =\n\n")) return false;
+  }
+
+  if (!WriteLine(f, "# Give bombs, arrows, and rupees\n")) return false;
+  if (!WriteLine(f, "CheatEquipment =\n\n")) return false;
+
+  if (!WriteLine(f, "# Walk through walls\n")) return false;
+  if (g_gamepad_cheat_walkthrough && *g_gamepad_cheat_walkthrough) {
+    if (!WriteLine(f, "CheatWalkThroughWalls = %s\n\n", g_gamepad_cheat_walkthrough)) return false;
+  } else {
+    if (!WriteLine(f, "CheatWalkThroughWalls =\n\n")) return false;
   }
 
   if (!WriteLine(f, "# ------------------------------------------------------------------------------\n")) return false;
-  if (!WriteLine(f, "# Optional: Additional Gamepad Bindings\n")) return false;
-  if (!WriteLine(f, "# ------------------------------------------------------------------------------\n")) return false;
-  if (!WriteLine(f, "# Uncomment and customize any of these examples to add extra functionality\n")) return false;
-  if (!WriteLine(f, "# to your gamepad. Useful for save states, turbo, cheats, etc.\n\n")) return false;
+  if (!WriteLine(f, "# Debug & Replay Tools\n")) return false;
+  if (!WriteLine(f, "# ------------------------------------------------------------------------------\n\n")) return false;
 
-  if (!WriteLine(f, "# Save states (example: L2+face buttons for slots 1-4)\n")) return false;
-  if (!WriteLine(f, "#Save = L2+A, L2+B, L2+X, L2+Y\n\n")) return false;
+  if (!WriteLine(f, "# Clear input recording log\n")) return false;
+  if (g_gamepad_clear_keylog && *g_gamepad_clear_keylog) {
+    if (!WriteLine(f, "ClearKeyLog = %s\n\n", g_gamepad_clear_keylog)) return false;
+  } else {
+    if (!WriteLine(f, "ClearKeyLog =\n\n")) return false;
+  }
 
-  if (!WriteLine(f, "# Load states (example: R2+face buttons for slots 1-4)\n")) return false;
-  if (!WriteLine(f, "#Load = R2+A, R2+B, R2+X, R2+Y\n\n")) return false;
+  if (!WriteLine(f, "# Stop replay playback\n")) return false;
+  if (g_gamepad_stop_replay && *g_gamepad_stop_replay) {
+    if (!WriteLine(f, "StopReplay = %s\n\n", g_gamepad_stop_replay)) return false;
+  } else {
+    if (!WriteLine(f, "StopReplay =\n\n")) return false;
+  }
 
-  if (!WriteLine(f, "# Replay states (example: L2+R2+face buttons)\n")) return false;
-  if (!WriteLine(f, "#Replay = L2+R2+A, L2+R2+B, L2+R2+X, L2+R2+Y\n\n")) return false;
-
-  if (!WriteLine(f, "# Turbo mode (hold for fast-forward)\n")) return false;
-  if (!WriteLine(f, "#Turbo = L3\n\n")) return false;
-
-  if (!WriteLine(f, "# Pause (dimmed, can still see game)\n")) return false;
-  if (!WriteLine(f, "#PauseDimmed = Guide\n\n")) return false;
+  if (!WriteLine(f, "# Toggle fullscreen\n")) return false;
+  if (g_gamepad_fullscreen && *g_gamepad_fullscreen) {
+    if (!WriteLine(f, "Fullscreen = %s\n\n", g_gamepad_fullscreen)) return false;
+  } else {
+    if (!WriteLine(f, "Fullscreen =\n\n")) return false;
+  }
 
   if (!WriteLine(f, "# Reset game\n")) return false;
-  if (!WriteLine(f, "#Reset = L1+R1+Start\n\n")) return false;
+  if (g_gamepad_reset && *g_gamepad_reset) {
+    if (!WriteLine(f, "Reset = %s\n\n", g_gamepad_reset)) return false;
+  } else {
+    if (!WriteLine(f, "Reset =\n\n")) return false;
+  }
 
-  if (!WriteLine(f, "# Fullscreen toggle\n")) return false;
-  if (!WriteLine(f, "#Fullscreen = L3+R3\n\n")) return false;
+  if (!WriteLine(f, "# Pause (dimmed - can see game)\n")) return false;
+  if (g_gamepad_pause_dimmed && *g_gamepad_pause_dimmed) {
+    if (!WriteLine(f, "PauseDimmed = %s\n\n", g_gamepad_pause_dimmed)) return false;
+  } else {
+    if (!WriteLine(f, "PauseDimmed =\n\n")) return false;
+  }
 
-  if (!WriteLine(f, "# Volume controls\n")) return false;
-  if (!WriteLine(f, "#VolumeUp = DpadUp+L1\n")) return false;
-  if (!WriteLine(f, "#VolumeDown = DpadDown+L1\n\n")) return false;
+  if (!WriteLine(f, "# Pause (full pause)\n")) return false;
+  if (g_gamepad_pause && *g_gamepad_pause) {
+    if (!WriteLine(f, "Pause = %s\n\n", g_gamepad_pause)) return false;
+  } else {
+    if (!WriteLine(f, "Pause =\n\n")) return false;
+  }
 
-  if (!WriteLine(f, "# Cheats (example bindings)\n")) return false;
-  if (!WriteLine(f, "#CheatLife = L2+R2+Start\n")) return false;
-  if (!WriteLine(f, "#CheatKeys = L2+R2+Back\n")) return false;
-  if (!WriteLine(f, "#CheatWalkThroughWalls = L1+R1+Back\n\n")) return false;
+  if (!WriteLine(f, "# Fast-forward (turbo)\n")) return false;
+  if (g_gamepad_turbo && *g_gamepad_turbo) {
+    if (!WriteLine(f, "Turbo = %s\n\n", g_gamepad_turbo)) return false;
+  } else {
+    if (!WriteLine(f, "Turbo =\n\n")) return false;
+  }
 
-  if (!WriteLine(f, "# Toggle renderer (switch between PPU implementations)\n")) return false;
-  if (!WriteLine(f, "#ToggleRenderer = L1+R1+Guide\n\n")) return false;
+  if (!WriteLine(f, "# Replay turbo mode\n")) return false;
+  if (g_gamepad_replay_turbo && *g_gamepad_replay_turbo) {
+    if (!WriteLine(f, "ReplayTurbo = %s\n\n", g_gamepad_replay_turbo)) return false;
+  } else {
+    if (!WriteLine(f, "ReplayTurbo =\n\n")) return false;
+  }
 
-  if (!WriteLine(f, "# Display performance metrics\n")) return false;
-  if (!WriteLine(f, "#DisplayPerf = L2+R2+Guide\n")) return false;
+  if (!WriteLine(f, "# Increase window size\n")) return false;
+  if (g_gamepad_window_bigger && *g_gamepad_window_bigger) {
+    if (!WriteLine(f, "WindowBigger = %s\n\n", g_gamepad_window_bigger)) return false;
+  } else {
+    if (!WriteLine(f, "WindowBigger =\n\n")) return false;
+  }
+
+  if (!WriteLine(f, "# Decrease window size\n")) return false;
+  if (g_gamepad_window_smaller && *g_gamepad_window_smaller) {
+    if (!WriteLine(f, "WindowSmaller = %s\n\n", g_gamepad_window_smaller)) return false;
+  } else {
+    if (!WriteLine(f, "WindowSmaller =\n\n")) return false;
+  }
+
+  if (!WriteLine(f, "# Increase volume\n")) return false;
+  if (g_gamepad_volume_up && *g_gamepad_volume_up) {
+    if (!WriteLine(f, "VolumeUp = %s\n\n", g_gamepad_volume_up)) return false;
+  } else {
+    if (!WriteLine(f, "VolumeUp =\n\n")) return false;
+  }
+
+  if (!WriteLine(f, "# Decrease volume\n")) return false;
+  if (g_gamepad_volume_down && *g_gamepad_volume_down) {
+    if (!WriteLine(f, "VolumeDown = %s\n", g_gamepad_volume_down)) return false;
+  } else {
+    if (!WriteLine(f, "VolumeDown =\n")) return false;
+  }
 
   if (!WriteLine(f, "\n")) return false;
   return true;

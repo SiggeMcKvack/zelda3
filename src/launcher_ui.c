@@ -38,9 +38,29 @@ char *g_kbd_window_smaller = NULL;
 char *g_kbd_volume_up = NULL;
 char *g_kbd_volume_down = NULL;
 
-// Quick save/load (gamepad only)
-char *g_gamepad_save = NULL;
-char *g_gamepad_load = NULL;
+// Gamepad save states (10 slots each)
+char *g_gamepad_load[10] = {NULL};
+char *g_gamepad_save[10] = {NULL};
+char *g_gamepad_replay[10] = {NULL};
+
+// Gamepad cheats
+char *g_gamepad_cheat_life = NULL;
+char *g_gamepad_cheat_keys = NULL;
+char *g_gamepad_cheat_walkthrough = NULL;
+
+// Gamepad system controls
+char *g_gamepad_clear_keylog = NULL;
+char *g_gamepad_stop_replay = NULL;
+char *g_gamepad_fullscreen = NULL;
+char *g_gamepad_reset = NULL;
+char *g_gamepad_pause_dimmed = NULL;
+char *g_gamepad_pause = NULL;
+char *g_gamepad_turbo = NULL;
+char *g_gamepad_replay_turbo = NULL;
+char *g_gamepad_window_bigger = NULL;
+char *g_gamepad_window_smaller = NULL;
+char *g_gamepad_volume_up = NULL;
+char *g_gamepad_volume_down = NULL;
 
 // Control names for UI
 static const char *kControlNames[12] = {
@@ -94,14 +114,19 @@ static struct {
     GtkWidget *feat_pokemode;
     GtkWidget *feat_zelda_helps;
 
-    // Gamepad quick save/load
-    GtkWidget *gamepad_save_entry;
-    GtkWidget *gamepad_load_entry;
-
     // Keyboard subtab grids (for accessing entry widgets)
     GtkWidget *kbd_states_grid;
     GtkWidget *kbd_cheats_grid;
     GtkWidget *kbd_system_grid;
+
+    // Gamepad subtab grids (for accessing button widgets)
+    GtkWidget *gamepad_states_grid;
+    GtkWidget *gamepad_cheats_grid;
+    GtkWidget *gamepad_system_grid;
+
+    // Path selection widgets
+    GtkWidget *msu_path_entry;
+    GtkWidget *shader_path_entry;
 } g_widgets;
 
 // Helper: Create labeled combo box
@@ -325,6 +350,85 @@ static void on_window_size_mode_changed(GtkComboBox *combo, gpointer user_data) 
     }
 }
 
+// Signal handler for Shader path browse button
+static void on_shader_path_browse_clicked(GtkButton *button, gpointer user_data) {
+    (void)button;
+    (void)user_data;
+
+    GtkWidget *dialog = gtk_file_chooser_dialog_new(
+        "Select Shader File",
+        NULL,
+        GTK_FILE_CHOOSER_ACTION_OPEN,
+        "Cancel", GTK_RESPONSE_CANCEL,
+        "Open", GTK_RESPONSE_ACCEPT,
+        NULL);
+
+    // Add file filter for shader files
+    GtkFileFilter *filter = gtk_file_filter_new();
+    gtk_file_filter_set_name(filter, "Shader files (*.glsl, *.glslp)");
+    gtk_file_filter_add_pattern(filter, "*.glsl");
+    gtk_file_filter_add_pattern(filter, "*.glslp");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+
+    // Add "All files" filter
+    GtkFileFilter *filter_all = gtk_file_filter_new();
+    gtk_file_filter_set_name(filter_all, "All files");
+    gtk_file_filter_add_pattern(filter_all, "*");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter_all);
+
+    // Set current file if one is already set
+    const char *current_path = gtk_entry_get_text(GTK_ENTRY(g_widgets.shader_path_entry));
+    if (current_path && *current_path) {
+        gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), current_path);
+    }
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+        gtk_entry_set_text(GTK_ENTRY(g_widgets.shader_path_entry), filename);
+        g_free(filename);
+    }
+
+    gtk_widget_destroy(dialog);
+}
+
+// Signal handler for MSU path browse button
+static void on_msu_path_browse_clicked(GtkButton *button, gpointer user_data) {
+    (void)button;
+    (void)user_data;
+
+    GtkWidget *dialog = gtk_file_chooser_dialog_new(
+        "Select MSU Folder",
+        NULL,
+        GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+        "Cancel", GTK_RESPONSE_CANCEL,
+        "Select", GTK_RESPONSE_ACCEPT,
+        NULL);
+
+    // Set current folder if one is already set
+    const char *current_path = gtk_entry_get_text(GTK_ENTRY(g_widgets.msu_path_entry));
+    if (current_path && *current_path) {
+        // Strip the "/alttp_msu-" suffix if present to get the folder
+        char *folder_path = strdup(current_path);
+        char *suffix = strstr(folder_path, "/alttp_msu-");
+        if (suffix) *suffix = '\0';
+        gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(dialog), folder_path);
+        free(folder_path);
+    }
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        char *folder = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+
+        // Append "/alttp_msu-" to the folder path
+        char full_path[1024];
+        snprintf(full_path, sizeof(full_path), "%s/alttp_msu-", folder);
+
+        gtk_entry_set_text(GTK_ENTRY(g_widgets.msu_path_entry), full_path);
+        g_free(folder);
+    }
+
+    gtk_widget_destroy(dialog);
+}
+
 // Create Graphics tab
 static GtkWidget* create_graphics_tab(const Config *config) {
     GtkWidget *grid = gtk_grid_new();
@@ -429,7 +533,7 @@ static GtkWidget* create_graphics_tab(const Config *config) {
     g_widgets.ignore_aspect_ratio = create_checkbox(grid, row++, "Stretch to fill window (ignore aspect ratio)");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.ignore_aspect_ratio), config->ignore_aspect_ratio);
 
-    g_widgets.extend_y = create_checkbox(grid, row++, "Extend Y (240 lines)");
+    g_widgets.extend_y = create_checkbox(grid, row++, "Extend render height (224 lines -> 240 lines)");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.extend_y), config->extend_y);
 
     g_widgets.linear_filtering = create_checkbox(grid, row++, "Use linear filtering for smoother pixels");
@@ -443,6 +547,25 @@ static GtkWidget* create_graphics_tab(const Config *config) {
 
     g_widgets.no_sprite_limits = create_checkbox(grid, row++, "Disable SNES sprite limit (8 sprites per scanline)");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.no_sprite_limits), config->no_sprite_limits);
+
+    // Shader file path
+    GtkWidget *shader_label = gtk_label_new("Shader File:");
+    gtk_widget_set_halign(shader_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), shader_label, 0, row, 1, 1);
+
+    GtkWidget *shader_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    g_widgets.shader_path_entry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(g_widgets.shader_path_entry),
+                       config->shader ? config->shader : "");
+    gtk_box_pack_start(GTK_BOX(shader_hbox), g_widgets.shader_path_entry, TRUE, TRUE, 0);
+
+    GtkWidget *shader_browse_btn = gtk_button_new_with_label("Browse...");
+    g_signal_connect(shader_browse_btn, "clicked",
+                     G_CALLBACK(on_shader_path_browse_clicked), NULL);
+    gtk_box_pack_start(GTK_BOX(shader_hbox), shader_browse_btn, FALSE, FALSE, 0);
+
+    gtk_grid_attach(GTK_GRID(grid), shader_hbox, 1, row, 1, 1);
+    row++;
 
     return grid;
 }
@@ -521,6 +644,25 @@ static GtkWidget* create_sound_tab(const Config *config) {
 
     g_widgets.resume_msu = create_checkbox(grid, row++, "Resume MSU position when re-entering overworld area");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.resume_msu), config->resume_msu);
+
+    // MSU folder path
+    GtkWidget *msu_path_label = gtk_label_new("MSU Folder:");
+    gtk_widget_set_halign(msu_path_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), msu_path_label, 0, row, 1, 1);
+
+    GtkWidget *msu_path_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    g_widgets.msu_path_entry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(g_widgets.msu_path_entry),
+                       config->msu_path ? config->msu_path : "");
+    gtk_box_pack_start(GTK_BOX(msu_path_hbox), g_widgets.msu_path_entry, TRUE, TRUE, 0);
+
+    GtkWidget *msu_path_browse_btn = gtk_button_new_with_label("Browse...");
+    g_signal_connect(msu_path_browse_btn, "clicked",
+                     G_CALLBACK(on_msu_path_browse_clicked), NULL);
+    gtk_box_pack_start(GTK_BOX(msu_path_hbox), msu_path_browse_btn, FALSE, FALSE, 0);
+
+    gtk_grid_attach(GTK_GRID(grid), msu_path_hbox, 1, row, 1, 1);
+    row++;
 
     return grid;
 }
@@ -798,8 +940,9 @@ static GtkWidget* create_keymap_tab(const Config *config) {
     gtk_container_set_border_width(GTK_CONTAINER(controls_grid), 10);
 
     GtkWidget *controls_title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(controls_title), "<b>SNES Controller Buttons</b>\nClick button to remap");
-    gtk_grid_attach(GTK_GRID(controls_grid), controls_title, 0, 0, 2, 1);
+    gtk_label_set_markup(GTK_LABEL(controls_title), "<b>SNES Controller</b>");
+    gtk_widget_set_halign(controls_title, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(controls_grid), controls_title, 0, 0, 3, 1);
 
     for (int i = 0; i < 12; i++) {
         // Create label for control name
@@ -815,6 +958,15 @@ static GtkWidget* create_keymap_tab(const Config *config) {
         gtk_widget_set_size_request(button, 150, 35);
         g_signal_connect(button, "clicked", G_CALLBACK(on_keyboard_button_clicked), GINT_TO_POINTER(i));
         gtk_grid_attach(GTK_GRID(controls_grid), button, 1, i + 1, 1, 1);
+
+        // Add Clear button
+        GtkWidget *clear_button = gtk_button_new_with_label("Clear");
+        gtk_widget_set_size_request(clear_button, 80, 35);
+        ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
+        clear_data->button = button;
+        clear_data->variable = &g_kbd_controls[i];
+        g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
+        gtk_grid_attach(GTK_GRID(controls_grid), clear_button, 2, i + 1, 1, 1);
     }
 
     gtk_container_add(GTK_CONTAINER(controls_scroll), controls_grid);
@@ -831,7 +983,8 @@ static GtkWidget* create_keymap_tab(const Config *config) {
     gtk_container_set_border_width(GTK_CONTAINER(states_grid), 10);
 
     GtkWidget *states_title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(states_title), "<b>Save State Keys (F1-F10)</b>");
+    gtk_label_set_markup(GTK_LABEL(states_title), "<b>Save States</b>");
+    gtk_widget_set_halign(states_title, GTK_ALIGN_START);
     gtk_grid_attach(GTK_GRID(states_grid), states_title, 0, 0, 2, 1);
 
     int row = 1;
@@ -900,7 +1053,8 @@ static GtkWidget* create_keymap_tab(const Config *config) {
     gtk_container_set_border_width(GTK_CONTAINER(cheats_grid), 10);
 
     GtkWidget *cheats_title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(cheats_title), "<b>Cheat Keys</b>");
+    gtk_label_set_markup(GTK_LABEL(cheats_title), "<b>Cheats</b>");
+    gtk_widget_set_halign(cheats_title, GTK_ALIGN_START);
     gtk_grid_attach(GTK_GRID(cheats_grid), cheats_title, 0, 0, 3, 1);
 
     row = 1;
@@ -956,13 +1110,12 @@ static GtkWidget* create_keymap_tab(const Config *config) {
     gtk_container_set_border_width(GTK_CONTAINER(system_grid), 10);
 
     GtkWidget *system_title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(system_title), "<b>System Control Keys</b>");
+    gtk_label_set_markup(GTK_LABEL(system_title), "<b>System Controls</b>");
+    gtk_widget_set_halign(system_title, GTK_ALIGN_START);
     gtk_grid_attach(GTK_GRID(system_grid), system_title, 0, 0, 3, 1);
 
     row = 1;
     struct { const char *label; char **ptr; const char *def; } system_keys[] = {
-        {"Clear Key Log:", &g_kbd_clear_keylog, "K"},
-        {"Stop Replay:", &g_kbd_stop_replay, "L"},
         {"Toggle Fullscreen:", &g_kbd_fullscreen, "Alt+Return"},
         {"Reset:", &g_kbd_reset, "Ctrl+R"},
         {"Pause (Dimmed):", &g_kbd_pause_dimmed, "P"},
@@ -972,7 +1125,9 @@ static GtkWidget* create_keymap_tab(const Config *config) {
         {"Window Bigger:", &g_kbd_window_bigger, "Ctrl+Up"},
         {"Window Smaller:", &g_kbd_window_smaller, "Ctrl+Down"},
         {"Volume Up:", &g_kbd_volume_up, "Shift+="},
-        {"Volume Down:", &g_kbd_volume_down, "Shift+-"}
+        {"Volume Down:", &g_kbd_volume_down, "Shift+-"},
+        {"Stop Replay:", &g_kbd_stop_replay, ""},
+        {"Clear input recording log (debug):", &g_kbd_clear_keylog, ""}
     };
 
     for (int i = 0; i < 12; i++) {
@@ -1015,7 +1170,16 @@ static GtkWidget* create_keymap_tab(const Config *config) {
 
 // Gamepad button click handler
 static void on_gamepad_button_clicked(GtkWidget *button, gpointer user_data) {
-    int index = GPOINTER_TO_INT(user_data);
+    // Check if this is for indexed controls or individual variable
+    char **var_ptr = (char**)g_object_get_data(G_OBJECT(button), "variable_ptr");
+    const char *prompt = (const char*)g_object_get_data(G_OBJECT(button), "prompt");
+    int index = -1;
+
+    if (!var_ptr) {
+        // Indexed control (original behavior)
+        index = GPOINTER_TO_INT(user_data);
+        prompt = kControlNames[index];
+    }
 
     // Get first gamepad
     GamepadInfo gamepads[1];
@@ -1048,7 +1212,7 @@ static void on_gamepad_button_clicked(GtkWidget *button, gpointer user_data) {
     GtkWidget *label = gtk_label_new(NULL);
     char markup[256];
     snprintf(markup, sizeof(markup), "<big><b>Press a button/axis for: %s</b></big>\n\n(5 second timeout or Cancel)",
-             kControlNames[index]);
+             prompt);
     gtk_label_set_markup(GTK_LABEL(label), markup);
     gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
     gtk_container_add(GTK_CONTAINER(content), label);
@@ -1058,26 +1222,28 @@ static void on_gamepad_button_clicked(GtkWidget *button, gpointer user_data) {
     // Detect input with timeout (non-blocking)
     DetectedInput input = LauncherGamepad_DetectInput(gamepads[0].controller, 5000);
 
+    const char *captured_name = NULL;
     if (input.type == INPUT_TYPE_BUTTON) {
-        const char *btn_name = LauncherGamepad_ButtonToString(input.button);
-        if (btn_name) {
-            if (g_gamepad_controls[index]) free(g_gamepad_controls[index]);
-            g_gamepad_controls[index] = strdup(btn_name);
-
-            // Update button label
-            char btn_label[128];
-            snprintf(btn_label, sizeof(btn_label), "%s: %s", kControlNames[index], btn_name);
-            gtk_button_set_label(GTK_BUTTON(button), btn_label);
-        }
+        captured_name = LauncherGamepad_ButtonToString(input.button);
     } else if (input.type == INPUT_TYPE_AXIS) {
-        const char *axis_name = LauncherGamepad_AxisToString(input.axis, input.axis_value);
-        if (axis_name) {
+        captured_name = LauncherGamepad_AxisToString(input.axis, input.axis_value);
+    }
+
+    if (captured_name) {
+        // Update the appropriate variable
+        if (var_ptr) {
+            // Individual variable (cheats, system controls, save states)
+            if (*var_ptr) free(*var_ptr);
+            *var_ptr = strdup(captured_name);
+            gtk_button_set_label(GTK_BUTTON(button), captured_name);
+        } else {
+            // Indexed control (SNES buttons)
             if (g_gamepad_controls[index]) free(g_gamepad_controls[index]);
-            g_gamepad_controls[index] = strdup(axis_name);
+            g_gamepad_controls[index] = strdup(captured_name);
 
             // Update button label
             char btn_label[128];
-            snprintf(btn_label, sizeof(btn_label), "%s: %s", kControlNames[index], axis_name);
+            snprintf(btn_label, sizeof(btn_label), "%s: %s", kControlNames[index], captured_name);
             gtk_button_set_label(GTK_BUTTON(button), btn_label);
         }
     }
@@ -1090,65 +1256,238 @@ static void on_gamepad_button_clicked(GtkWidget *button, gpointer user_data) {
 static GtkWidget* create_gamepadmap_tab(const Config *config) {
     (void)config;
 
-    GtkWidget *scroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
-                                   GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+    // Create notebook for subtabs
+    GtkWidget *notebook = gtk_notebook_new();
+    gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_TOP);
 
-    GtkWidget *grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 5);
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(grid), 10);
+    // --- Controls Subtab ---
+    GtkWidget *controls_scroll = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(controls_scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
 
-    // Title
-    GtkWidget *title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(title), "<b>Gamepad Controls</b>\nClick a button to remap");
-    gtk_label_set_justify(GTK_LABEL(title), GTK_JUSTIFY_CENTER);
-    gtk_grid_attach(GTK_GRID(grid), title, 0, 0, 2, 1);
+    GtkWidget *controls_grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(controls_grid), 5);
+    gtk_grid_set_column_spacing(GTK_GRID(controls_grid), 10);
+    gtk_container_set_border_width(GTK_CONTAINER(controls_grid), 10);
 
-    // Create button for each control
+    GtkWidget *controls_title = gtk_label_new(NULL);
+    gtk_label_set_markup(GTK_LABEL(controls_title), "<b>SNES Controller</b>");
+    gtk_widget_set_halign(controls_title, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(controls_grid), controls_title, 0, 0, 3, 1);
+
     for (int i = 0; i < 12; i++) {
-        char label[128];
+        // Create label for control name
+        char label_text[64];
+        snprintf(label_text, sizeof(label_text), "%s:", kControlNames[i]);
+        GtkWidget *label = gtk_label_new(label_text);
+        gtk_widget_set_halign(label, GTK_ALIGN_END);
+        gtk_grid_attach(GTK_GRID(controls_grid), label, 0, i + 1, 1, 1);
+
+        // Create button showing the gamepad button
         const char *btn = g_gamepad_controls[i] ? g_gamepad_controls[i] : "(not set)";
-        snprintf(label, sizeof(label), "%s: %s", kControlNames[i], btn);
-
-        GtkWidget *button = gtk_button_new_with_label(label);
-        gtk_widget_set_size_request(button, 200, 40);
+        GtkWidget *button = gtk_button_new_with_label(btn);
+        gtk_widget_set_size_request(button, 150, 35);
         g_signal_connect(button, "clicked", G_CALLBACK(on_gamepad_button_clicked), GINT_TO_POINTER(i));
+        gtk_grid_attach(GTK_GRID(controls_grid), button, 1, i + 1, 1, 1);
 
-        gtk_grid_attach(GTK_GRID(grid), button, i / 6, i % 6 + 1, 1, 1);
+        // Add Clear button
+        GtkWidget *clear_button = gtk_button_new_with_label("Clear");
+        gtk_widget_set_size_request(clear_button, 80, 35);
+        ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
+        clear_data->button = button;
+        clear_data->variable = &g_gamepad_controls[i];
+        g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
+        gtk_grid_attach(GTK_GRID(controls_grid), clear_button, 2, i + 1, 1, 1);
     }
 
-    // Quick save/load section
-    GtkWidget *separator = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
-    gtk_grid_attach(GTK_GRID(grid), separator, 0, 7, 2, 1);
+    gtk_container_add(GTK_CONTAINER(controls_scroll), controls_grid);
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), controls_scroll, gtk_label_new("Controls"));
 
-    GtkWidget *quick_label = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(quick_label), "<b>Quick Save/Load Bindings</b>");
-    gtk_label_set_justify(GTK_LABEL(quick_label), GTK_JUSTIFY_CENTER);
-    gtk_grid_attach(GTK_GRID(grid), quick_label, 0, 8, 2, 1);
+    // --- Save States Subtab ---
+    GtkWidget *states_scroll = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(states_scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
 
-    // Quick Save entry
-    GtkWidget *save_label = gtk_label_new("Quick Save:");
-    gtk_widget_set_halign(save_label, GTK_ALIGN_END);
-    gtk_grid_attach(GTK_GRID(grid), save_label, 0, 9, 1, 1);
+    g_widgets.gamepad_states_grid = gtk_grid_new();
+    GtkWidget *states_grid = g_widgets.gamepad_states_grid;
+    gtk_grid_set_row_spacing(GTK_GRID(states_grid), 5);
+    gtk_grid_set_column_spacing(GTK_GRID(states_grid), 10);
+    gtk_container_set_border_width(GTK_CONTAINER(states_grid), 10);
 
-    g_widgets.gamepad_save_entry = gtk_entry_new();
-    gtk_entry_set_text(GTK_ENTRY(g_widgets.gamepad_save_entry), g_gamepad_save ? g_gamepad_save : "L2+R3");
-    gtk_entry_set_placeholder_text(GTK_ENTRY(g_widgets.gamepad_save_entry), "e.g., L2+R3");
-    gtk_grid_attach(GTK_GRID(grid), g_widgets.gamepad_save_entry, 1, 9, 1, 1);
+    GtkWidget *states_title = gtk_label_new(NULL);
+    gtk_label_set_markup(GTK_LABEL(states_title), "<b>Save States</b>");
+    gtk_widget_set_halign(states_title, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(states_grid), states_title, 0, 0, 2, 1);
 
-    // Quick Load entry
-    GtkWidget *load_label = gtk_label_new("Quick Load:");
-    gtk_widget_set_halign(load_label, GTK_ALIGN_END);
-    gtk_grid_attach(GTK_GRID(grid), load_label, 0, 10, 1, 1);
+    int row = 1;
+    const char *state_labels[] = {"Load", "Save", "Replay"};
+    char **state_arrays[] = {g_gamepad_load, g_gamepad_save, g_gamepad_replay};
 
-    g_widgets.gamepad_load_entry = gtk_entry_new();
-    gtk_entry_set_text(GTK_ENTRY(g_widgets.gamepad_load_entry), g_gamepad_load ? g_gamepad_load : "L2+L3");
-    gtk_entry_set_placeholder_text(GTK_ENTRY(g_widgets.gamepad_load_entry), "e.g., L2+L3");
-    gtk_grid_attach(GTK_GRID(grid), g_widgets.gamepad_load_entry, 1, 10, 1, 1);
+    for (int type = 0; type < 3; type++) {
+        GtkWidget *type_label = gtk_label_new(NULL);
+        char markup[64];
+        snprintf(markup, sizeof(markup), "<b>%s:</b>", state_labels[type]);
+        gtk_label_set_markup(GTK_LABEL(type_label), markup);
+        gtk_widget_set_halign(type_label, GTK_ALIGN_START);
+        gtk_grid_attach(GTK_GRID(states_grid), type_label, 0, row++, 3, 1);
 
-    gtk_container_add(GTK_CONTAINER(scroll), grid);
-    return scroll;
+        for (int i = 0; i < 10; i++) {
+            char slot_label[64];
+            snprintf(slot_label, sizeof(slot_label), "%s Slot %d:", state_labels[type], i + 1);
+            GtkWidget *label = gtk_label_new(slot_label);
+            gtk_widget_set_halign(label, GTK_ALIGN_END);
+            gtk_grid_attach(GTK_GRID(states_grid), label, 0, row, 1, 1);
+
+            const char *value;
+            if (!state_arrays[type][i] || !*state_arrays[type][i]) {
+                value = "(not set)";
+            } else {
+                value = state_arrays[type][i];
+            }
+            GtkWidget *button = gtk_button_new_with_label(value);
+            gtk_widget_set_size_request(button, 150, 35);
+            g_signal_connect(button, "clicked", G_CALLBACK(on_gamepad_button_clicked), NULL);
+            g_object_set_data(G_OBJECT(button), "variable_ptr", &state_arrays[type][i]);
+            g_object_set_data(G_OBJECT(button), "prompt", slot_label);
+            gtk_grid_attach(GTK_GRID(states_grid), button, 1, row, 1, 1);
+            g_object_set_data(G_OBJECT(states_grid), g_strdup_printf("state_%d_%d", type, i), button);
+
+            // Add Clear button
+            GtkWidget *clear_button = gtk_button_new_with_label("Clear");
+            gtk_widget_set_size_request(clear_button, 80, 35);
+            ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
+            clear_data->button = button;
+            clear_data->variable = &state_arrays[type][i];
+            g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
+            gtk_grid_attach(GTK_GRID(states_grid), clear_button, 2, row, 1, 1);
+
+            row++;
+        }
+    }
+
+    gtk_container_add(GTK_CONTAINER(states_scroll), states_grid);
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), states_scroll, gtk_label_new("Save States"));
+
+    // --- Cheats Subtab ---
+    GtkWidget *cheats_scroll = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(cheats_scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+
+    g_widgets.gamepad_cheats_grid = gtk_grid_new();
+    GtkWidget *cheats_grid = g_widgets.gamepad_cheats_grid;
+    gtk_grid_set_row_spacing(GTK_GRID(cheats_grid), 5);
+    gtk_grid_set_column_spacing(GTK_GRID(cheats_grid), 10);
+    gtk_container_set_border_width(GTK_CONTAINER(cheats_grid), 10);
+
+    GtkWidget *cheats_title = gtk_label_new(NULL);
+    gtk_label_set_markup(GTK_LABEL(cheats_title), "<b>Cheats</b>");
+    gtk_widget_set_halign(cheats_title, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(cheats_grid), cheats_title, 0, 0, 3, 1);
+
+    row = 1;
+    struct { const char *label; char **ptr; } cheats[] = {
+        {"Refill Health & Magic:", &g_gamepad_cheat_life},
+        {"Set key count to 1:", &g_gamepad_cheat_keys},
+        {"Toggle Walk Through Walls:", &g_gamepad_cheat_walkthrough}
+    };
+
+    for (int i = 0; i < 3; i++) {
+        GtkWidget *label = gtk_label_new(cheats[i].label);
+        gtk_widget_set_halign(label, GTK_ALIGN_END);
+        gtk_grid_attach(GTK_GRID(cheats_grid), label, 0, row, 1, 1);
+
+        const char *value;
+        if (!*cheats[i].ptr || !**cheats[i].ptr) {
+            value = "(not set)";
+        } else {
+            value = *cheats[i].ptr;
+        }
+        GtkWidget *button = gtk_button_new_with_label(value);
+        gtk_widget_set_size_request(button, 150, 35);
+        g_signal_connect(button, "clicked", G_CALLBACK(on_gamepad_button_clicked), NULL);
+        g_object_set_data(G_OBJECT(button), "variable_ptr", cheats[i].ptr);
+        g_object_set_data(G_OBJECT(button), "prompt", (gpointer)cheats[i].label);
+        gtk_grid_attach(GTK_GRID(cheats_grid), button, 1, row, 1, 1);
+        g_object_set_data(G_OBJECT(cheats_grid), g_strdup_printf("cheat_%d", i), button);
+
+        // Add Clear button
+        GtkWidget *clear_button = gtk_button_new_with_label("Clear");
+        gtk_widget_set_size_request(clear_button, 80, 35);
+        ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
+        clear_data->button = button;
+        clear_data->variable = cheats[i].ptr;
+        g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
+        gtk_grid_attach(GTK_GRID(cheats_grid), clear_button, 2, row, 1, 1);
+
+        row++;
+    }
+
+    gtk_container_add(GTK_CONTAINER(cheats_scroll), cheats_grid);
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), cheats_scroll, gtk_label_new("Cheats"));
+
+    // --- System Subtab ---
+    GtkWidget *system_scroll = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(system_scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+
+    g_widgets.gamepad_system_grid = gtk_grid_new();
+    GtkWidget *system_grid = g_widgets.gamepad_system_grid;
+    gtk_grid_set_row_spacing(GTK_GRID(system_grid), 5);
+    gtk_grid_set_column_spacing(GTK_GRID(system_grid), 10);
+    gtk_container_set_border_width(GTK_CONTAINER(system_grid), 10);
+
+    GtkWidget *system_title = gtk_label_new(NULL);
+    gtk_label_set_markup(GTK_LABEL(system_title), "<b>System Controls</b>");
+    gtk_widget_set_halign(system_title, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(system_grid), system_title, 0, 0, 3, 1);
+
+    row = 1;
+    struct { const char *label; char **ptr; } system_keys[] = {
+        {"Toggle Fullscreen:", &g_gamepad_fullscreen},
+        {"Reset:", &g_gamepad_reset},
+        {"Pause (Dimmed):", &g_gamepad_pause_dimmed},
+        {"Pause:", &g_gamepad_pause},
+        {"Turbo:", &g_gamepad_turbo},
+        {"Replay Turbo:", &g_gamepad_replay_turbo},
+        {"Window Bigger:", &g_gamepad_window_bigger},
+        {"Window Smaller:", &g_gamepad_window_smaller},
+        {"Volume Up:", &g_gamepad_volume_up},
+        {"Volume Down:", &g_gamepad_volume_down},
+        {"Stop Replay:", &g_gamepad_stop_replay},
+        {"Clear input recording log (debug):", &g_gamepad_clear_keylog}
+    };
+
+    for (int i = 0; i < 12; i++) {
+        GtkWidget *label = gtk_label_new(system_keys[i].label);
+        gtk_widget_set_halign(label, GTK_ALIGN_END);
+        gtk_grid_attach(GTK_GRID(system_grid), label, 0, row, 1, 1);
+
+        const char *value;
+        if (!*system_keys[i].ptr || !**system_keys[i].ptr) {
+            value = "(not set)";
+        } else {
+            value = *system_keys[i].ptr;
+        }
+        GtkWidget *button = gtk_button_new_with_label(value);
+        gtk_widget_set_size_request(button, 150, 35);
+        g_signal_connect(button, "clicked", G_CALLBACK(on_gamepad_button_clicked), NULL);
+        g_object_set_data(G_OBJECT(button), "variable_ptr", system_keys[i].ptr);
+        g_object_set_data(G_OBJECT(button), "prompt", (gpointer)system_keys[i].label);
+        gtk_grid_attach(GTK_GRID(system_grid), button, 1, row, 1, 1);
+        g_object_set_data(G_OBJECT(system_grid), g_strdup_printf("system_%d", i), button);
+
+        // Add Clear button
+        GtkWidget *clear_button = gtk_button_new_with_label("Clear");
+        gtk_widget_set_size_request(clear_button, 80, 35);
+        ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
+        clear_data->button = button;
+        clear_data->variable = system_keys[i].ptr;
+        g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
+        gtk_grid_attach(GTK_GRID(system_grid), clear_button, 2, row, 1, 1);
+
+        row++;
+    }
+
+    gtk_container_add(GTK_CONTAINER(system_scroll), system_grid);
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), system_scroll, gtk_label_new("System"));
+
+    return notebook;
 }
 
 // Create main window with tabs
@@ -1219,6 +1558,11 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
     config->enhanced_mode7 = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.enhanced_mode7));
     config->no_sprite_limits = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.no_sprite_limits));
 
+    // Shader path
+    const char *shader_text = gtk_entry_get_text(GTK_ENTRY(g_widgets.shader_path_entry));
+    if (config->shader) free((void*)config->shader);
+    config->shader = (shader_text && *shader_text) ? strdup(shader_text) : NULL;
+
     // Sound
     config->enable_audio = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.enable_audio));
 
@@ -1248,6 +1592,11 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         kMsuEnabled_Msu | kMsuEnabled_MsuDeluxe | kMsuEnabled_Opuz  // Opuz Deluxe
     };
     config->enable_msu = msu_values[msu_idx];
+
+    // MSU path
+    const char *msu_path_text = gtk_entry_get_text(GTK_ENTRY(g_widgets.msu_path_entry));
+    if (config->msu_path) free((void*)config->msu_path);
+    config->msu_path = (msu_path_text && *msu_path_text) ? strdup(msu_path_text) : NULL;
 
     // Features
     config->features0 = 0;
@@ -1284,13 +1633,6 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
     if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_zelda_helps)))
         config->features0 |= kFeatures0_PrincessZeldaHelps;
 
-    // Gamepad quick save/load bindings
-    if (g_gamepad_save) free(g_gamepad_save);
-    g_gamepad_save = strdup(gtk_entry_get_text(GTK_ENTRY(g_widgets.gamepad_save_entry)));
-
-    if (g_gamepad_load) free(g_gamepad_load);
-    g_gamepad_load = strdup(gtk_entry_get_text(GTK_ENTRY(g_widgets.gamepad_load_entry)));
-
     // Read keyboard save state bindings (30 buttons)
     char **state_arrays[] = {g_kbd_load, g_kbd_save, g_kbd_replay};
     for (int type = 0; type < 3; type++) {
@@ -1319,8 +1661,6 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
 
     // Read keyboard system bindings (12 buttons)
     char **system_ptrs[] = {
-        &g_kbd_clear_keylog,
-        &g_kbd_stop_replay,
         &g_kbd_fullscreen,
         &g_kbd_reset,
         &g_kbd_pause_dimmed,
@@ -1330,7 +1670,9 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         &g_kbd_window_bigger,
         &g_kbd_window_smaller,
         &g_kbd_volume_up,
-        &g_kbd_volume_down
+        &g_kbd_volume_down,
+        &g_kbd_stop_replay,
+        &g_kbd_clear_keylog
     };
     for (int i = 0; i < 12; i++) {
         char key[32];
@@ -1339,6 +1681,57 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         if (button) {
             if (*system_ptrs[i]) free(*system_ptrs[i]);
             *system_ptrs[i] = strdup(gtk_button_get_label(GTK_BUTTON(button)));
+        }
+    }
+
+    // Read gamepad save state bindings (30 buttons)
+    char **gamepad_state_arrays[] = {g_gamepad_load, g_gamepad_save, g_gamepad_replay};
+    for (int type = 0; type < 3; type++) {
+        for (int i = 0; i < 10; i++) {
+            char key[32];
+            snprintf(key, sizeof(key), "state_%d_%d", type, i);
+            GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.gamepad_states_grid), key);
+            if (button) {
+                if (gamepad_state_arrays[type][i]) free(gamepad_state_arrays[type][i]);
+                gamepad_state_arrays[type][i] = strdup(gtk_button_get_label(GTK_BUTTON(button)));
+            }
+        }
+    }
+
+    // Read gamepad cheat bindings (3 buttons)
+    char **gamepad_cheat_ptrs[] = {&g_gamepad_cheat_life, &g_gamepad_cheat_keys, &g_gamepad_cheat_walkthrough};
+    for (int i = 0; i < 3; i++) {
+        char key[32];
+        snprintf(key, sizeof(key), "cheat_%d", i);
+        GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.gamepad_cheats_grid), key);
+        if (button) {
+            if (*gamepad_cheat_ptrs[i]) free(*gamepad_cheat_ptrs[i]);
+            *gamepad_cheat_ptrs[i] = strdup(gtk_button_get_label(GTK_BUTTON(button)));
+        }
+    }
+
+    // Read gamepad system bindings (12 buttons)
+    char **gamepad_system_ptrs[] = {
+        &g_gamepad_fullscreen,
+        &g_gamepad_reset,
+        &g_gamepad_pause_dimmed,
+        &g_gamepad_pause,
+        &g_gamepad_turbo,
+        &g_gamepad_replay_turbo,
+        &g_gamepad_window_bigger,
+        &g_gamepad_window_smaller,
+        &g_gamepad_volume_up,
+        &g_gamepad_volume_down,
+        &g_gamepad_stop_replay,
+        &g_gamepad_clear_keylog
+    };
+    for (int i = 0; i < 12; i++) {
+        char key[32];
+        snprintf(key, sizeof(key), "system_%d", i);
+        GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.gamepad_system_grid), key);
+        if (button) {
+            if (*gamepad_system_ptrs[i]) free(*gamepad_system_ptrs[i]);
+            *gamepad_system_ptrs[i] = strdup(gtk_button_get_label(GTK_BUTTON(button)));
         }
     }
 }

@@ -283,13 +283,74 @@ bool ConfigReader_Read(const char *path, Config *config) {
             if (strcmp(key, "Controls") == 0) {
                 LauncherUI_ParseGamepadControlString(value, g_gamepad_controls);
             }
-            else if (strcmp(key, "Save") == 0) {
-                if (g_gamepad_save) free(g_gamepad_save);
-                g_gamepad_save = strdup(value);
-            }
             else if (strcmp(key, "Load") == 0) {
-                if (g_gamepad_load) free(g_gamepad_load);
-                g_gamepad_load = strdup(value);
+                LauncherUI_ParseGamepadControlString(value, g_gamepad_load);
+            }
+            else if (strcmp(key, "Save") == 0) {
+                LauncherUI_ParseGamepadControlString(value, g_gamepad_save);
+            }
+            else if (strcmp(key, "Replay") == 0) {
+                LauncherUI_ParseGamepadControlString(value, g_gamepad_replay);
+            }
+            else if (strcmp(key, "CheatLife") == 0) {
+                if (g_gamepad_cheat_life) free(g_gamepad_cheat_life);
+                g_gamepad_cheat_life = strdup(value);
+            }
+            else if (strcmp(key, "CheatKeys") == 0) {
+                if (g_gamepad_cheat_keys) free(g_gamepad_cheat_keys);
+                g_gamepad_cheat_keys = strdup(value);
+            }
+            else if (strcmp(key, "CheatEquipment") == 0 || strcmp(key, "CheatWalkThroughWalls") == 0) {
+                if (g_gamepad_cheat_walkthrough) free(g_gamepad_cheat_walkthrough);
+                g_gamepad_cheat_walkthrough = strdup(value);
+            }
+            else if (strcmp(key, "ClearKeyLog") == 0) {
+                if (g_gamepad_clear_keylog) free(g_gamepad_clear_keylog);
+                g_gamepad_clear_keylog = strdup(value);
+            }
+            else if (strcmp(key, "StopReplay") == 0) {
+                if (g_gamepad_stop_replay) free(g_gamepad_stop_replay);
+                g_gamepad_stop_replay = strdup(value);
+            }
+            else if (strcmp(key, "Fullscreen") == 0) {
+                if (g_gamepad_fullscreen) free(g_gamepad_fullscreen);
+                g_gamepad_fullscreen = strdup(value);
+            }
+            else if (strcmp(key, "Reset") == 0) {
+                if (g_gamepad_reset) free(g_gamepad_reset);
+                g_gamepad_reset = strdup(value);
+            }
+            else if (strcmp(key, "PauseDimmed") == 0) {
+                if (g_gamepad_pause_dimmed) free(g_gamepad_pause_dimmed);
+                g_gamepad_pause_dimmed = strdup(value);
+            }
+            else if (strcmp(key, "Pause") == 0) {
+                if (g_gamepad_pause) free(g_gamepad_pause);
+                g_gamepad_pause = strdup(value);
+            }
+            else if (strcmp(key, "Turbo") == 0) {
+                if (g_gamepad_turbo) free(g_gamepad_turbo);
+                g_gamepad_turbo = strdup(value);
+            }
+            else if (strcmp(key, "ReplayTurbo") == 0) {
+                if (g_gamepad_replay_turbo) free(g_gamepad_replay_turbo);
+                g_gamepad_replay_turbo = strdup(value);
+            }
+            else if (strcmp(key, "WindowBigger") == 0) {
+                if (g_gamepad_window_bigger) free(g_gamepad_window_bigger);
+                g_gamepad_window_bigger = strdup(value);
+            }
+            else if (strcmp(key, "WindowSmaller") == 0) {
+                if (g_gamepad_window_smaller) free(g_gamepad_window_smaller);
+                g_gamepad_window_smaller = strdup(value);
+            }
+            else if (strcmp(key, "VolumeUp") == 0) {
+                if (g_gamepad_volume_up) free(g_gamepad_volume_up);
+                g_gamepad_volume_up = strdup(value);
+            }
+            else if (strcmp(key, "VolumeDown") == 0) {
+                if (g_gamepad_volume_down) free(g_gamepad_volume_down);
+                g_gamepad_volume_down = strdup(value);
             }
         }
 

@@ -32,9 +32,29 @@ extern char *g_kbd_window_smaller;
 extern char *g_kbd_volume_up;
 extern char *g_kbd_volume_down;
 
-// Quick save/load bindings (gamepad only)
-extern char *g_gamepad_save;
-extern char *g_gamepad_load;
+// Gamepad save states (10 slots each)
+extern char *g_gamepad_load[10];
+extern char *g_gamepad_save[10];
+extern char *g_gamepad_replay[10];
+
+// Gamepad cheats
+extern char *g_gamepad_cheat_life;
+extern char *g_gamepad_cheat_keys;
+extern char *g_gamepad_cheat_walkthrough;
+
+// Gamepad system controls
+extern char *g_gamepad_clear_keylog;
+extern char *g_gamepad_stop_replay;
+extern char *g_gamepad_fullscreen;
+extern char *g_gamepad_reset;
+extern char *g_gamepad_pause_dimmed;
+extern char *g_gamepad_pause;
+extern char *g_gamepad_turbo;
+extern char *g_gamepad_replay_turbo;
+extern char *g_gamepad_window_bigger;
+extern char *g_gamepad_window_smaller;
+extern char *g_gamepad_volume_up;
+extern char *g_gamepad_volume_down;
 
 // Parse/format control strings for INI
 void LauncherUI_ParseControlString(const char *str, char **controls);
