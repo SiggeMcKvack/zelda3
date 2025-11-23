@@ -38,6 +38,7 @@ extern char *g_gamepad_load;
 
 // Parse/format control strings for INI
 void LauncherUI_ParseControlString(const char *str, char **controls);
+void LauncherUI_ParseGamepadControlString(const char *str, char **controls);
 char* LauncherUI_FormatControlString(char **controls);
 
 // Create the main launcher window with all tabs

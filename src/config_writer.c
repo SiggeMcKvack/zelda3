@@ -531,7 +531,7 @@ static bool WriteKeyMapSection(FILE *f, const Config *config) {
 
   if (!WriteLine(f, "# Give bombs, arrows, and rupees\n")) return false;
   if (!WriteLine(f, "# Gives 10 bombs, 10 arrows, and 100 rupees\n")) return false;
-  if (!WriteLine(f, "# CheatEquipment = Shift+w\n\n")) return false;
+  if (!WriteLine(f, "# CheatEquipment = \n\n")) return false;
 
   if (!WriteLine(f, "# Walk through walls\n")) return false;
   if (!WriteLine(f, "# Toggles collision detection on/off\n")) return false;

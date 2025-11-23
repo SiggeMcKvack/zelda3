@@ -281,7 +281,7 @@ bool ConfigReader_Read(const char *path, Config *config) {
         }
         else if (strcmp(current_section, "GamepadMap") == 0) {
             if (strcmp(key, "Controls") == 0) {
-                LauncherUI_ParseControlString(value, g_gamepad_controls);
+                LauncherUI_ParseGamepadControlString(value, g_gamepad_controls);
             }
             else if (strcmp(key, "Save") == 0) {
                 if (g_gamepad_save) free(g_gamepad_save);
