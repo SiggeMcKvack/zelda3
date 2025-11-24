@@ -27,6 +27,12 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+// Windows compatibility for POSIX functions
+#ifdef _WIN32
+  #define popen _popen
+  #define pclose _pclose
+#endif
+
 #define RESTOOL_VERSION "0.1.0"
 
 typedef struct {

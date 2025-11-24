@@ -7,6 +7,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Windows compatibility for POSIX functions
+#ifdef _WIN32
+  #define strcasecmp _stricmp
+#else
+  #include <strings.h>  // For strcasecmp on POSIX systems
+#endif
+
 // ============================================================================
 // SHA-1 Implementation (for ROM validation)
 // ============================================================================
