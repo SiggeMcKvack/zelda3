@@ -49,7 +49,6 @@ add_executable(zelda3_restool ${RESTOOL_SOURCES} ${THIRD_PARTY_SOURCES} ${SHARED
 # Include directories
 target_include_directories(zelda3_restool PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}              # For restool headers
-  ${CMAKE_CURRENT_SOURCE_DIR}/..           # For shared headers (platform.h, logging.h, etc.)
   ${CMAKE_SOURCE_DIR}/third_party/stb      # For stb_image.h, stb_image_write.h
   ${CMAKE_SOURCE_DIR}/third_party/sha256   # For sha256.h
   ${CMAKE_SOURCE_DIR}/third_party/lodepng  # For lodepng.h

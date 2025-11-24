@@ -1,7 +1,7 @@
 // restool_util.c - Core utilities implementation
 #include "restool_util.h"
-#include "platform.h"
-#include "logging.h"
+#include "../platform.h"
+#include "../logging.h"
 #include "sha256.h"
 #include <stdio.h>
 #include <stdlib.h>

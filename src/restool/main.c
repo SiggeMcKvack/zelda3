@@ -7,8 +7,8 @@
 #include <stdbool.h>
 
 // Shared utilities
-#include "platform.h"
-#include "logging.h"
+#include "../platform.h"
+#include "../logging.h"
 
 // Restool modules
 #include "types.h"

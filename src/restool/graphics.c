@@ -1,6 +1,6 @@
 // graphics.c - SNES graphics decoding implementation
 #include "graphics.h"
-#include "logging.h"
+#include "../logging.h"
 #include <stdlib.h>
 #include <string.h>
 
