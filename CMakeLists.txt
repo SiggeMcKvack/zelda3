@@ -49,6 +49,9 @@ endif()
 # Option to build launcher (manual override)
 option(BUILD_LAUNCHER "Build GTK3 launcher" ON)
 
+# Option to build asset extraction tool
+option(BUILD_RESTOOL "Build asset extraction tool" ON)
+
 # Find GTK3 (optional, for settings launcher)
 if(BUILD_LAUNCHER)
     find_package(PkgConfig QUIET)
@@ -291,6 +294,12 @@ if(HAVE_GTK3)
     install(TARGETS zelda3-launcher DESTINATION bin)
 
     message(STATUS "Launcher target will be built: zelda3-launcher")
+endif()
+
+# Asset extraction tool (optional)
+if(BUILD_RESTOOL)
+    add_subdirectory(src/restool)
+    message(STATUS "Asset extraction tool will be built: zelda3_restool")
 endif()
 
 # Print configuration summary

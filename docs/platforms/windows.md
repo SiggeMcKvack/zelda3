@@ -6,7 +6,7 @@ This guide covers building Zelda3 on Windows using Visual Studio and vcpkg.
 
 ## Prerequisites
 
-- **Python 3.x** with pip
+- **Python 3.x** with pip (required for asset extraction; being replaced with C implementation)
 - **Visual Studio 2019 or later** (Community Edition is free)
 - **CMake 3.10+**
 - **vcpkg** (for dependency management)
@@ -53,8 +53,8 @@ setx PATH "%PATH%;C:\vcpkg"
 # Navigate to vcpkg directory
 cd C:\vcpkg
 
-# Install SDL2 and Opus (64-bit)
-.\vcpkg install sdl2:x64-windows opus:x64-windows
+# Install SDL2, Opus, and libyaml (64-bit)
+.\vcpkg install sdl2:x64-windows opus:x64-windows libyaml:x64-windows
 
 # Install Python requirements
 python -m pip install -r requirements.txt

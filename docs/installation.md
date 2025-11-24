@@ -21,9 +21,10 @@ Complete build instructions for Zelda3 on all supported platforms.
 
 ### Desktop Platforms (Linux, macOS, Windows)
 
-- **Python 3.x** with pip
+- **Python 3.x** with pip (required for asset extraction; being replaced with C implementation)
 - **SDL2** development libraries
 - **Opus** audio codec library
+- **libyaml** development library (required for building restool)
 - **CMake 3.10+**
 - **C Compiler** (GCC, Clang, or MSVC)
 

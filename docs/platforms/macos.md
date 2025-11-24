@@ -6,9 +6,10 @@ This guide covers building Zelda3 on macOS for both Intel (x86_64) and Apple Sil
 
 ## Prerequisites
 
-- **Python 3.x** with pip
+- **Python 3.x** with pip (required for asset extraction; being replaced with C implementation)
 - **SDL2** development libraries
 - **Opus** audio codec library
+- **libyaml** development library (required for building restool)
 - **CMake 3.10+**
 - **Xcode Command Line Tools**
 
@@ -27,7 +28,7 @@ xcode-select --install
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
 # Install dependencies
-brew install sdl2 opus cmake python3
+brew install sdl2 opus libyaml cmake python3
 
 # Install Python requirements
 python3 -m pip install -r requirements.txt

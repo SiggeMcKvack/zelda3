@@ -6,9 +6,10 @@ This guide covers building Zelda3 on Linux distributions including Ubuntu, Debia
 
 ## Prerequisites
 
-- **Python 3.x** with pip
+- **Python 3.x** with pip (required for asset extraction; being replaced with C implementation)
 - **SDL2** development libraries
 - **Opus** audio codec library
+- **libyaml** development library (required for building restool)
 - **CMake 3.10+**
 - **Build tools** (gcc or clang)
 
@@ -17,21 +18,21 @@ This guide covers building Zelda3 on Linux distributions including Ubuntu, Debia
 ### Ubuntu/Debian
 
 ```bash
-sudo apt install libsdl2-dev libopus-dev cmake build-essential python3 python3-pip
+sudo apt install libsdl2-dev libopus-dev libyaml-dev cmake build-essential python3 python3-pip
 python3 -m pip install -r requirements.txt
 ```
 
 ### Fedora
 
 ```bash
-sudo dnf install SDL2-devel opus-devel cmake gcc python3 python3-pip
+sudo dnf install SDL2-devel opus-devel libyaml-devel cmake gcc python3 python3-pip
 python3 -m pip install -r requirements.txt
 ```
 
 ### Arch Linux
 
 ```bash
-sudo pacman -S sdl2 opus cmake gcc python python-pip
+sudo pacman -S sdl2 opus libyaml cmake gcc python python-pip
 python3 -m pip install -r requirements.txt
 ```
 

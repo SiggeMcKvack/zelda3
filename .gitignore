@@ -61,3 +61,11 @@ android/.kotlin/
 android/zelda3
 android/Makefile
 docs/launcher-implementation.md
+zelda3_assets_python.dat
+compare_assets.py
+enemy_0_python.png
+linksprite.png
+test_decomp_verbose.py
+test_decomp.py
+test_gfx
+tools/RESTOOL_MIGRATION.md
