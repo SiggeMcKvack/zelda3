@@ -1930,7 +1930,7 @@ static void ExtractDungeonSprites(AssetBuilder *builder) {
 
   // Add assets
   AssetBuilder_AddAsset(builder, "kDungeonSprites", ASSET_TYPE_UINT8, data, data_len);
-  AssetBuilder_AddAsset(builder, "kDungeonSpriteOffs", ASSET_TYPE_UINT16, offsets, 320*2);
+  AssetBuilder_AddAsset(builder, "kDungeonSpriteOffs", ASSET_TYPE_UINT16, (const uint8_t*)offsets, 320*2);
 
   printf("    Processed %d rooms, encoded %d sprites\n", rooms_processed, sprites_encoded);
   printf("    kDungeonSprites: %zu bytes\n", data_len);
@@ -1952,10 +1952,10 @@ static void ExtractRomBasedAssets(Rom *rom, AssetBuilder *builder) {
   if (data) AssetBuilder_AddAsset(builder, "kOverworldMapGfx", ASSET_TYPE_UINT8, data, 0x4000);
 
   uint16_t *words = (uint16_t*)Rom_ReadPtr(rom, 0x8ADB27, 256 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kOverworldMapPaletteData", ASSET_TYPE_UINT16, (uint8_t*)words, 256 * 2);
+  if (words) AssetBuilder_AddAsset(builder, "kOverworldMapPaletteData", ASSET_TYPE_UINT16, (const uint8_t*)words, 256 * 2);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x9BD660, 64 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kHudPalData", ASSET_TYPE_UINT16, words, 64*2);
+  if (words) AssetBuilder_AddAsset(builder, "kHudPalData", ASSET_TYPE_UINT16, (const uint8_t*)words, 64*2);
 
   // Tilemaps
   data = Rom_ReadPtr(rom, 0xac727, 4096);
@@ -1966,10 +1966,10 @@ static void ExtractRomBasedAssets(Rom *rom, AssetBuilder *builder) {
 
   // Map16 data
   words = (uint16_t*)Rom_ReadPtr(rom, 0x9B52, 6438 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kPredefinedTileData", ASSET_TYPE_UINT16, words, 6438*2);
+  if (words) AssetBuilder_AddAsset(builder, "kPredefinedTileData", ASSET_TYPE_UINT16, (const uint8_t*)words, 6438*2);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x8f8000, 3752 * 4 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kMap16ToMap8", ASSET_TYPE_UINT16, words, 3752*4*2);
+  if (words) AssetBuilder_AddAsset(builder, "kMap16ToMap8", ASSET_TYPE_UINT16, (const uint8_t*)words, 3752*4*2);
 
   data = Rom_ReadPtr(rom, 0x8E9459, 512);
   if (data) AssetBuilder_AddAsset(builder, "kMap8DataToTileAttr", ASSET_TYPE_UINT8, data, 512);
@@ -1995,47 +1995,47 @@ static void ExtractRomBasedAssets(Rom *rom, AssetBuilder *builder) {
   if (data) AssetBuilder_AddAsset(builder, "kEnding_Credits_Text", ASSET_TYPE_UINT8, data, 1989);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x8EB93d, 394 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kEnding_Credits_Offs", ASSET_TYPE_UINT16, words, 394*2);
+  if (words) AssetBuilder_AddAsset(builder, "kEnding_Credits_Offs", ASSET_TYPE_UINT16, (const uint8_t*)words, 394*2);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x8EB038, 160 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kEnding_MapData", ASSET_TYPE_UINT16, words, 160*2);
+  if (words) AssetBuilder_AddAsset(builder, "kEnding_MapData", ASSET_TYPE_UINT16, (const uint8_t*)words, 160*2);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x8EC2E1, 17 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kEnding0_Offs", ASSET_TYPE_UINT16, words, 17*2);
+  if (words) AssetBuilder_AddAsset(builder, "kEnding0_Offs", ASSET_TYPE_UINT16, (const uint8_t*)words, 17*2);
 
   data = Rom_ReadPtr(rom, 0x8EBF4C, 917);
   if (data) AssetBuilder_AddAsset(builder, "kEnding0_Data", ASSET_TYPE_UINT8, data, 917);
 
   // Palettes (many!)
   words = (uint16_t*)Rom_ReadPtr(rom, 0x9BD734, 1800 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kPalette_DungBgMain", ASSET_TYPE_UINT16, words, 1800*2);
+  if (words) AssetBuilder_AddAsset(builder, "kPalette_DungBgMain", ASSET_TYPE_UINT16, (const uint8_t*)words, 1800*2);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x9BD218, 120 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kPalette_MainSpr", ASSET_TYPE_UINT16, words, 120*2);
+  if (words) AssetBuilder_AddAsset(builder, "kPalette_MainSpr", ASSET_TYPE_UINT16, (const uint8_t*)words, 120*2);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x9BD308, 75 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kPalette_ArmorAndGloves", ASSET_TYPE_UINT16, words, 75*2);
+  if (words) AssetBuilder_AddAsset(builder, "kPalette_ArmorAndGloves", ASSET_TYPE_UINT16, (const uint8_t*)words, 75*2);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x9BD630, 12 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kPalette_Sword", ASSET_TYPE_UINT16, words, 12*2);
+  if (words) AssetBuilder_AddAsset(builder, "kPalette_Sword", ASSET_TYPE_UINT16, (const uint8_t*)words, 12*2);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x9BD648, 12 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kPalette_Shield", ASSET_TYPE_UINT16, words, 12*2);
+  if (words) AssetBuilder_AddAsset(builder, "kPalette_Shield", ASSET_TYPE_UINT16, (const uint8_t*)words, 12*2);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x9BD39E, 84 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kPalette_SpriteAux3", ASSET_TYPE_UINT16, words, 84*2);
+  if (words) AssetBuilder_AddAsset(builder, "kPalette_SpriteAux3", ASSET_TYPE_UINT16, (const uint8_t*)words, 84*2);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x9BD446, 77 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kPalette_MiscSprite_Indoors", ASSET_TYPE_UINT16, words, 77*2);
+  if (words) AssetBuilder_AddAsset(builder, "kPalette_MiscSprite_Indoors", ASSET_TYPE_UINT16, (const uint8_t*)words, 77*2);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x9BD4E0, 126 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kPalette_SpriteAux1", ASSET_TYPE_UINT16, words, 126*2);
+  if (words) AssetBuilder_AddAsset(builder, "kPalette_SpriteAux1", ASSET_TYPE_UINT16, (const uint8_t*)words, 126*2);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x9BD5E0, 84 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kPalette_SpriteAux2", ASSET_TYPE_UINT16, words, 84*2);
+  if (words) AssetBuilder_AddAsset(builder, "kPalette_SpriteAux2", ASSET_TYPE_UINT16, (const uint8_t*)words, 84*2);
 
   words = (uint16_t*)Rom_ReadPtr(rom, 0x9BD66C, 28 * 2);
-  if (words) AssetBuilder_AddAsset(builder, "kPalette_MiscSprite_Outdoors", ASSET_TYPE_UINT16, words, 28*2);
+  if (words) AssetBuilder_AddAsset(builder, "kPalette_MiscSprite_Outdoors", ASSET_TYPE_UINT16, (const uint8_t*)words, 28*2);
 
   printf("    Extracted 32 ROM-based assets\n");
 }
@@ -4342,15 +4342,15 @@ int main(int argc, char **argv) {
 
     // Misc dungeon ROM assets (5 assets)
     uint16_t *words = (uint16_t*)Rom_ReadPtr(rom, 0x8e9000, 21 * 2);
-    if (words) AssetBuilder_AddAsset(builder, "kDungAttrsForTile_Offs", ASSET_TYPE_UINT16, (uint8_t*)words, 21*2);
+    if (words) AssetBuilder_AddAsset(builder, "kDungAttrsForTile_Offs", ASSET_TYPE_UINT16, (const uint8_t*)words, 21*2);
     AssetBuilder_AddAsset(builder, "kDungAttrsForTile", ASSET_TYPE_UINT8,
                          Rom_ReadPtr(rom, 0x8e902a, 1024), 1024);
     words = (uint16_t*)Rom_ReadPtr(rom, 0x84f1de, 198 * 2);
-    if (words) AssetBuilder_AddAsset(builder, "kMovableBlockDataInit", ASSET_TYPE_UINT16, (uint8_t*)words, 198*2);
+    if (words) AssetBuilder_AddAsset(builder, "kMovableBlockDataInit", ASSET_TYPE_UINT16, (const uint8_t*)words, 198*2);
     words = (uint16_t*)Rom_ReadPtr(rom, 0x84F36A, 144 * 2);
-    if (words) AssetBuilder_AddAsset(builder, "kTorchDataInit", ASSET_TYPE_UINT16, (uint8_t*)words, 144*2);
+    if (words) AssetBuilder_AddAsset(builder, "kTorchDataInit", ASSET_TYPE_UINT16, (const uint8_t*)words, 144*2);
     words = (uint16_t*)Rom_ReadPtr(rom, 0x84F48a, 48 * 2);
-    if (words) AssetBuilder_AddAsset(builder, "kTorchDataJunk", ASSET_TYPE_UINT16, (uint8_t*)words, 48*2);
+    if (words) AssetBuilder_AddAsset(builder, "kTorchDataJunk", ASSET_TYPE_UINT16, (const uint8_t*)words, 48*2);
 
     // 3. print_enemy_damage_data() - 1 asset
     printf("  Extracting kEnemyDamageData (decompressed)...\n");
