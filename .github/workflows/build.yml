@@ -28,7 +28,8 @@ jobs:
           libopus-dev \
           python3 \
           python3-pip \
-          libopenal-dev
+          libopenal-dev \
+          libyaml-dev
 
     - name: Extract assets
       run: |
@@ -71,7 +72,8 @@ jobs:
           sdl2 \
           opus \
           python \
-          openal
+          openal \
+          libyaml
 
     - name: Configure CMake
       run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
@@ -105,7 +107,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        vcpkg install sdl2:x64-windows opus:x64-windows openal-soft:x64-windows
+        vcpkg install sdl2:x64-windows opus:x64-windows openal-soft:x64-windows libyaml:x64-windows
 
     - name: Configure CMake
       run: |
@@ -137,7 +139,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install sdl2 opus openal-soft cmake
+        brew install sdl2 opus openal-soft cmake libyaml
 
     - name: Configure CMake
       run: |
@@ -169,7 +171,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install sdl2 opus openal-soft cmake
+        brew install sdl2 opus openal-soft cmake libyaml
 
     - name: Configure CMake
       run: |
