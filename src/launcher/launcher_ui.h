@@ -31,6 +31,8 @@ extern char *g_kbd_window_bigger;
 extern char *g_kbd_window_smaller;
 extern char *g_kbd_volume_up;
 extern char *g_kbd_volume_down;
+extern char *g_kbd_display_perf;
+extern char *g_kbd_toggle_renderer;
 
 // Gamepad save states (10 slots each)
 extern char *g_gamepad_load[10];
@@ -55,6 +57,8 @@ extern char *g_gamepad_window_bigger;
 extern char *g_gamepad_window_smaller;
 extern char *g_gamepad_volume_up;
 extern char *g_gamepad_volume_down;
+extern char *g_gamepad_display_perf;
+extern char *g_gamepad_toggle_renderer;
 
 // Parse/format control strings for INI
 void LauncherUI_ParseControlString(const char *str, char **controls);

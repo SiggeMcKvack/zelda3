@@ -37,6 +37,8 @@ char *g_kbd_window_bigger = NULL;
 char *g_kbd_window_smaller = NULL;
 char *g_kbd_volume_up = NULL;
 char *g_kbd_volume_down = NULL;
+char *g_kbd_display_perf = NULL;
+char *g_kbd_toggle_renderer = NULL;
 
 // Gamepad save states (10 slots each)
 char *g_gamepad_load[10] = {NULL};
@@ -61,6 +63,8 @@ char *g_gamepad_window_bigger = NULL;
 char *g_gamepad_window_smaller = NULL;
 char *g_gamepad_volume_up = NULL;
 char *g_gamepad_volume_down = NULL;
+char *g_gamepad_display_perf = NULL;
+char *g_gamepad_toggle_renderer = NULL;
 
 // Control names for UI
 static const char *kControlNames[12] = {
@@ -1126,11 +1130,13 @@ static GtkWidget* create_keymap_tab(const Config *config) {
         {"Window Smaller:", &g_kbd_window_smaller, "Ctrl+Down"},
         {"Volume Up:", &g_kbd_volume_up, "Shift+="},
         {"Volume Down:", &g_kbd_volume_down, "Shift+-"},
+        {"Display FPS:", &g_kbd_display_perf, "F"},
+        {"Toggle Renderer:", &g_kbd_toggle_renderer, "R"},
         {"Stop Replay:", &g_kbd_stop_replay, ""},
         {"Clear input recording log (debug):", &g_kbd_clear_keylog, ""}
     };
 
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 14; i++) {
         GtkWidget *label = gtk_label_new(system_keys[i].label);
         gtk_widget_set_halign(label, GTK_ALIGN_END);
         gtk_grid_attach(GTK_GRID(system_grid), label, 0, row, 1, 1);
@@ -1449,11 +1455,13 @@ static GtkWidget* create_gamepadmap_tab(const Config *config) {
         {"Window Smaller:", &g_gamepad_window_smaller},
         {"Volume Up:", &g_gamepad_volume_up},
         {"Volume Down:", &g_gamepad_volume_down},
+        {"Display FPS:", &g_gamepad_display_perf},
+        {"Toggle Renderer:", &g_gamepad_toggle_renderer},
         {"Stop Replay:", &g_gamepad_stop_replay},
         {"Clear input recording log (debug):", &g_gamepad_clear_keylog}
     };
 
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 14; i++) {
         GtkWidget *label = gtk_label_new(system_keys[i].label);
         gtk_widget_set_halign(label, GTK_ALIGN_END);
         gtk_grid_attach(GTK_GRID(system_grid), label, 0, row, 1, 1);
@@ -1659,7 +1667,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         }
     }
 
-    // Read keyboard system bindings (12 buttons)
+    // Read keyboard system bindings (14 buttons)
     char **system_ptrs[] = {
         &g_kbd_fullscreen,
         &g_kbd_reset,
@@ -1671,10 +1679,12 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         &g_kbd_window_smaller,
         &g_kbd_volume_up,
         &g_kbd_volume_down,
+        &g_kbd_display_perf,
+        &g_kbd_toggle_renderer,
         &g_kbd_stop_replay,
         &g_kbd_clear_keylog
     };
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 14; i++) {
         char key[32];
         snprintf(key, sizeof(key), "system_%d", i);
         GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.kbd_system_grid), key);
@@ -1710,7 +1720,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         }
     }
 
-    // Read gamepad system bindings (12 buttons)
+    // Read gamepad system bindings (14 buttons)
     char **gamepad_system_ptrs[] = {
         &g_gamepad_fullscreen,
         &g_gamepad_reset,
@@ -1722,10 +1732,12 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         &g_gamepad_window_smaller,
         &g_gamepad_volume_up,
         &g_gamepad_volume_down,
+        &g_gamepad_display_perf,
+        &g_gamepad_toggle_renderer,
         &g_gamepad_stop_replay,
         &g_gamepad_clear_keylog
     };
-    for (int i = 0; i < 12; i++) {
+    for (int i = 0; i < 14; i++) {
         char key[32];
         snprintf(key, sizeof(key), "system_%d", i);
         GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.gamepad_system_grid), key);

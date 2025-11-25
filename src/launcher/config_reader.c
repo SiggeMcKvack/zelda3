@@ -278,6 +278,14 @@ bool ConfigReader_Read(const char *path, Config *config) {
                 if (g_kbd_volume_down) free(g_kbd_volume_down);
                 g_kbd_volume_down = strdup(value);
             }
+            else if (strcmp(key, "DisplayPerf") == 0) {
+                if (g_kbd_display_perf) free(g_kbd_display_perf);
+                g_kbd_display_perf = strdup(value);
+            }
+            else if (strcmp(key, "ToggleRenderer") == 0) {
+                if (g_kbd_toggle_renderer) free(g_kbd_toggle_renderer);
+                g_kbd_toggle_renderer = strdup(value);
+            }
         }
         else if (strcmp(current_section, "GamepadMap") == 0) {
             if (strcmp(key, "Controls") == 0) {
@@ -351,6 +359,14 @@ bool ConfigReader_Read(const char *path, Config *config) {
             else if (strcmp(key, "VolumeDown") == 0) {
                 if (g_gamepad_volume_down) free(g_gamepad_volume_down);
                 g_gamepad_volume_down = strdup(value);
+            }
+            else if (strcmp(key, "DisplayPerf") == 0) {
+                if (g_gamepad_display_perf) free(g_gamepad_display_perf);
+                g_gamepad_display_perf = strdup(value);
+            }
+            else if (strcmp(key, "ToggleRenderer") == 0) {
+                if (g_gamepad_toggle_renderer) free(g_gamepad_toggle_renderer);
+                g_gamepad_toggle_renderer = strdup(value);
             }
         }
 

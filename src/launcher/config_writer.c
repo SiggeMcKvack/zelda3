@@ -593,6 +593,14 @@ static bool WriteKeyMapSection(FILE *f, const Config *config) {
   if (g_kbd_volume_down && *g_kbd_volume_down)
     if (!WriteLine(f, "VolumeDown = %s\n\n", g_kbd_volume_down)) return false;
 
+  if (!WriteLine(f, "# Toggle on-screen FPS counter (PPU rendering performance)\n")) return false;
+  if (g_kbd_display_perf && *g_kbd_display_perf)
+    if (!WriteLine(f, "DisplayPerf = %s\n\n", g_kbd_display_perf)) return false;
+
+  if (!WriteLine(f, "# Toggle between NewRenderer (optimized) and original PPU renderer\n")) return false;
+  if (g_kbd_toggle_renderer && *g_kbd_toggle_renderer)
+    if (!WriteLine(f, "ToggleRenderer = %s\n\n", g_kbd_toggle_renderer)) return false;
+
   if (!WriteLine(f, "\n")) return false;
   return true;
 }
@@ -777,9 +785,23 @@ static bool WriteGamepadMapSection(FILE *f, const Config *config) {
 
   if (!WriteLine(f, "# Decrease volume\n")) return false;
   if (g_gamepad_volume_down && *g_gamepad_volume_down) {
-    if (!WriteLine(f, "VolumeDown = %s\n", g_gamepad_volume_down)) return false;
+    if (!WriteLine(f, "VolumeDown = %s\n\n", g_gamepad_volume_down)) return false;
   } else {
-    if (!WriteLine(f, "VolumeDown =\n")) return false;
+    if (!WriteLine(f, "VolumeDown =\n\n")) return false;
+  }
+
+  if (!WriteLine(f, "# Toggle on-screen FPS counter\n")) return false;
+  if (g_gamepad_display_perf && *g_gamepad_display_perf) {
+    if (!WriteLine(f, "DisplayPerf = %s\n\n", g_gamepad_display_perf)) return false;
+  } else {
+    if (!WriteLine(f, "DisplayPerf =\n\n")) return false;
+  }
+
+  if (!WriteLine(f, "# Toggle between NewRenderer and original PPU renderer\n")) return false;
+  if (g_gamepad_toggle_renderer && *g_gamepad_toggle_renderer) {
+    if (!WriteLine(f, "ToggleRenderer = %s\n", g_gamepad_toggle_renderer)) return false;
+  } else {
+    if (!WriteLine(f, "ToggleRenderer =\n")) return false;
   }
 
   if (!WriteLine(f, "\n")) return false;
