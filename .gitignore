@@ -30,6 +30,11 @@ __pycache__
 /sprites-gfx
 /glsl-shaders
 /token.txt
+*.ips
+*.sfc
+*.zip
+*.ups
+*.smc
 
 # CMake build directory
 build/
@@ -69,3 +74,4 @@ test_decomp_verbose.py
 test_decomp.py
 test_gfx
 tools/RESTOOL_MIGRATION.md
+translations/check_rom_sha.sh

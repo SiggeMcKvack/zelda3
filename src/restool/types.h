@@ -6,12 +6,30 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+// ROM language identifiers (matching Python's util.py)
+typedef enum {
+  ROM_LANG_UNKNOWN = 0,
+  ROM_LANG_US,      // USA
+  ROM_LANG_DE,      // Germany
+  ROM_LANG_FR,      // France
+  ROM_LANG_FR_C,    // Canada (French)
+  ROM_LANG_EN,      // Europe (English)
+  ROM_LANG_ES,      // Spanish translation
+  ROM_LANG_PL,      // Polish translation
+  ROM_LANG_PT,      // Portuguese translation
+  ROM_LANG_REDUX,   // English Redux
+  ROM_LANG_NL,      // Dutch translation
+  ROM_LANG_SV,      // Swedish translation
+} RomLanguage;
+
 // ROM structure
 typedef struct {
   uint8_t *data;
   size_t size;
   bool has_smc_header;
-  char sha1[41];  // Hex string (40 chars + null terminator)
+  char sha1[41];       // Hex string (40 chars + null terminator)
+  RomLanguage language;
+  const char *language_name;  // Human-readable name
 } Rom;
 
 // Decompressed data from SNES compression

@@ -23,6 +23,7 @@ set(RESTOOL_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/asset_compiler.c
   ${CMAKE_CURRENT_SOURCE_DIR}/overworld.c
   ${CMAKE_CURRENT_SOURCE_DIR}/text.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/text_decode.c
   ${CMAKE_CURRENT_SOURCE_DIR}/yaml_util.c
   ${CMAKE_CURRENT_SOURCE_DIR}/tables.c
   # Add more as we create them:

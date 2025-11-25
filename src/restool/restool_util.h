@@ -35,6 +35,13 @@ uint8_t* Rom_ReadPtr(Rom *rom, uint32_t snes_addr, size_t len);
 // Validate ROM SHA1 hash
 bool Rom_ValidateSHA1(Rom *rom, const char *expected_sha1);
 
+// Identify ROM language from SHA1 hash
+// Sets rom->language and rom->language_name
+void Rom_IdentifyLanguage(Rom *rom);
+
+// Get language code string (e.g., "us", "en", "de")
+const char* Rom_GetLanguageCode(RomLanguage lang);
+
 // Convert SNES address to ROM offset (LoROM mapping)
 // Returns 0xFFFFFFFF if address is invalid
 uint32_t SnesAddrToRomOffset(uint32_t snes_addr);

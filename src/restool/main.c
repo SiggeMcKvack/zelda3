@@ -17,6 +17,7 @@
 #include "asset_compiler.h"
 #include "overworld.h"
 #include "text.h"
+#include "text_decode.h"
 #include "yaml_util.h"
 #include "tables.h"
 
@@ -4156,34 +4157,10 @@ int main(int argc, char **argv) {
     printf("  SMC header: %s\n", rom->has_smc_header ? "yes" : "no");
     printf("  SHA-1: %s\n", rom->sha1);
 
-    // Validate against known ROMs
-    const char *version = NULL;
-    if (Rom_ValidateSHA1(rom, ROM_SHA1_USA)) {
-      version = "USA";
-    } else if (Rom_ValidateSHA1(rom, ROM_SHA1_DE)) {
-      version = "Germany";
-    } else if (Rom_ValidateSHA1(rom, ROM_SHA1_FR)) {
-      version = "France";
-    } else if (Rom_ValidateSHA1(rom, ROM_SHA1_FR_C)) {
-      version = "Canada (French)";
-    } else if (Rom_ValidateSHA1(rom, ROM_SHA1_EN)) {
-      version = "Europe (English)";
-    } else if (Rom_ValidateSHA1(rom, ROM_SHA1_ES)) {
-      version = "Spanish translation";
-    } else if (Rom_ValidateSHA1(rom, ROM_SHA1_PL)) {
-      version = "Polish translation";
-    } else if (Rom_ValidateSHA1(rom, ROM_SHA1_PT)) {
-      version = "Portuguese translation";
-    } else if (Rom_ValidateSHA1(rom, ROM_SHA1_REDUX1) || Rom_ValidateSHA1(rom, ROM_SHA1_REDUX2)) {
-      version = "English Redux";
-    } else if (Rom_ValidateSHA1(rom, ROM_SHA1_NL)) {
-      version = "Dutch translation";
-    } else if (Rom_ValidateSHA1(rom, ROM_SHA1_SV)) {
-      version = "Swedish translation";
-    }
-
-    if (version) {
-      printf("  Version: %s (verified)\n", version);
+    // Show ROM identification (using language detection from Rom_Load)
+    if (rom->language != ROM_LANG_UNKNOWN) {
+      printf("  Identified ROM as: %s - \"%s\"\n",
+             Rom_GetLanguageCode(rom->language), rom->language_name);
     } else {
       printf("  Version: Unknown (unsupported ROM)\n");
     }
@@ -4303,6 +4280,61 @@ int main(int argc, char **argv) {
     printf("\nExtraction complete\n");
   }
 
+  // Handle --extract-dialogue (separate from extract_mode, matching Python behavior)
+  if (args.extract_dialogue) {
+    if (!args.rom_path) {
+      LogError("--extract-dialogue requires ROM file (use --extract-from-rom)");
+      return 1;
+    }
+
+    Rom *rom = Rom_Load(args.rom_path);
+    if (!rom) {
+      return 1;
+    }
+
+    // Get language code from ROM
+    const char *lang_code = TextDecode_GetLanguageCode(rom->language);
+    if (!lang_code) {
+      LogError("Unknown ROM language");
+      Rom_Free(rom);
+      return 1;
+    }
+
+    printf("Identified ROM as: %s - \"%s\"\n", lang_code, rom->language_name);
+
+    // Check if language is supported for text decoding
+    const LanguageConfig *config = TextDecode_GetLanguageConfig(lang_code);
+    if (!config) {
+      LogError("Language '%s' not yet supported for dialogue extraction", lang_code);
+      LogError("Supported languages: us, en, de, fr, fr-c");
+      Rom_Free(rom);
+      return 1;
+    }
+
+    // Decode dialogue strings
+    printf("Extracting dialogue strings...\n");
+    DecodedStringsArray *strings = TextDecode_DecodeStrings(rom, lang_code);
+    if (!strings) {
+      LogError("Failed to decode dialogue strings");
+      Rom_Free(rom);
+      return 1;
+    }
+
+    printf("Decoded %zu dialogue strings\n", strings->count);
+
+    // Write to file
+    if (!TextDecode_WriteDialogueFile(strings, lang_code, args.output_dir)) {
+      LogError("Failed to write dialogue file");
+      TextDecode_FreeStrings(strings);
+      Rom_Free(rom);
+      return 1;
+    }
+
+    TextDecode_FreeStrings(strings);
+    Rom_Free(rom);
+    return 0;  // Exit after dialogue extraction (matching Python behavior)
+  }
+
   if (args.compile_mode) {
     printf("Compiling assets to zelda3_assets.dat...\n");
 
@@ -4316,6 +4348,22 @@ int main(int argc, char **argv) {
     if (!rom) {
       return 1;
     }
+
+    // Check for US ROM (matching Python's behavior in util.py)
+    // Python only accepts US ROM for --extract-from-rom, other ROMs only work with --extract-dialogue
+    if (rom->language != ROM_LANG_US) {
+      fprintf(stderr, "\nROM with hash %s not supported.\n\n", rom->sha1);
+      fprintf(stderr, "Expected %s.\n", ROM_SHA1_USA);
+      fprintf(stderr, "Please verify your ROM is \"Legend of Zelda, The - A Link to the Past (USA)\"\n");
+      if (rom->language != ROM_LANG_UNKNOWN) {
+        fprintf(stderr, "\nDetected ROM: %s - \"%s\"\n",
+                Rom_GetLanguageCode(rom->language), rom->language_name);
+        fprintf(stderr, "\nNote: Non-US ROMs can only be used with --extract-dialogue for text extraction.\n");
+      }
+      Rom_Free(rom);
+      return 1;
+    }
+    printf("Identified ROM as: %s - \"%s\"\n", Rom_GetLanguageCode(rom->language), rom->language_name);
 
     // Create asset builder
     AssetBuilder *builder = AssetBuilder_Create();

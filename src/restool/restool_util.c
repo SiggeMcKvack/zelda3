@@ -213,6 +213,18 @@ Rom* Rom_Load(const char *path) {
   }
   LogInfo("ROM SHA-1: %s", rom->sha1);
 
+  // Identify ROM language from SHA-1
+  Rom_IdentifyLanguage(rom);
+
+  // Workaround for Swedish ROM with broken size (has 0x200 header but non-standard total size)
+  // Python: if self.language == 'sv' and len(self.ROM) == 0x10083b: self.ROM = self.ROM[0x200:]
+  if (rom->language == ROM_LANG_SV && rom->size == 0x10083b) {
+    LogInfo("Detected Swedish ROM with broken header, stripping 0x200 bytes");
+    memmove(rom->data, rom->data + 0x200, rom->size - 0x200);
+    rom->size -= 0x200;
+    rom->has_smc_header = true;
+  }
+
   // Validate ROM size (typical SNES ROMs are 1MB, 2MB, or 4MB)
   if (rom->size < 512 * 1024) {
     LogWarn("ROM size seems small: %zu bytes", rom->size);
@@ -270,6 +282,52 @@ uint8_t* Rom_ReadPtr(Rom *rom, uint32_t snes_addr, size_t len) {
 
 bool Rom_ValidateSHA1(Rom *rom, const char *expected_sha1) {
   return strcasecmp(rom->sha1, expected_sha1) == 0;
+}
+
+// ROM language identification table (matching Python's util.py ZELDA3_SHA1)
+typedef struct {
+  const char *sha1;
+  RomLanguage language;
+  const char *name;
+  const char *code;
+} RomLanguageEntry;
+
+static const RomLanguageEntry kRomLanguages[] = {
+  { ROM_SHA1_USA,    ROM_LANG_US,    "Legend of Zelda, The - A Link to the Past (USA)",     "us" },
+  { ROM_SHA1_DE,     ROM_LANG_DE,    "Legend of Zelda, The - A Link to the Past (Germany)", "de" },
+  { ROM_SHA1_FR,     ROM_LANG_FR,    "Legend of Zelda, The - A Link to the Past (France)",  "fr" },
+  { ROM_SHA1_FR_C,   ROM_LANG_FR_C,  "Legend of Zelda, The - A Link to the Past (Canada)",  "fr-c" },
+  { ROM_SHA1_EN,     ROM_LANG_EN,    "Legend of Zelda, The - A Link to the Past (Europe)",  "en" },
+  { ROM_SHA1_ES,     ROM_LANG_ES,    "Spanish - https://www.romhacking.net/translations/2195/", "es" },
+  { ROM_SHA1_PL,     ROM_LANG_PL,    "Polish - https://www.romhacking.net/translations/5760/",  "pl" },
+  { ROM_SHA1_PT,     ROM_LANG_PT,    "Portuguese - https://www.romhacking.net/translations/6530/", "pt" },
+  { ROM_SHA1_REDUX1, ROM_LANG_REDUX, "English Redux - https://www.romhacking.net/translations/6657/", "redux" },
+  { ROM_SHA1_REDUX2, ROM_LANG_REDUX, "English Redux - https://www.romhacking.net/hacks/2594/", "redux" },
+  { ROM_SHA1_NL,     ROM_LANG_NL,    "Dutch - https://www.romhacking.net/translations/1124/", "nl" },
+  { ROM_SHA1_SV,     ROM_LANG_SV,    "Swedish - https://www.romhacking.net/translations/982/", "sv" },
+  { NULL, ROM_LANG_UNKNOWN, NULL, NULL }  // Terminator
+};
+
+void Rom_IdentifyLanguage(Rom *rom) {
+  rom->language = ROM_LANG_UNKNOWN;
+  rom->language_name = "Unknown";
+
+  for (const RomLanguageEntry *entry = kRomLanguages; entry->sha1 != NULL; entry++) {
+    if (strcasecmp(rom->sha1, entry->sha1) == 0) {
+      rom->language = entry->language;
+      rom->language_name = entry->name;
+      return;
+    }
+  }
+}
+
+const char* Rom_GetLanguageCode(RomLanguage lang) {
+  for (const RomLanguageEntry *entry = kRomLanguages; entry->sha1 != NULL; entry++) {
+    if (entry->language == lang) {
+      return entry->code;
+    }
+  }
+  return "unknown";
 }
 
 // ============================================================================
