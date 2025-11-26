@@ -142,25 +142,32 @@ def main():
 
         # Write asset table
         f.write("// Asset lookup table\n")
-        f.write("static const EmbeddedAsset kEmbeddedAssets[] = {\n")
-        for rel_path, full_path in files:
-            name = sanitize_name(rel_path)
-            size = os.path.getsize(full_path)
-            # Normalize path separators
-            norm_path = rel_path.replace('\\', '/')
-            f.write(f'    {{"{norm_path}", {name}, sizeof({name})}},\n')
-        f.write("};\n\n")
+        if files:
+            f.write("static const EmbeddedAsset kEmbeddedAssets[] = {\n")
+            for rel_path, full_path in files:
+                name = sanitize_name(rel_path)
+                size = os.path.getsize(full_path)
+                # Normalize path separators
+                norm_path = rel_path.replace('\\', '/')
+                f.write(f'    {{"{norm_path}", {name}, sizeof({name})}},\n')
+            f.write("};\n\n")
+        else:
+            # Empty assets - use NULL pointer instead of zero-size array
+            f.write("static const EmbeddedAsset *kEmbeddedAssets = NULL;\n\n")
 
         # Write lookup function
         f.write("const EmbeddedAsset* EmbeddedAssets_Find(const char *path) {\n")
         f.write("    if (!path) return NULL;\n")
-        f.write("    // Skip leading \"assets/\" if present\n")
-        f.write("    if (strncmp(path, \"assets/\", 7) == 0) path += 7;\n")
-        f.write(f"    for (int i = 0; i < {len(files)}; i++) {{\n")
-        f.write("        if (strcmp(kEmbeddedAssets[i].name, path) == 0) {\n")
-        f.write("            return &kEmbeddedAssets[i];\n")
-        f.write("        }\n")
-        f.write("    }\n")
+        if files:
+            f.write("    // Skip leading \"assets/\" if present\n")
+            f.write("    if (strncmp(path, \"assets/\", 7) == 0) path += 7;\n")
+            f.write(f"    for (int i = 0; i < {len(files)}; i++) {{\n")
+            f.write("        if (strcmp(kEmbeddedAssets[i].name, path) == 0) {\n")
+            f.write("            return &kEmbeddedAssets[i];\n")
+            f.write("        }\n")
+            f.write("    }\n")
+        else:
+            f.write("    (void)path; // No embedded assets available\n")
         f.write("    return NULL;\n")
         f.write("}\n\n")
 

@@ -22,6 +22,8 @@
 #include "tables.h"
 #include "music_compiler.h"
 #include "asset_reader.h"
+#include "rom_addresses.h"
+#include "extract.h"
 
 // Third-party
 #include "sha256.h"
@@ -51,71 +53,12 @@ typedef struct {
   bool version;
 } RestoolArgs;
 
-// Sprite graphics ROM addresses (108 tilesets)
-// First 12 are uncompressed (0x600 bytes), rest are compressed
-static const uint32_t kCompSpritePtrs[108] = {
-  0x10f000,0x10f600,0x10fc00,0x118200,0x118800,0x118e00,0x119400,0x119a00,
-  0x11a000,0x11a600,0x11ac00,0x11b200,0x14fffc,0x1585d4,0x158ab6,0x158fbe,
-  0x1593f8,0x1599a6,0x159f32,0x15a3d7,0x15a8f1,0x15aec6,0x15b418,0x15b947,
-  0x15bed0,0x15c449,0x15c975,0x15ce7c,0x15d394,0x15d8ac,0x15ddc0,0x15e34c,
-  0x15e8e8,0x15ee31,0x15f3a6,0x15f92d,0x15feba,0x1682ff,0x1688e0,0x168e41,
-  0x1692df,0x169883,0x169cd0,0x16a26e,0x16a275,0x16a787,0x16aa06,0x16ae9d,
-  0x16b3ff,0x16b87e,0x16be6b,0x16c13d,0x16c619,0x16cbbb,0x16d0f1,0x16d641,
-  0x16d95a,0x16dd99,0x16e278,0x16e760,0x16ed25,0x16f20f,0x16f6b7,0x16fa5f,
-  0x16fd29,0x1781cd,0x17868d,0x178b62,0x178fd5,0x179527,0x17994b,0x179ea7,
-  0x17a30e,0x17a805,0x17acf8,0x17b2a2,0x17b7f9,0x17bc93,0x17c237,0x17c78e,
-  0x17cd55,0x17d2bc,0x17d82f,0x17dcec,0x17e1cc,0x17e36b,0x17e842,0x17eb38,
-  0x17ed58,0x17f06c,0x17f4fd,0x17fa39,0x17ff86,0x18845c,0x1889a1,0x188d64,
-  0x18919d,0x189610,0x189857,0x189b24,0x189dd2,0x18a03f,0x18a4ed,0x18a7ba,
-  0x18aedf,0x18af0d,0x18b520,0x18b953,
-};
-
-// Background graphics ROM addresses (115 tilesets, all compressed)
-static const uint32_t kCompBgPtrs[115] = {
-  0x11b800,0x11bce2,0x11c15f,0x11c675,0x11cb84,0x11cf4c,0x11d2ce,0x11d726,
-  0x11d9cf,0x11dec4,0x11e393,0x11e893,0x11ed7d,0x11f283,0x11f746,0x11fc21,
-  0x11fff2,0x128498,0x128a0e,0x128f30,0x129326,0x129804,0x129d5b,0x12a272,
-  0x12a6fe,0x12aa77,0x12ad83,0x12b167,0x12b51d,0x12b840,0x12bd54,0x12c1c9,
-  0x12c73d,0x12cc86,0x12d198,0x12d6b1,0x12db6a,0x12e0ea,0x12e6bd,0x12eb51,
-  0x12f135,0x12f6c5,0x12fc71,0x138129,0x138693,0x138bad,0x139117,0x139609,
-  0x139b21,0x13a074,0x13a619,0x13ab2b,0x13b00c,0x13b4f5,0x13b9eb,0x13bebf,
-  0x13c3ce,0x13c817,0x13cb68,0x13cfb5,0x13d460,0x13d8c2,0x13dd7a,0x13e266,
-  0x13e7af,0x13ece5,0x13f245,0x13f6f0,0x13fc30,0x1480e9,0x14863b,0x148a7c,
-  0x148f2a,0x149346,0x1497ed,0x149cc2,0x14a173,0x14a61d,0x14ab5d,0x14b083,
-  0x14b4bd,0x14b94e,0x14be0e,0x14c291,0x14c7ba,0x14cce4,0x14d1db,0x14d6bd,
-  0x14db77,0x14ded1,0x14e2ac,0x14e754,0x14ebae,0x14ef4e,0x14f309,0x14f6f4,
-  0x14fa55,0x14ff8c,0x14ff93,0x14ff9a,0x14ffa1,0x14ffa8,0x14ffaf,0x14ffb6,
-  0x14ffbd,0x14ffc4,0x14ffcb,0x14ffd2,0x14ffd9,0x14ffe0,0x14ffe7,0x14ffee,
-  0x14fff5,0x18b520,0x18b953,
-};
-
-// ============================================================================
-// Asset Loading Helpers (uses embedded assets with filesystem fallback)
-// ============================================================================
-
-// Load YAML from embedded assets or filesystem
-static YamlDoc* LoadAssetYaml(const char *path) {
-  size_t size;
-  const uint8_t *embedded = AssetReader_GetEmbedded(path, &size);
-  if (embedded) {
-    return Yaml_LoadString(embedded, size);
-  }
-  // Fall back to filesystem
-  return LoadAssetYaml(path);
-}
-
-// Load binary/text data from embedded assets or filesystem
-// Returns allocated buffer that caller must free with AssetReader_Free()
-static uint8_t* LoadAssetData(const char *path, size_t *out_size) {
-  return AssetReader_Load(path, out_size);
-}
-
 // ============================================================================
 // Graphics Extraction
 // ============================================================================
 
 // Extract kSprGfx (108 sprite tilesets) - Python-compatible
-static void ExtractSpriteGraphics(Rom *rom, AssetBuilder *builder) {
+void ExtractSpriteGraphics(Rom *rom, AssetBuilder *builder) {
   printf("  Extracting kSprGfx (108 sprite tilesets)...\n");
 
   uint8_t **arrays = (uint8_t**)malloc(108 * sizeof(uint8_t*));
@@ -204,7 +147,7 @@ static void ExtractSpriteGraphics(Rom *rom, AssetBuilder *builder) {
 }
 
 // Extract background graphics (kBgGfx) - 115 compressed tilesets
-static void ExtractBackgroundGraphics(Rom *rom, AssetBuilder *builder) {
+void ExtractBackgroundGraphics(Rom *rom, AssetBuilder *builder) {
   const uint32_t count = 115;
   uint8_t **arrays = malloc(count * sizeof(uint8_t*));
   uint32_t *sizes = malloc(count * sizeof(uint32_t));
@@ -224,10 +167,9 @@ static void ExtractBackgroundGraphics(Rom *rom, AssetBuilder *builder) {
     DecompressedData *decomp = Snes_Decompress(rom, kCompBgPtrs[i], false);  // Little-endian for bg gfx
     if (!decomp) {
       LogError("Failed to decompress background tileset %u at 0x%06X", i, kCompBgPtrs[i]);
-      // Use empty array on failure
-      arrays[i] = malloc(1);
-      arrays[i][0] = 0;
-      sizes[i] = 1;
+      // Use NULL on failure - packer handles NULL entries
+      arrays[i] = NULL;
+      sizes[i] = 0;
       continue;
     }
 
@@ -239,9 +181,7 @@ static void ExtractBackgroundGraphics(Rom *rom, AssetBuilder *builder) {
     arrays[i] = malloc(comp_len);
     if (!arrays[i]) {
       LogError("Failed to allocate memory for background tileset %u", i);
-      arrays[i] = malloc(1);
-      arrays[i][0] = 0;
-      sizes[i] = 1;
+      sizes[i] = 0;
       continue;
     }
 
@@ -271,7 +211,7 @@ static void ExtractBackgroundGraphics(Rom *rom, AssetBuilder *builder) {
 }
 
 // Extract dungeon map data (2 packed assets)
-static void ExtractDungeonMap(Rom *rom, AssetBuilder *builder) {
+void ExtractDungeonMap(Rom *rom, AssetBuilder *builder) {
   const uint32_t kSizes[14] = {75, 125, 50, 75, 175, 75, 50, 75, 50, 200, 150, 75, 100, 200};
 
   printf("  Extracting dungeon map data (2 packed assets, 14 dungeons each)...\n");
@@ -353,7 +293,7 @@ static uint32_t DecodeTilemapLength(Rom *rom, uint32_t snes_addr) {
   }
 }
 
-static void ExtractTilemaps(Rom *rom, AssetBuilder *builder) {
+void ExtractTilemaps(Rom *rom, AssetBuilder *builder) {
   const uint32_t kTilemapAddrs[6] = {
     0x8CDD6D, 0x8CE7BF, 0x8CE2A8, 0x8CE63C, 0x8CE456, 0x8EDA9C
   };
@@ -394,6 +334,11 @@ static void CopyAssetFromPython(AssetBuilder *builder, const char *name,
   fseek(fp, 0, SEEK_SET);
 
   uint8_t *data = malloc(file_size);
+  if (!data) {
+    LogError("Failed to allocate %zu bytes for Python asset file", file_size);
+    fclose(fp);
+    return;
+  }
   fread(data, 1, file_size, fp);
   fclose(fp);
 
@@ -425,6 +370,11 @@ static void CopyAssetFromPython(AssetBuilder *builder, const char *name,
 
   // Copy asset data
   uint8_t *asset_data = malloc(sizes[idx]);
+  if (!asset_data) {
+    LogError("Failed to allocate %u bytes for asset %s", sizes[idx], name);
+    free(data);
+    return;
+  }
   memcpy(asset_data, data + offset, sizes[idx]);
 
   // Determine type (uint8 is most common)
@@ -435,7 +385,7 @@ static void CopyAssetFromPython(AssetBuilder *builder, const char *name,
 }
 
 // Extract misc assets - simple ROM reads (28 assets from print_misc)
-static void ExtractMiscAssets(Rom *rom, AssetBuilder *builder) {
+void ExtractMiscAssets(Rom *rom, AssetBuilder *builder) {
   printf("  Extracting misc assets (28 simple ROM reads)...\n");
   fflush(stdout);
 
@@ -528,7 +478,7 @@ static inline void PackMap32Quad(const uint16_t *a, uint8_t *res) {
   res[5] = ((a[2] >> 8) << 4) | (a[3] >> 8);
 }
 
-static void ExtractMap32toMap16(AssetBuilder *builder) {
+void ExtractMap32toMap16(AssetBuilder *builder) {
   printf("  Extracting kMap32ToMap16 (4 assets from text file)...\n");
 
   // Load file from embedded assets or filesystem
@@ -539,8 +489,13 @@ static void ExtractMap32toMap16(AssetBuilder *builder) {
     return;
   }
 
-  // Read all lines into a table indexed by line number
-  uint16_t tab[8872][4];  // 8872 lines, 4 values per line
+  // Allocate table on heap (8872 * 4 * 2 = 71KB - too large for stack)
+  uint16_t (*tab)[4] = malloc(8872 * sizeof(*tab));
+  if (!tab) {
+    LogError("Failed to allocate map32 table");
+    AssetReader_Free((uint8_t *)file_data);
+    return;
+  }
   int line_count = 0;
 
   const char *ptr = file_data;
@@ -580,6 +535,7 @@ static void ExtractMap32toMap16(AssetBuilder *builder) {
 
   if (line_count != 8872) {
     LogError("Expected 8872 lines in map32_to_map16.txt, got %d", line_count);
+    free(tab);
     return;
   }
 
@@ -591,6 +547,7 @@ static void ExtractMap32toMap16(AssetBuilder *builder) {
     if (!res[j]) {
       LogError("Failed to allocate Map32toMap16 buffer");
       for (int k = 0; k < j; k++) free(res[k]);
+      free(tab);
       return;
     }
   }
@@ -621,6 +578,7 @@ static void ExtractMap32toMap16(AssetBuilder *builder) {
 
   // Cleanup
   for (int j = 0; j < 4; j++) free(res[j]);
+  free(tab);
 }
 
 static void TestMap32ToMap16(void) {
@@ -634,7 +592,13 @@ static void TestMap32ToMap16(void) {
     return;
   }
 
-  uint16_t tab[8872][4];
+  // Allocate table on heap (8872 * 4 * 2 = 71KB - too large for stack)
+  uint16_t (*tab)[4] = malloc(8872 * sizeof(*tab));
+  if (!tab) {
+    LogError("Failed to allocate map32 table");
+    AssetReader_Free((uint8_t *)file_data);
+    return;
+  }
   int line_count = 0;
 
   const char *ptr = file_data;
@@ -670,6 +634,7 @@ static void TestMap32ToMap16(void) {
 
   if (line_count != 8872) {
     LogError("Expected 8872 lines, got %d", line_count);
+    free(tab);
     return;
   }
 
@@ -677,6 +642,12 @@ static void TestMap32ToMap16(void) {
   uint8_t *res[4];
   for (int j = 0; j < 4; j++) {
     res[j] = malloc(13308);
+    if (!res[j]) {
+      LogError("Failed to allocate res[%d]", j);
+      for (int k = 0; k < j; k++) free(res[k]);
+      free(tab);
+      return;
+    }
   }
 
   int out_pos = 0;
@@ -711,6 +682,7 @@ static void TestMap32ToMap16(void) {
 
   // Cleanup
   for (int j = 0; j < 4; j++) free(res[j]);
+  free(tab);
 
   printf("\nNow compare:\n");
   printf("  diff /tmp/map32_python_0.bin /tmp/map32_c_0.bin\n");
@@ -770,7 +742,7 @@ static void Encode2bppSprite(const uint8_t *data, int offset, int pitch, uint8_t
   }
 }
 
-static void ExtractLinkGraphics(AssetBuilder *builder) {
+void ExtractLinkGraphics(AssetBuilder *builder) {
   printf("  Extracting kLinkGraphics from linksprite.png...\n");
 
   // Load PNG file from embedded assets or filesystem
@@ -1388,7 +1360,7 @@ static uint8_t *PackArrays(uint8_t **arrays, size_t *array_lens, size_t count, s
 
 // Extract all dialogue assets (kDialogue, kDialogueFont, kDialogueMap) for US language
 // Replaces Python script /tmp/extract_dialogue.py
-static void ExtractDialogueAssets(AssetBuilder *builder) {
+void ExtractDialogueAssets(AssetBuilder *builder) {
   const char *lang = "us";
 
   printf("  Extracting dialogue (%s language)...\n", lang);
@@ -1861,7 +1833,7 @@ static void TestDungeonSprites(void) {
 // Dungeon Sprites Extraction
 // ============================================================================
 
-static void ExtractDungeonSprites(AssetBuilder *builder) {
+void ExtractDungeonSprites(AssetBuilder *builder) {
   printf("  Extracting dungeon sprites from 320 rooms...\n");
 
   // Allocate buffers
@@ -2008,7 +1980,7 @@ static void ExtractDungeonSprites(AssetBuilder *builder) {
 // ROM-Based Asset Extraction (no YAML required)
 // ============================================================================
 
-static void ExtractRomBasedAssets(Rom *rom, AssetBuilder *builder) {
+void ExtractRomBasedAssets(Rom *rom, AssetBuilder *builder) {
   printf("  Extracting ROM-based assets (32 assets)...\n");
 
   // Overworld graphics and palettes
@@ -2108,7 +2080,7 @@ static void ExtractRomBasedAssets(Rom *rom, AssetBuilder *builder) {
 // Dungeon Secrets Extraction
 // ============================================================================
 
-static void ExtractDungeonSecrets(AssetBuilder *builder) {
+void ExtractDungeonSecrets(AssetBuilder *builder) {
   printf("  Extracting dungeon secrets from 320 rooms...\n");
 
   // Allocate result array: 320 rooms × 2 bytes offset each = 640 bytes
@@ -2264,7 +2236,7 @@ static size_t AppendScanBytes(uint8_t **big_ptr, size_t *big_len, size_t *big_ca
 // Dungeon Room Headers
 // ============================================================================
 
-static void ExtractDungeonRoomHeaders(AssetBuilder *builder) {
+void ExtractDungeonRoomHeaders(AssetBuilder *builder) {
   printf("  Extracting dungeon room headers from 320 rooms...\n");
 
   // Room headers data (deduplicated)
@@ -2387,7 +2359,7 @@ static void ExtractDungeonRoomHeaders(AssetBuilder *builder) {
 // Simple Dungeon Room Assets
 // ============================================================================
 
-static void ExtractDungeonRoomSimple(AssetBuilder *builder) {
+void ExtractDungeonRoomSimple(AssetBuilder *builder) {
   printf("  Extracting simple dungeon room data from 320 rooms...\n");
 
   // kDungeonRoomTeleMsg: 320 uint16 values (sign/teleport message IDs)
@@ -2601,7 +2573,7 @@ static uint16_t EncodeRoomLayer(uint8_t **data_ptr, size_t *data_len, size_t *da
   return door_offset;
 }
 
-static void ExtractDungeonRoomData(AssetBuilder *builder) {
+void ExtractDungeonRoomData(AssetBuilder *builder) {
   printf("  Extracting dungeon room data (3-layer encoding) from 320 rooms...\n");
 
   // Main room data buffer (NOT deduplicated, only headers are)
@@ -2697,7 +2669,7 @@ static void ExtractDungeonRoomData(AssetBuilder *builder) {
 // Default and Overlay Dungeon Rooms
 // ============================================================================
 
-static void ExtractDefaultOverlayRooms(AssetBuilder *builder) {
+void ExtractDefaultOverlayRooms(AssetBuilder *builder) {
   printf("  Extracting default and overlay rooms...\n");
 
   // Default rooms: 8 variants from default_rooms.yaml
@@ -2784,7 +2756,7 @@ static void ExtractDefaultOverlayRooms(AssetBuilder *builder) {
 }
 // Extract all entrances and starting points from dungeon YAML files
 // Extract entrances and starting points - 33 assets total (indexed by YAML fields)
-static void ExtractEntrancesAndStartingPoints(AssetBuilder *builder) {
+void ExtractEntrancesAndStartingPoints(AssetBuilder *builder) {
   printf("  Extracting entrances and starting points from 320 rooms...\n");
 
   typedef struct {
@@ -3220,7 +3192,7 @@ static void Overworld_ProcessSpriteStage(Rom *rom, uint8_t *map_is_small,
 // ============================================================================
 
 // Extract overworld data from 160 YAML files (~48 assets)
-static void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
+void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
   printf("  Extracting overworld YAML data (160 areas)...\n");
 
   // Allocate map_is_small FIRST - needed by multiple phases
@@ -4058,7 +4030,7 @@ static bool ParseArgs(int argc, char **argv, RestoolArgs *args) {
 
 // Extract sound banks using pure C music compiler
 // Returns true on success, false on error
-static bool ExtractSoundBanks(AssetBuilder *builder) {
+bool ExtractSoundBanks(AssetBuilder *builder) {
   printf("  Extracting sound banks (intro, indoor, ending)...\n");
 
   const char *songs[] = {"intro", "indoor", "ending"};
@@ -4090,7 +4062,7 @@ static bool ExtractSoundBanks(AssetBuilder *builder) {
 
 // Extract dialogue assets (pure C implementation - no Python dependency)
 // Returns true on success, false on error
-static bool ExtractDialogue(AssetBuilder *builder) {
+bool ExtractDialogue(AssetBuilder *builder) {
   // Call pure C implementation (replaces Python script)
   ExtractDialogueAssets(builder);
   return true;

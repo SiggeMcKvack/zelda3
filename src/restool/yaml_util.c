@@ -5,24 +5,45 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 // ============================================================================
 // Internal Structures
 // ============================================================================
 
+// Node pool for memory management - all nodes tied to document lifetime
+#define YAML_NODE_POOL_INITIAL_CAPACITY 32
+
+typedef struct {
+  YamlNode *nodes;
+  int count;
+  int capacity;
+} YamlNodePool;
+
 struct YamlDoc {
   yaml_document_t document;
   yaml_parser_t parser;
   FILE *file;
+  YamlNodePool node_pool;  // Memory pool for YamlNode allocations
 };
 
 struct YamlNode {
+  YamlDoc *doc;             // Back-pointer to owning document (for pool allocation)
   yaml_document_t *document;
   yaml_node_t *node;
 };
 
 // Thread-local error message storage
-static _Thread_local char g_yaml_error[256] = {0};
+// Use portable thread-local macro
+#if defined(__GNUC__) || defined(__clang__)
+  #define THREAD_LOCAL __thread
+#elif defined(_MSC_VER)
+  #define THREAD_LOCAL __declspec(thread)
+#else
+  #define THREAD_LOCAL _Thread_local
+#endif
+
+static THREAD_LOCAL char g_yaml_error[256] = {0};
 
 // ============================================================================
 // Error Handling
@@ -37,6 +58,42 @@ static void SetError(const char *fmt, ...) {
 
 const char* Yaml_GetLastError(void) {
   return g_yaml_error;
+}
+
+// ============================================================================
+// Node Pool Management
+// ============================================================================
+
+// Allocate a YamlNode from the document's pool
+// Nodes are automatically freed when Yaml_Free() is called
+static YamlNode* AllocNode(YamlDoc *doc) {
+  if (!doc) return NULL;
+
+  YamlNodePool *pool = &doc->node_pool;
+
+  // Grow pool if needed
+  if (pool->count >= pool->capacity) {
+    int new_capacity = pool->capacity ? pool->capacity * 2 : YAML_NODE_POOL_INITIAL_CAPACITY;
+    YamlNode *new_nodes = realloc(pool->nodes, new_capacity * sizeof(YamlNode));
+    if (!new_nodes) {
+      SetError("Failed to grow node pool");
+      return NULL;
+    }
+    pool->nodes = new_nodes;
+    pool->capacity = new_capacity;
+  }
+
+  return &pool->nodes[pool->count++];
+}
+
+// Free all nodes in the pool
+static void FreeNodePool(YamlNodePool *pool) {
+  if (pool && pool->nodes) {
+    free(pool->nodes);
+    pool->nodes = NULL;
+    pool->count = 0;
+    pool->capacity = 0;
+  }
 }
 
 // ============================================================================
@@ -128,6 +185,9 @@ YamlDoc* Yaml_LoadString(const uint8_t *data, size_t size) {
 void Yaml_Free(YamlDoc *doc) {
   if (!doc) return;
 
+  // Free the node pool (all YamlNode allocations)
+  FreeNodePool(&doc->node_pool);
+
   yaml_document_delete(&doc->document);
   yaml_parser_delete(&doc->parser);
 
@@ -154,12 +214,12 @@ YamlNode* Yaml_GetRoot(YamlDoc *doc) {
     return NULL;
   }
 
-  YamlNode *node = malloc(sizeof(YamlNode));
+  YamlNode *node = AllocNode(doc);
   if (!node) {
-    SetError("Failed to allocate YamlNode");
-    return NULL;
+    return NULL;  // Error already set by AllocNode
   }
 
+  node->doc = doc;
   node->document = &doc->document;
   node->node = root;
   return node;
@@ -191,12 +251,12 @@ YamlNode* Yaml_GetMapping(YamlNode *node, const char *key) {
           return NULL;
         }
 
-        YamlNode *result = malloc(sizeof(YamlNode));
+        YamlNode *result = AllocNode(node->doc);
         if (!result) {
-          SetError("Failed to allocate YamlNode");
-          return NULL;
+          return NULL;  // Error already set by AllocNode
         }
 
+        result->doc = node->doc;
         result->document = node->document;
         result->node = value_node;
         return result;
@@ -232,12 +292,12 @@ YamlNode* Yaml_GetSequence(YamlNode *node, int index) {
     return NULL;
   }
 
-  YamlNode *result = malloc(sizeof(YamlNode));
+  YamlNode *result = AllocNode(node->doc);
   if (!result) {
-    SetError("Failed to allocate YamlNode");
-    return NULL;
+    return NULL;  // Error already set by AllocNode
   }
 
+  result->doc = node->doc;
   result->document = node->document;
   result->node = item_node;
   return result;
@@ -283,13 +343,12 @@ const char* Yaml_GetString(YamlNode *node, const char *key, const char *default_
   }
 
   if (value_node->node->type != YAML_SCALAR_NODE) {
-    free(value_node);
+    // Node is managed by pool, no need to free
     return default_value;
   }
 
-  const char *result = (const char*)value_node->node->data.scalar.value;
-  free(value_node);
-  return result;
+  // Node is managed by pool, no need to free
+  return (const char*)value_node->node->data.scalar.value;
 }
 
 int Yaml_GetInt(YamlNode *node, const char *key, int default_value) {
