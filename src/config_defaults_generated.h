@@ -433,6 +433,12 @@ const char* kDefaultConfigIni =
     "# Decrease volume\n"
     "VolumeDown = Shift+N\n"
     "\n"
+    "# Toggle on-screen FPS counter (PPU rendering performance)\n"
+    "DisplayPerf = F\n"
+    "\n"
+    "# Toggle between NewRenderer (optimized) and original PPU renderer\n"
+    "ToggleRenderer = R\n"
+    "\n"
     "\n"
     "[GamepadMap]\n"
     "# ==============================================================================\n"
@@ -536,6 +542,12 @@ const char* kDefaultConfigIni =
     "\n"
     "# Decrease volume\n"
     "VolumeDown =\n"
+    "\n"
+    "# Toggle on-screen FPS counter\n"
+    "DisplayPerf =\n"
+    "\n"
+    "# Toggle between NewRenderer and original PPU renderer\n"
+    "ToggleRenderer =\n"
     "";
 
 #endif // CONFIG_DEFAULTS_GENERATED_H

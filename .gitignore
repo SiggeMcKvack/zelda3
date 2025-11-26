@@ -35,6 +35,8 @@ __pycache__
 *.zip
 *.ups
 *.smc
+*.7z
+*.dat
 
 # CMake build directory
 build/
@@ -65,8 +67,9 @@ android/.kotlin/
 *.log
 android/zelda3
 android/Makefile
+
+# Development
 docs/launcher-implementation.md
-zelda3_assets_python.dat
 compare_assets.py
 enemy_0_python.png
 linksprite.png

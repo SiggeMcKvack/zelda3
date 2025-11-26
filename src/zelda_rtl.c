@@ -785,6 +785,21 @@ void ZeldaSetLanguage(const char *language) {
   g_zenv.dialogue_flags = found.ptr[2];
 }
 
+int ZeldaGetAvailableLanguages(char languages[][8], int max_languages) {
+  int count = 0;
+  for (int i = 0; i < max_languages; i++) {
+    MemBlk mb = kDialogueMap(i);
+    if (mb.ptr == 0)
+      break;
+    MemBlk name = FindIndexInMemblk(mb, 0);
+    if (name.size < 8 && name.size > 0) {
+      memcpy(languages[count], name.ptr, name.size);
+      languages[count][name.size] = '\0';
+      count++;
+    }
+  }
+  return count;
+}
 
 static const char *const kReferenceSaves[] = {
   "Chapter 1 - Zelda's Rescue.sav",
