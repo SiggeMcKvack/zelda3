@@ -228,9 +228,12 @@ static void MsuPlayer_Open(MsuPlayer *mp, int orig_track, bool resume_from_snaps
   mp->buffer_size = mp->buffer_pos = 0;
   mp->preskip = 0;
   if (file_tag == (('Z' << 24) | ('U' << 16) | ('P' << 8) | 'O')) {
-    mp->opus = opus_decoder_create(48000, 2, NULL);
-    if (!mp->opus)
+    int opus_error = 0;
+    mp->opus = opus_decoder_create(48000, 2, &opus_error);
+    if (!mp->opus) {
+      LogError("Failed to create Opus decoder: error %d", opus_error);
       goto READ_ERROR;
+    }
     if (mp->state == kMsuState_Resuming)
       Platform_SeekFile(mp->f, mp->cur_file_offs, SEEK_SET);
   } else if (file_tag == (('1' << 24) | ('U' << 16) | ('S' << 8) | 'M')) {
@@ -533,8 +536,10 @@ void ZeldaEnableMsu(uint8 enable) {
       LogWarn("MSU requires: AudioFreq = 44100");
   }
 
+  // Guard against division by zero
+  uint16 audio_freq = g_config.audio_freq ? g_config.audio_freq : 44100;
   float volscale = g_config.msuvolume * (1.0f / 255 / 100);
-  float stepscale = g_config.msuvolume * (60.0f / 256 / 100) / g_config.audio_freq;
+  float stepscale = g_config.msuvolume * (60.0f / 256 / 100) / audio_freq;
   for (size_t i = 0; i != countof(kVolumeTransitionStepFloat); i++) {
     kVolumeTransitionStepFloat[i] = kVolumeTransitionStep[i] * stepscale;
     kVolumeTransitionTargetFloat[i] = kVolumeTransitionTarget[i] * volscale;

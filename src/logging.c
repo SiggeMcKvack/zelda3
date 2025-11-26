@@ -94,8 +94,8 @@ void LogPrintV(LogLevel level, const char *file, int line, const char *fmt, va_l
   // Print message
   vfprintf(stderr, fmt, args);
 
-  // Ensure newline
-  if (fmt[strlen(fmt) - 1] != '\n') {
+  // Ensure newline (check fmt is not NULL/empty first)
+  if (fmt && fmt[0] && fmt[strlen(fmt) - 1] != '\n') {
     fprintf(stderr, "\n");
   }
 }

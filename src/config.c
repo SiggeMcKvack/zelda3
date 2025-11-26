@@ -477,8 +477,7 @@ static bool HandleSoundConfig(const char *key, char *value) {
 
 static bool HandleGeneralConfig(const char *key, char *value) {
   if (StringEqualsNoCase(key, "Autosave")) {
-    g_config.autosave = (bool)strtol(value, (char**)NULL, 10);
-    return true;
+    return ParseBool(value, &g_config.autosave);
   } else if (StringEqualsNoCase(key, "ExtendedAspectRatio")) {
     const char* s;
     int h = kSnesBaseHeight;

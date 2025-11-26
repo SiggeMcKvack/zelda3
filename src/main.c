@@ -75,6 +75,10 @@ enum {
   kAngleSegments = 64,  // Multiply atan2 result by this for quantization
 };
 
+enum {
+  kFrameDelayThresholdMs = 500,  // Max frame delay before resetting timing
+};
+
 static const char kWindowTitle[] = "The Legend of Zelda: A Link to the Past";
 static uint32 g_win_flags = SDL_WINDOW_RESIZABLE;
 static SDL_Window *g_window;
@@ -201,7 +205,12 @@ static int g_frames_per_block;
 static uint8 g_audio_channels;
 
 static void SDLCALL AudioCallback(void *userdata, Uint8 *stream, int len) {
-  if (SDL_LockMutex(g_audio_mutex)) Die("Mutex lock failed!");
+  // Don't call Die() from audio callback - it can cause crashes or deadlocks.
+  // Instead, output silence and return gracefully on mutex failure.
+  if (SDL_LockMutex(g_audio_mutex) != 0) {
+    SDL_memset(stream, 0, len);
+    return;
+  }
   while (len != 0) {
     if (g_audiobuffer_end - g_audiobuffer_cur == 0) {
       ZeldaRenderAudio((int16*)g_audiobuffer, g_frames_per_block, g_audio_channels);
@@ -632,7 +641,7 @@ int main(int argc, char** argv) {
     DrawPpuFrameWithPerf();
 
     if (g_config.display_perf_title) {
-      char title[60];
+      char title[128];
       snprintf(title, sizeof(title), "%s | FPS: %d", kWindowTitle, g_curr_fps);
       SDL_SetWindowTitle(g_window, title);
     }
@@ -646,13 +655,12 @@ int main(int argc, char** argv) {
 
       if (lastTick > curTick) {
         uint32 delta = lastTick - curTick;
-        if (delta > 500) {
-          lastTick = curTick - 500;
-          delta = 500;
+        if (delta > kFrameDelayThresholdMs) {
+          lastTick = curTick - kFrameDelayThresholdMs;
+          delta = kFrameDelayThresholdMs;
         }
-//        printf("Sleeping %d\n", delta);
         SDL_Delay(delta);
-      } else if (curTick - lastTick > 500) {
+      } else if (curTick - lastTick > kFrameDelayThresholdMs) {
         lastTick = curTick;
       }
     }

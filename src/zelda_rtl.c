@@ -556,10 +556,13 @@ void StateRecorder_Save(StateRecorder *sr, FILE *f) {
     hdr[5] |= sr->replay_pos_last_complete << 1;
     hdr[7] = sr->replay_frame_counter;
   }
-  fwrite(hdr, 1, sizeof(hdr), f);
-  fwrite(sr->log.data, 1, hdr[2], f);
-  fwrite(sr->base_snapshot.data, 1, sr->base_snapshot.size, f);
-  fwrite(arr.data, 1, arr.size, f);
+  bool write_ok = true;
+  write_ok = write_ok && fwrite(hdr, 1, sizeof(hdr), f) == sizeof(hdr);
+  write_ok = write_ok && fwrite(sr->log.data, 1, hdr[2], f) == hdr[2];
+  write_ok = write_ok && fwrite(sr->base_snapshot.data, 1, sr->base_snapshot.size, f) == sr->base_snapshot.size;
+  write_ok = write_ok && fwrite(arr.data, 1, arr.size, f) == arr.size;
+  if (!write_ok)
+    LogError("Failed to write save file");
 
   ByteArray_Destroy(&arr);
 }
