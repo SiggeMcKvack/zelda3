@@ -39,11 +39,13 @@ typedef struct {
   const char *output_dir;
   bool extract_mode;
   bool compile_mode;
+  bool no_compile;          // --no-compile flag to skip auto-compilation
   bool extract_dialogue;
   bool extract_graphics;
   bool extract_overworld;
   int extract_enemy_sheet;  // -1 = none, 0-N = specific sheet
   const char *language;
+  const char *languages;    // --languages comma-separated list for multi-lang build
   bool verbose;
   bool test_yaml;
   bool test_map32;
@@ -796,7 +798,15 @@ static bool ExtractDialogueFontFromPNG(const char *lang, uint8_t **out_font_data
     { "us", "font.png", 99 },
     { "de", "font_de.png", 112 },
     { "fr", "font_fr.png", 112 },
+    { "fr-c", "font_fr_c.png", 112 },
     { "en", "font_en.png", 102 },
+    { "es", "font_es.png", 99 },
+    { "sv", "font_sv.png", 99 },
+    { "pl", "font_pl.png", 99 },
+    { "pt", "font_pt.png", 121 },
+    { "nl", "font_nl.png", 99 },       // Dutch
+    { "redux", "font.png", 99 },       // Redux uses US font
+    { "retrans-kal", "font.png", 99 }, // Kaleidoscope uses US font
   };
 
   // Find language config
@@ -884,12 +894,14 @@ static bool ExtractDialogueFontFromPNG(const char *lang, uint8_t **out_font_data
     // Extract width from first row (only for even rows: y & 1 == 0)
     if ((y & 1) == 0 && width_idx < chars_per_lang) {
       // Scan for pixel value 255 in first 8 pixels
-      int char_width = 0;
+      // Python: for i in range(8): if pixel==255: break; return i+1
+      // So width is index where 255 is found + 1 (or 8+1=9 if not found, but 9 is capped to 8)
+      int char_width = 8;  // Default if 255 not found
       for (int j = 0; j < 8; j++) {
         if (image[base_offs + j] == 255) {
+          char_width = j + 1;
           break;
         }
-        char_width = j + 1;
       }
       font_width[width_idx++] = char_width;
     }
@@ -912,122 +924,133 @@ static bool ExtractDialogueFontFromPNG(const char *lang, uint8_t **out_font_data
 }
 
 // ============================================================================
-// Text Compression (US Language)
+// Generic Multi-Language Text Compression
 // ============================================================================
 
-// US text alphabet (95 characters)
-static const char *kTextAlphabet_US[] = {
-  "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P",
-  "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f",
-  "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v",
-  "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "!", "?",
-  "-", ".", ",", "[...]", ">", "(", ")", "[Ankh]", "[Waves]", "[Snake]", "[LinkL]", "[LinkR]",
-  "\"", "[Up]", "[Down]", "[Left]", "[Right]", "'", "[1HeartL]", "[1HeartR]", "[2HeartL]",
-  "[3HeartL]", "[3HeartR]", "[4HeartL]", "[4HeartR]", " ", "<", "[A]", "[B]", "[X]", "[Y]",
-};
-
-// US text dictionary (87 entries)
-static const char *kTextDictionary_US[] = {
-  "    ", "   ", "  ", "'s ", "and ",
-  "are ", "all ", "ain", "and", "at ",
-  "ast", "an", "at", "ble", "ba",
-  "be", "bo", "can ", "che", "com",
-  "ck", "des", "di", "do", "en ",
-  "er ", "ear", "ent", "ed ", "en",
-  "er", "ev", "for", "fro", "give ",
-  "get", "go", "have", "has", "her",
-  "hi", "ha", "ight ", "ing ", "in",
-  "is", "it", "just", "know", "ly ",
-  "la", "lo", "man", "ma", "me",
-  "mu", "n't ", "non", "not", "open",
-  "ound", "out ", "of", "on", "or",
-  "per", "ple", "pow", "pro", "re ",
-  "re", "some", "se", "sh", "so",
-  "st", "ter ", "thin", "ter", "tha",
-  "the", "thi", "to", "tr", "up",
-  "ver", "with", "wa", "we", "wh",
-  "wi", "you", "Her", "Tha", "The",
-  "Thi", "You",
-};
-
-// US command names (25 commands)
-static const char *kText_CommandNames_US[] = {
-  "NextPic", "Choose", "Item", "Name", "Window", "Number",
-  "Position", "ScrollSpd", "Selchg", "Unused_Crash", "Choose3",
-  "Choose2", "Scroll", "1", "2", "3", "Color",
-  "Wait", "Sound", "Speed", "Unused_Mark", "Unused_Mark2", "Unused_Clear",
-  "Waitkey", "Unused_Mark3",
-};
-
-// US command lengths (number of bytes: 1 or 2)
-static const uint8_t kText_CommandLengths_US[] = {
-  1, 1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 1, 1,
-};
-
-#define DICT_BASE_ENC_US 0x98  // Dictionary entries start at 0x98
-
-// Encode dictionary strings using alphabet mapping
-// Returns array of bytearrays (caller must free)
-static uint8_t **EncodeDictionary_US(size_t *out_count) {
-  const size_t dict_count = sizeof(kTextDictionary_US) / sizeof(kTextDictionary_US[0]);
-  const size_t alphabet_size = sizeof(kTextAlphabet_US) / sizeof(kTextAlphabet_US[0]);
-
-  // Allocate array of pointers
-  uint8_t **result = calloc(dict_count, sizeof(uint8_t *));
-  if (!result) return NULL;
+// Encode dictionary strings using alphabet mapping (generic version)
+// Returns array of bytearrays (caller must free each entry and the array)
+// Also returns array of lengths in out_lens (caller must free)
+static uint8_t **EncodeDictionary_Generic(const LanguageConfig *config, size_t *out_count, size_t **out_lens) {
+  // Allocate array of pointers and lengths
+  uint8_t **result = calloc(config->dictionary_size, sizeof(uint8_t *));
+  size_t *lens = calloc(config->dictionary_size, sizeof(size_t));
+  if (!result || !lens) {
+    free(result);
+    free(lens);
+    return NULL;
+  }
 
   // Encode each dictionary entry
-  for (size_t i = 0; i < dict_count; i++) {
-    const char *dict_str = kTextDictionary_US[i];
+  for (size_t i = 0; i < config->dictionary_size; i++) {
+    const char *dict_str = config->dictionary[i];
     size_t dict_len = strlen(dict_str);
 
-    // Allocate bytearray for this entry
-    result[i] = malloc(dict_len + 1);  // +1 for null terminator
+    // Allocate bytearray for this entry (may be shorter than dict_len due to multi-byte chars)
+    result[i] = malloc(dict_len + 1);
     if (!result[i]) {
       // Cleanup on failure
       for (size_t j = 0; j < i; j++) free(result[j]);
       free(result);
+      free(lens);
       return NULL;
     }
 
     // Encode each character using alphabet
-    for (size_t j = 0; j < dict_len; j++) {
-      char target[2] = {dict_str[j], '\0'};
+    size_t out_pos = 0;
+    for (size_t j = 0; j < dict_len; ) {
       int found = -1;
+      size_t match_len = 0;
 
-      // Find character in alphabet
-      for (size_t k = 0; k < alphabet_size; k++) {
-        if (strcmp(target, kTextAlphabet_US[k]) == 0) {
-          found = k;
-          break;
+      // Try to match multi-byte UTF-8 characters first
+      // Check each alphabet entry for a match at this position
+      // NOTE: For duplicate entries (like two spaces in SV alphabet), use the LAST
+      // match to match Python's behavior (dict comprehension takes last key)
+      for (size_t k = 0; k < config->alphabet_size; k++) {
+        size_t alpha_len = strlen(config->alphabet[k]);
+        if (alpha_len > 0 && j + alpha_len <= dict_len &&
+            strncmp(&dict_str[j], config->alphabet[k], alpha_len) == 0) {
+          if (alpha_len >= match_len) {  // >= instead of > to take last match for duplicates
+            found = k;
+            match_len = alpha_len;
+          }
         }
       }
 
       if (found < 0) {
-        LogError("Character '%c' not found in alphabet", dict_str[j]);
-        for (size_t j = 0; j <= i; j++) free(result[j]);
+        LogError("Character '%c' (0x%02x) at position %zu not found in alphabet for dictionary entry %zu",
+                 dict_str[j], (unsigned char)dict_str[j], j, i);
+        for (size_t k = 0; k <= i; k++) free(result[k]);
         free(result);
+        free(lens);
         return NULL;
       }
 
-      result[i][j] = (uint8_t)found;
+      result[i][out_pos++] = (uint8_t)found;
+      j += match_len;
     }
-    result[i][dict_len] = 0;  // Null terminate
+    lens[i] = out_pos;  // Store actual encoded length
   }
 
-  *out_count = dict_count;
+  *out_count = config->dictionary_size;
+  *out_lens = lens;
   return result;
 }
 
-// Helper: Encode a command using org_encoder (US format)
-// Returns number of bytes written to out
-static int EncodeCommand_US(const char *cmd, int param, uint8_t *out) {
-  const size_t cmd_count = sizeof(kText_CommandNames_US) / sizeof(kText_CommandNames_US[0]);
+// Helper: Encode a command using the "new" EU format (DE, FR, FR-C, PT)
+// Returns number of bytes written to out, or 0 on error, or -1 for "no output"
+static int EncodeCommand_New(const char *cmd, int param, uint8_t *out) {
+  // Simple commands (no param expected)
+  if (strcmp(cmd, "Scroll") == 0) { out[0] = 0x80; return 1; }
+  if (strcmp(cmd, "Waitkey") == 0) { out[0] = 0x81; return 1; }
+  if (strcmp(cmd, "1") == 0) { out[0] = 0x82; return 1; }
+  if (strcmp(cmd, "2") == 0) { out[0] = 0x83; return 1; }
+  if (strcmp(cmd, "3") == 0) { out[0] = 0x84; return 1; }
+  if (strcmp(cmd, "Name") == 0) { out[0] = 0x85; return 1; }
 
+  // Two-byte commands (0x87 + computed param)
+  if (strcmp(cmd, "Wait") == 0 && param >= 0 && param < 16) {
+    out[0] = 0x87; out[1] = param + 0x00; return 2;
+  }
+  if (strcmp(cmd, "Color") == 0 && param >= 0 && param < 16) {
+    out[0] = 0x87; out[1] = param + 0x10; return 2;
+  }
+  if (strcmp(cmd, "Number") == 0 && param >= 0 && param < 16) {
+    out[0] = 0x87; out[1] = param + 0x20; return 2;
+  }
+  if (strcmp(cmd, "Speed") == 0 && param >= 0 && param < 16) {
+    out[0] = 0x87; out[1] = param + 0x30; return 2;
+  }
+  if (strcmp(cmd, "Sound") == 0) {
+    if (param == 45) { out[0] = 0x87; out[1] = 0x40; return 2; }
+    if (param == 64) { return -1; }  // No output
+  }
+  if (strcmp(cmd, "Choose") == 0) { out[0] = 0x87; out[1] = 0x80; return 2; }
+  if (strcmp(cmd, "Choose2") == 0) { out[0] = 0x87; out[1] = 0x81; return 2; }
+  if (strcmp(cmd, "Choose3") == 0) { out[0] = 0x87; out[1] = 0x82; return 2; }
+  if (strcmp(cmd, "Selchg") == 0) { out[0] = 0x87; out[1] = 0x83; return 2; }
+  if (strcmp(cmd, "Item") == 0) { out[0] = 0x87; out[1] = 0x84; return 2; }
+  if (strcmp(cmd, "NextPic") == 0) { out[0] = 0x87; out[1] = 0x85; return 2; }
+  if (strcmp(cmd, "Window") == 0) {
+    if (param == 0) { return -1; }  // No output
+    if (param == 2) { out[0] = 0x87; out[1] = 0x86; return 2; }
+  }
+  if (strcmp(cmd, "Position") == 0) {
+    if (param == 0) { out[0] = 0x87; out[1] = 0x87; return 2; }
+    if (param == 1) { out[0] = 0x87; out[1] = 0x88; return 2; }
+  }
+  if (strcmp(cmd, "ScrollSpd") == 0 && param == 0) { return -1; }  // No output
+
+  LogError("Unknown command for new encoder: %s (param=%d)", cmd, param);
+  return 0;
+}
+
+// Helper: Encode a command using the "org" original US format
+// Returns number of bytes written to out, or 0 on error
+static int EncodeCommand_Org(const char *cmd, int param, uint8_t *out, const LanguageConfig *config) {
   // Find command in list
   int cmd_index = -1;
-  for (size_t i = 0; i < cmd_count; i++) {
-    if (strcmp(cmd, kText_CommandNames_US[i]) == 0) {
+  for (size_t i = 0; i < config->command_count; i++) {
+    if (strcmp(cmd, config->command_names[i]) == 0) {
       cmd_index = i;
       break;
     }
@@ -1039,7 +1062,7 @@ static int EncodeCommand_US(const char *cmd, int param, uint8_t *out) {
   }
 
   // Verify parameter matches expected length
-  int expected_len = kText_CommandLengths_US[cmd_index];
+  int expected_len = config->command_lengths[cmd_index];
   int has_param = (param >= 0) ? 2 : 1;
 
   if (expected_len != has_param) {
@@ -1047,8 +1070,8 @@ static int EncodeCommand_US(const char *cmd, int param, uint8_t *out) {
     return 0;
   }
 
-  // Encode: cmd_index + 0x67, with optional parameter
-  out[0] = cmd_index + 0x67;
+  // Encode: cmd_index + COMMAND_START, with optional parameter
+  out[0] = cmd_index + config->COMMAND_START;
   if (param >= 0) {
     out[1] = param;
     return 2;
@@ -1056,12 +1079,19 @@ static int EncodeCommand_US(const char *cmd, int param, uint8_t *out) {
   return 1;
 }
 
-// Compress a single dialogue string using greedy dictionary matching
-// Returns compressed bytearray (caller must free)
-static uint8_t *CompressString_US(const char *str, size_t *out_len) {
-  const size_t alphabet_size = sizeof(kTextAlphabet_US) / sizeof(kTextAlphabet_US[0]);
-  const size_t dict_count = sizeof(kTextDictionary_US) / sizeof(kTextDictionary_US[0]);
+// Helper: Encode a command using the appropriate encoder for the language
+// Returns number of bytes written to out, or 0 on error, or -1 for "no output"
+static int EncodeCommand_Generic(const char *cmd, int param, uint8_t *out, const LanguageConfig *config) {
+  if (config->uses_new_format) {
+    return EncodeCommand_New(cmd, param, out);
+  } else {
+    return EncodeCommand_Org(cmd, param, out, config);
+  }
+}
 
+// Compress a single dialogue string using greedy dictionary matching (generic version)
+// Returns compressed bytearray (caller must free), or NULL on error
+static uint8_t *CompressString_Generic(const char *str, const LanguageConfig *config, size_t *out_len) {
   // Build reverse lookup: first_char -> list of (dict_entry, dict_index)
   struct DictEntry {
     const char *str;
@@ -1071,8 +1101,8 @@ static uint8_t *CompressString_US(const char *str, size_t *out_len) {
 
   struct DictEntry *reverse[256] = {0};  // Hash by first character
 
-  for (size_t i = 0; i < dict_count; i++) {
-    const char *dict_str = kTextDictionary_US[i];
+  for (size_t i = 0; i < config->dictionary_size; i++) {
+    const char *dict_str = config->dictionary[i];
     unsigned char first_char = dict_str[0];
 
     struct DictEntry *entry = malloc(sizeof(struct DictEntry));
@@ -1083,7 +1113,7 @@ static uint8_t *CompressString_US(const char *str, size_t *out_len) {
   }
 
   // Compress string using greedy matching
-  size_t capacity = strlen(str) * 2;  // Overestimate
+  size_t capacity = strlen(str) * 2 + 100;  // Overestimate
   uint8_t *result = malloc(capacity);
   size_t result_len = 0;
 
@@ -1111,7 +1141,7 @@ static uint8_t *CompressString_US(const char *str, size_t *out_len) {
       }
 
       if (best_index >= 0) {
-        result[result_len++] = best_index + DICT_BASE_ENC_US;
+        result[result_len++] = best_index + config->DICT_BASE_ENC;
         i += best_len;
         matched = 1;
       }
@@ -1125,6 +1155,7 @@ static uint8_t *CompressString_US(const char *str, size_t *out_len) {
         if (close_bracket) {
           size_t cmd_len = close_bracket - remaining - 1;  // Length of text between [ and ]
           char cmd_buf[64];
+          if (cmd_len >= sizeof(cmd_buf)) cmd_len = sizeof(cmd_buf) - 1;
           strncpy(cmd_buf, remaining + 1, cmd_len);
           cmd_buf[cmd_len] = '\0';
 
@@ -1132,10 +1163,10 @@ static uint8_t *CompressString_US(const char *str, size_t *out_len) {
           char full_cmd[66];
           snprintf(full_cmd, sizeof(full_cmd), "[%s]", cmd_buf);
           int alphabet_index = -1;
-          for (size_t k = 0; k < alphabet_size; k++) {
-            if (strcmp(full_cmd, kTextAlphabet_US[k]) == 0) {
+          for (size_t k = 0; k < config->alphabet_size; k++) {
+            if (strcmp(full_cmd, config->alphabet[k]) == 0) {
               alphabet_index = k;
-              break;
+              // Don't break - continue to find last match for duplicates
             }
           }
 
@@ -1154,64 +1185,54 @@ static uint8_t *CompressString_US(const char *str, size_t *out_len) {
             }
 
             uint8_t cmd_bytes[2];
-            int cmd_result_len = EncodeCommand_US(cmd_buf, param, cmd_bytes);
+            int cmd_result_len = EncodeCommand_Generic(cmd_buf, param, cmd_bytes, config);
             if (cmd_result_len > 0) {
               memcpy(&result[result_len], cmd_bytes, cmd_result_len);
               result_len += cmd_result_len;
               i += cmd_len + 2;  // Skip [...]
+            } else if (cmd_result_len == -1) {
+              // No output for this command (e.g., [Window 0], [Sound 64])
+              i += cmd_len + 2;  // Skip [...] but don't add any bytes
             } else {
               LogError("Failed to encode command: %s", cmd_buf);
-              free(result);
-              for (int j = 0; j < 256; j++) {
-                struct DictEntry *entry = reverse[j];
-                while (entry) {
-                  struct DictEntry *next = entry->next;
-                  free(entry);
-                  entry = next;
-                }
-              }
-              *out_len = 0;
-              return NULL;
+              goto cleanup_error;
             }
           }
           matched = 1;
         }
       }
 
-      // If still no match, try single character from alphabet
+      // If still no match, try single character or multi-byte from alphabet
       if (!matched) {
-        char single[2] = {remaining[0], '\0'};
         int alphabet_index = -1;
+        size_t best_len = 0;
 
-        for (size_t k = 0; k < alphabet_size; k++) {
-          if (strcmp(single, kTextAlphabet_US[k]) == 0) {
-            alphabet_index = k;
-            break;
+        // Try all alphabet entries, prefer longest match
+        // NOTE: For duplicates (like two spaces), use >= to take the last match
+        for (size_t k = 0; k < config->alphabet_size; k++) {
+          size_t alpha_len = strlen(config->alphabet[k]);
+          if (alpha_len > 0 && alpha_len <= (str_len - i) &&
+              strncmp(remaining, config->alphabet[k], alpha_len) == 0) {
+            if (alpha_len >= best_len) {  // >= to match Python's behavior for duplicates
+              alphabet_index = k;
+              best_len = alpha_len;
+            }
           }
         }
 
         if (alphabet_index >= 0) {
           result[result_len++] = alphabet_index;
-          i++;
+          i += best_len;
         } else {
-          LogError("Character not found in alphabet: '%c' (0x%02x)", remaining[0], (unsigned char)remaining[0]);
-          free(result);
-          for (int j = 0; j < 256; j++) {
-            struct DictEntry *entry = reverse[j];
-            while (entry) {
-              struct DictEntry *next = entry->next;
-              free(entry);
-              entry = next;
-            }
-          }
-          *out_len = 0;
-          return NULL;
+          LogError("Character not found in alphabet: '%c' (0x%02x) at position %zu",
+                   remaining[0], (unsigned char)remaining[0], i);
+          goto cleanup_error;
         }
       }
     }
   }
 
-  // Cleanup reverse lookup
+  // Cleanup reverse lookup and return success
   for (int j = 0; j < 256; j++) {
     struct DictEntry *entry = reverse[j];
     while (entry) {
@@ -1223,6 +1244,19 @@ static uint8_t *CompressString_US(const char *str, size_t *out_len) {
 
   *out_len = result_len;
   return result;
+
+cleanup_error:
+  free(result);
+  for (int j = 0; j < 256; j++) {
+    struct DictEntry *entry = reverse[j];
+    while (entry) {
+      struct DictEntry *next = entry->next;
+      free(entry);
+      entry = next;
+    }
+  }
+  *out_len = 0;
+  return NULL;
 }
 
 // Pack multiple byte arrays with offset table (matching Python's pack_arrays exactly)
@@ -1236,17 +1270,21 @@ static uint8_t *PackArrays(uint8_t **arrays, size_t *array_lens, size_t count, s
   }
 
   // Calculate cumulative offsets
+  // Python: offs is cumulative of first n-1 arrays, checked BEFORE adding last array
   size_t *offsets = malloc((count - 1) * sizeof(size_t));
-  size_t total_data_size = 0;
+  size_t offs = 0;  // Cumulative offset (excludes last array, matches Python)
 
   for (size_t i = 0; i < count - 1; i++) {
-    total_data_size += array_lens[i];
-    offsets[i] = total_data_size;
+    offs += array_lens[i];
+    offsets[i] = offs;
   }
-  total_data_size += array_lens[count - 1];  // Add last array size
 
   // Determine format: uint16 or uint32
-  int use_uint16 = (total_data_size < 65536 && count <= 8192);
+  // Python checks offs (cumulative of first n-1) BEFORE adding last array
+  int use_uint16 = (offs < 65536 && count <= 8192);
+
+  // Now add last array for total size calculation
+  size_t total_data_size = offs + array_lens[count - 1];
   size_t offset_size = use_uint16 ? 2 : 4;
   size_t offset_table_size = (count - 1) * offset_size;
   size_t trailer_size = 2;  // Always uint16
@@ -1293,68 +1331,65 @@ static uint8_t *PackArrays(uint8_t **arrays, size_t *array_lens, size_t count, s
   return result;
 }
 
-// Extract all dialogue assets (kDialogue, kDialogueFont, kDialogueMap) for US language
-// Replaces Python script /tmp/extract_dialogue.py
-void ExtractDialogueAssets(AssetBuilder *builder) {
-  const char *lang = "us";
-
-  printf("  Extracting dialogue (%s language)...\n", lang);
-
-  // 1. Extract font from PNG
-  uint8_t *font_data = NULL, *font_width = NULL;
-  size_t font_width_count = 0;
-
-  if (!ExtractDialogueFontFromPNG(lang, &font_data, &font_width, &font_width_count)) {
-    LogError("Failed to extract dialogue font from PNG");
-    return;
+// Helper: Get dialogue filename for a language
+static char* GetDialogueFilename(const char *lang) {
+  char *filename = malloc(64);
+  if (strcmp(lang, "us") == 0) {
+    snprintf(filename, 64, "assets/dialogue.txt");
+  } else {
+    // Replace '-' with '_' in language code for filename
+    char lang_clean[16];
+    strncpy(lang_clean, lang, sizeof(lang_clean) - 1);
+    lang_clean[sizeof(lang_clean) - 1] = '\0';
+    for (char *p = lang_clean; *p; p++) {
+      if (*p == '-') *p = '_';
+    }
+    snprintf(filename, 64, "assets/dialogue_%s.txt", lang_clean);
   }
+  return filename;
+}
 
-  // 2. Encode dictionary
+// Helper: Process one language's dialogue data
+// Returns inner pack (dict + dialogue) or NULL on error
+static uint8_t *ProcessLanguageDialogue(const char *lang, const LanguageConfig *config, size_t *out_len) {
+  // Get dialogue filename
+  char *dialogue_filename = GetDialogueFilename(lang);
+
+  // Load dialogue file
+  size_t dialogue_size;
+  char *dialogue_file_data = (char *)LoadAssetData(dialogue_filename, &dialogue_size);
+  if (!dialogue_file_data) {
+    LogError("Failed to read %s", dialogue_filename);
+    free(dialogue_filename);
+    return NULL;
+  }
+  free(dialogue_filename);
+
+  // Encode dictionary
   size_t dict_count = 0;
-  uint8_t **dict_data = EncodeDictionary_US(&dict_count);
+  size_t *dict_lens = NULL;
+  uint8_t **dict_data = EncodeDictionary_Generic(config, &dict_count, &dict_lens);
   if (!dict_data) {
-    LogError("Failed to encode dictionary");
-    free(font_data);
-    free(font_width);
-    return;
+    LogError("Failed to encode dictionary for %s", lang);
+    free(dialogue_file_data);
+    return NULL;
   }
 
-  // 3. Pack dictionary
-  size_t *dict_lens = malloc(dict_count * sizeof(size_t));
-  for (size_t i = 0; i < dict_count; i++) {
-    dict_lens[i] = strlen((char *)dict_data[i]);
-  }
-
+  // Pack dictionary (dict_lens already populated by EncodeDictionary_Generic)
   size_t dict_packed_len = 0;
   uint8_t *dict_packed = PackArrays(dict_data, dict_lens, dict_count, &dict_packed_len);
   free(dict_lens);
 
-  // Free dict_data arrays
-  for (size_t i = 0; i < dict_count; i++) {
-    free(dict_data[i]);
-  }
+  for (size_t i = 0; i < dict_count; i++) free(dict_data[i]);
   free(dict_data);
 
   if (!dict_packed) {
-    LogError("Failed to pack dictionary");
-    free(font_data);
-    free(font_width);
-    return;
+    LogError("Failed to pack dictionary for %s", lang);
+    free(dialogue_file_data);
+    return NULL;
   }
 
-  // 4. Load and compress dialogue strings
-  size_t dialogue_size;
-  char *dialogue_file_data = (char *)LoadAssetData("assets/dialogue.txt", &dialogue_size);
-  if (!dialogue_file_data) {
-    LogError("Failed to read assets/dialogue.txt");
-    free(dict_packed);
-    free(font_data);
-    free(font_width);
-    return;
-  }
-
-  // Parse dialogue.txt (format: "ID: text\n")
-  // Count lines first
+  // Count lines
   size_t line_count = 0;
   for (size_t i = 0; i < dialogue_size; i++) {
     if (dialogue_file_data[i] == '\n') line_count++;
@@ -1371,171 +1406,263 @@ void ExtractDialogueAssets(AssetBuilder *builder) {
   for (size_t i = 0; i <= dialogue_size; i++) {
     if (i == dialogue_size || dialogue_file_data[i] == '\n') {
       if (i > 0 && line_start < &dialogue_file_data[i]) {
-        // Extract line
         size_t line_len = &dialogue_file_data[i] - line_start;
         char *line = malloc(line_len + 1);
         memcpy(line, line_start, line_len);
         line[line_len] = '\0';
 
-        // Find ": " separator
         char *colon = strstr(line, ": ");
         if (colon) {
-          char *text = colon + 2;  // Skip ": "
-
-          // Compress this dialogue string
+          char *text = colon + 2;
           size_t compressed_len = 0;
-          dialogue_compressed[line_idx] = CompressString_US(text, &compressed_len);
+          dialogue_compressed[line_idx] = CompressString_Generic(text, config, &compressed_len);
           dialogue_lens[line_idx] = compressed_len;
 
           if (!dialogue_compressed[line_idx]) {
-            LogError("Failed to compress dialogue line %zu: %s", line_idx, text);
+            LogError("Failed to compress dialogue line %zu for %s", line_idx, lang);
             free(line);
-            // Cleanup
             for (size_t j = 0; j < line_idx; j++) free(dialogue_compressed[j]);
             free(dialogue_compressed);
             free(dialogue_lens);
             free(dialogue_file_data);
             free(dict_packed);
-            free(font_data);
-            free(font_width);
-            return;
+            return NULL;
           }
-
           line_idx++;
         }
-
         free(line);
       }
-
       line_start = &dialogue_file_data[i + 1];
     }
   }
 
   free(dialogue_file_data);
 
-  // 5. Pack dialogue strings
+  // Pack dialogue strings
   size_t dialogue_packed_len = 0;
   uint8_t *dialogue_packed = PackArrays(dialogue_compressed, dialogue_lens, line_idx, &dialogue_packed_len);
 
-  // Free compressed strings
-  for (size_t i = 0; i < line_idx; i++) {
-    free(dialogue_compressed[i]);
-  }
+  for (size_t i = 0; i < line_idx; i++) free(dialogue_compressed[i]);
   free(dialogue_compressed);
   free(dialogue_lens);
 
   if (!dialogue_packed) {
-    LogError("Failed to pack dialogue");
+    LogError("Failed to pack dialogue for %s", lang);
     free(dict_packed);
-    free(font_data);
-    free(font_width);
-    return;
+    return NULL;
   }
 
-  // 6. Create kDialogue (double-packed: inner = dict + dialogue, outer = language wrapper)
-  uint8_t *inner_dialogue_arrays[] = {dict_packed, dialogue_packed};
-  size_t inner_dialogue_lens[] = {dict_packed_len, dialogue_packed_len};
+  // Create inner pack (dict + dialogue)
+  uint8_t *inner_arrays[] = {dict_packed, dialogue_packed};
+  size_t inner_lens[] = {dict_packed_len, dialogue_packed_len};
 
-  size_t inner_dialogue_len = 0;
-  uint8_t *inner_dialogue = PackArrays(inner_dialogue_arrays, inner_dialogue_lens, 2, &inner_dialogue_len);
+  size_t inner_len = 0;
+  uint8_t *inner = PackArrays(inner_arrays, inner_lens, 2, &inner_len);
 
   free(dict_packed);
   free(dialogue_packed);
 
-  if (!inner_dialogue) {
-    LogError("Failed to pack inner dialogue");
-    free(font_data);
-    free(font_width);
-    return;
+  *out_len = inner_len;
+  return inner;
+}
+
+// Extract all dialogue assets with multi-language support
+// languages_arg: comma-separated list like "de,fr,es" (US is always included first)
+void ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
+  // Parse languages - always start with "us"
+  const char *lang_list[16];
+  size_t lang_count = 1;
+  lang_list[0] = "us";
+
+  // Parse additional languages from comma-separated list
+  char *languages_copy = NULL;
+  if (languages_arg && strlen(languages_arg) > 0) {
+    languages_copy = strdup(languages_arg);
+    char *token = strtok(languages_copy, ",");
+    while (token && lang_count < 16) {
+      // Skip if already in list (e.g., "us" specified again)
+      bool duplicate = false;
+      for (size_t i = 0; i < lang_count; i++) {
+        if (strcmp(lang_list[i], token) == 0) {
+          duplicate = true;
+          break;
+        }
+      }
+
+      if (!duplicate) {
+        // Validate language
+        const LanguageConfig *config = TextDecode_GetLanguageConfig(token);
+        if (!config) {
+          LogError("Unknown language code: %s", token);
+          free(languages_copy);
+          return;
+        }
+
+        // Check dialogue file exists
+        char *dialogue_filename = GetDialogueFilename(token);
+        size_t dummy_size;
+        char *test_data = (char *)LoadAssetData(dialogue_filename, &dummy_size);
+        if (!test_data) {
+          LogError("Dialogue file not found: %s (extract with --extract-dialogue first)", dialogue_filename);
+          free(dialogue_filename);
+          free(languages_copy);
+          return;
+        }
+        free(test_data);
+        free(dialogue_filename);
+
+        lang_list[lang_count++] = token;
+      }
+      token = strtok(NULL, ",");
+    }
   }
 
-  // Outer pack (single language)
-  uint8_t *outer_dialogue_arrays[] = {inner_dialogue};
-  size_t outer_dialogue_lens[] = {inner_dialogue_len};
+  printf("  Extracting dialogue (%zu language%s: ", lang_count, lang_count > 1 ? "s" : "");
+  for (size_t i = 0; i < lang_count; i++) {
+    printf("%s%s", lang_list[i], i < lang_count - 1 ? ", " : "");
+  }
+  printf(")...\n");
 
+  // Allocate arrays for all languages
+  uint8_t **all_dialogue = malloc(lang_count * sizeof(uint8_t*));
+  size_t *all_dialogue_lens = malloc(lang_count * sizeof(size_t));
+  uint8_t **all_fonts = malloc(lang_count * sizeof(uint8_t*));
+  size_t *all_font_lens = malloc(lang_count * sizeof(size_t));
+  uint8_t **all_maps = malloc(lang_count * sizeof(uint8_t*));
+  size_t *all_map_lens = malloc(lang_count * sizeof(size_t));
+
+  // Process each language
+  for (size_t i = 0; i < lang_count; i++) {
+    const char *lang = lang_list[i];
+    const LanguageConfig *config = TextDecode_GetLanguageConfig(lang);
+
+    printf("    Processing %s (alphabet_size=%zu, dict_size=%zu)...\n",
+           lang, config->alphabet_size, config->dictionary_size);
+
+    // 1. Process dialogue (dict + strings)
+    all_dialogue[i] = ProcessLanguageDialogue(lang, config, &all_dialogue_lens[i]);
+    if (!all_dialogue[i]) {
+      LogError("Failed to process dialogue for %s", lang);
+      // Cleanup and return
+      for (size_t j = 0; j < i; j++) {
+        free(all_dialogue[j]);
+        free(all_fonts[j]);
+        free(all_maps[j]);
+      }
+      free(all_dialogue); free(all_dialogue_lens);
+      free(all_fonts); free(all_font_lens);
+      free(all_maps); free(all_map_lens);
+      if (languages_copy) free(languages_copy);
+      return;
+    }
+
+    // 2. Extract font
+    uint8_t *font_data = NULL, *font_width = NULL;
+    size_t font_width_count = 0;
+
+    if (!ExtractDialogueFontFromPNG(lang, &font_data, &font_width, &font_width_count)) {
+      LogError("Failed to extract dialogue font for %s", lang);
+      for (size_t j = 0; j <= i; j++) free(all_dialogue[j]);
+      for (size_t j = 0; j < i; j++) { free(all_fonts[j]); free(all_maps[j]); }
+      free(all_dialogue); free(all_dialogue_lens);
+      free(all_fonts); free(all_font_lens);
+      free(all_maps); free(all_map_lens);
+      if (languages_copy) free(languages_copy);
+      return;
+    }
+
+    // Pack font (inner: font_data + font_width)
+    uint8_t *inner_font_arrays[] = {font_data, font_width};
+    size_t inner_font_lens[] = {256 * 16, font_width_count};
+    all_fonts[i] = PackArrays(inner_font_arrays, inner_font_lens, 2, &all_font_lens[i]);
+    free(font_data);
+    free(font_width);
+
+    if (!all_fonts[i]) {
+      LogError("Failed to pack font for %s", lang);
+      for (size_t j = 0; j <= i; j++) free(all_dialogue[j]);
+      for (size_t j = 0; j < i; j++) { free(all_fonts[j]); free(all_maps[j]); }
+      free(all_dialogue); free(all_dialogue_lens);
+      free(all_fonts); free(all_font_lens);
+      free(all_maps); free(all_map_lens);
+      if (languages_copy) free(languages_copy);
+      return;
+    }
+
+    // 3. Create map entry (lang_code + flags)
+    // Store original language code (including hyphens) - matches Python behavior
+    uint8_t lang_bytes[16];
+    size_t lang_bytes_len = strlen(lang);
+    memcpy(lang_bytes, lang, lang_bytes_len);
+
+    // Flags: [index, index, flags]
+    // Bit 0: uses_new_format (EU encoder)
+    // Bit 1: non-US language marker
+    uint8_t flags = 0;
+    if (config->uses_new_format) flags |= 0x01;
+    if (i != 0) flags |= 0x02;
+
+    uint8_t flags_bytes[] = {(uint8_t)i, (uint8_t)i, flags};
+
+    uint8_t *inner_map_arrays[] = {lang_bytes, flags_bytes};
+    size_t inner_map_lens[] = {lang_bytes_len, 3};
+    all_maps[i] = PackArrays(inner_map_arrays, inner_map_lens, 2, &all_map_lens[i]);
+
+    if (!all_maps[i]) {
+      LogError("Failed to pack map for %s", lang);
+      for (size_t j = 0; j <= i; j++) { free(all_dialogue[j]); free(all_fonts[j]); }
+      for (size_t j = 0; j < i; j++) free(all_maps[j]);
+      free(all_dialogue); free(all_dialogue_lens);
+      free(all_fonts); free(all_font_lens);
+      free(all_maps); free(all_map_lens);
+      if (languages_copy) free(languages_copy);
+      return;
+    }
+  }
+
+  // Create outer packs with all languages
   size_t kDialogue_len = 0;
-  uint8_t *kDialogue = PackArrays(outer_dialogue_arrays, outer_dialogue_lens, 1, &kDialogue_len);
+  uint8_t *kDialogue = PackArrays(all_dialogue, all_dialogue_lens, lang_count, &kDialogue_len);
 
-  free(inner_dialogue);
+  size_t kDialogueFont_len = 0;
+  uint8_t *kDialogueFont = PackArrays(all_fonts, all_font_lens, lang_count, &kDialogueFont_len);
 
-  if (!kDialogue) {
-    LogError("Failed to pack kDialogue");
-    free(font_data);
-    free(font_width);
+  size_t kDialogueMap_len = 0;
+  uint8_t *kDialogueMap = PackArrays(all_maps, all_map_lens, lang_count, &kDialogueMap_len);
+
+  // Cleanup per-language data
+  for (size_t i = 0; i < lang_count; i++) {
+    free(all_dialogue[i]);
+    free(all_fonts[i]);
+    free(all_maps[i]);
+  }
+  free(all_dialogue); free(all_dialogue_lens);
+  free(all_fonts); free(all_font_lens);
+  free(all_maps); free(all_map_lens);
+  if (languages_copy) free(languages_copy);
+
+  if (!kDialogue || !kDialogueFont || !kDialogueMap) {
+    LogError("Failed to create outer packs");
+    free(kDialogue);
+    free(kDialogueFont);
+    free(kDialogueMap);
     return;
   }
 
+  // Add assets
   AssetBuilder_AddAsset(builder, "kDialogue", ASSET_TYPE_UINT8, kDialogue, kDialogue_len);
   printf("    Added kDialogue (%zu bytes)\n", kDialogue_len);
   free(kDialogue);
-
-  // 7. Create kDialogueFont (double-packed: inner = font_data + font_width, outer = language wrapper)
-  uint8_t *inner_font_arrays[] = {font_data, font_width};
-  size_t inner_font_lens[] = {256 * 16, font_width_count};  // 256 tiles * 16 bytes/tile
-
-  size_t inner_font_len = 0;
-  uint8_t *inner_font = PackArrays(inner_font_arrays, inner_font_lens, 2, &inner_font_len);
-
-  free(font_data);
-  free(font_width);
-
-  if (!inner_font) {
-    LogError("Failed to pack inner font");
-    return;
-  }
-
-  // Outer pack (single language)
-  uint8_t *outer_font_arrays[] = {inner_font};
-  size_t outer_font_lens[] = {inner_font_len};
-
-  size_t kDialogueFont_len = 0;
-  uint8_t *kDialogueFont = PackArrays(outer_font_arrays, outer_font_lens, 1, &kDialogueFont_len);
-
-  free(inner_font);
-
-  if (!kDialogueFont) {
-    LogError("Failed to pack kDialogueFont");
-    return;
-  }
 
   AssetBuilder_AddAsset(builder, "kDialogueFont", ASSET_TYPE_UINT8, kDialogueFont, kDialogueFont_len);
   printf("    Added kDialogueFont (%zu bytes)\n", kDialogueFont_len);
   free(kDialogueFont);
 
-  // 8. Create kDialogueMap (double-packed: inner = lang + flags, outer = language wrapper)
-  uint8_t lang_bytes[] = {'u', 's'};  // 2 bytes
-  uint8_t flags_bytes[] = {0, 0, 0};  // 3 bytes (i, i, flags where i=0 for US, flags=0)
-
-  uint8_t *inner_map_arrays[] = {lang_bytes, flags_bytes};
-  size_t inner_map_lens[] = {2, 3};
-
-  size_t inner_map_len = 0;
-  uint8_t *inner_map = PackArrays(inner_map_arrays, inner_map_lens, 2, &inner_map_len);
-
-  if (!inner_map) {
-    LogError("Failed to pack inner map");
-    return;
-  }
-
-  // Outer pack (single language)
-  uint8_t *outer_map_arrays[] = {inner_map};
-  size_t outer_map_lens[] = {inner_map_len};
-
-  size_t kDialogueMap_len = 0;
-  uint8_t *kDialogueMap = PackArrays(outer_map_arrays, outer_map_lens, 1, &kDialogueMap_len);
-
-  free(inner_map);
-
-  if (!kDialogueMap) {
-    LogError("Failed to pack kDialogueMap");
-    return;
-  }
-
   AssetBuilder_AddAsset(builder, "kDialogueMap", ASSET_TYPE_UINT8, kDialogueMap, kDialogueMap_len);
   printf("    Added kDialogueMap (%zu bytes)\n", kDialogueMap_len);
   free(kDialogueMap);
 
-  printf("  ✅ Dialogue complete: 3 assets\n");
+  printf("  Dialogue complete: 3 assets (%zu language%s)\n", lang_count, lang_count > 1 ? "s" : "");
 }
 
 static void TestLinkGraphics(void) {
@@ -3191,7 +3318,9 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
     } else if (i >= 64 && i < 160) {
       uint8_t ma = Overworld_GetMusicByte(header, "agahnim");
       music_sets2[i - 64] = ma;
-      if (map_is_small[i] == 0) {
+      // Python: awrite checks 'if area < 128' before expanding for large areas
+      // So areas 128-159 never expand to adjacent indices
+      if (i < 128 && map_is_small[i] == 0) {
         music_sets2[i - 63] = ma;
         music_sets2[i - 56] = ma;
         music_sets2[i - 55] = ma;
@@ -3853,13 +3982,16 @@ static void PrintHelp(void) {
   printf("USAGE:\n");
   printf("  zelda3_restool [OPTIONS]\n\n");
   printf("OPTIONS:\n");
-  printf("  --extract-from-rom <path>   Extract assets from ROM file\n");
+  printf("  --extract-from-rom <path>   Extract assets from ROM and compile (default)\n");
+  printf("  --no-compile                Skip asset compilation (extract only)\n");
+  printf("  --compile                   Compile assets to zelda3_assets.dat\n");
+  printf("  --languages <L1,L2,...>     Include additional languages (comma-separated)\n");
+  printf("                              Requires dialogue_<lang>.txt files to exist\n");
+  printf("  --extract-dialogue          Extract dialogue strings (separate mode)\n");
+  printf("  --language <code>           Language for dialogue extraction\n");
   printf("  --extract-graphics          Extract Link sprites (linksprite.png)\n");
   printf("  --extract-enemy-sheet <N>   Extract enemy tileset N (enemy_N.png)\n");
   printf("  --extract-overworld         Extract overworld data (160 areas)\n");
-  printf("  --compile                   Compile assets to zelda3_assets.dat\n");
-  printf("  --extract-dialogue          Extract dialogue strings\n");
-  printf("  --language <code>           Language for dialogue (de, fr, es, etc.)\n");
   printf("  --output <dir>              Output directory (default: current)\n");
   printf("  --verbose, -v               Verbose output\n");
   printf("  --test-yaml                 Test YAML parsing (dev only)\n");
@@ -3868,16 +4000,20 @@ static void PrintHelp(void) {
   printf("  --test-dungeon              Test dungeon sprites extraction vs Python\n");
   printf("  --help, -h                  Show this help\n");
   printf("  --version                   Show version\n\n");
+  printf("SUPPORTED LANGUAGES:\n");
+  printf("  us (default), de, fr, fr-c, en, es, pl, pt, nl, sv, redux, retrans-kal\n\n");
   printf("EXAMPLES:\n");
+  printf("  # Extract and compile assets (auto-compiles by default)\n");
+  printf("  zelda3_restool --extract-from-rom zelda3.sfc\n\n");
+  printf("  # Extract and compile with multiple languages\n");
+  printf("  zelda3_restool --extract-from-rom zelda3.sfc --languages de,fr\n\n");
+  printf("  # Extract only, skip compilation\n");
+  printf("  zelda3_restool --extract-from-rom zelda3.sfc --no-compile\n\n");
   printf("  # Extract Link sprites from USA ROM\n");
   printf("  zelda3_restool --extract-from-rom zelda3.sfc --extract-graphics\n\n");
-  printf("  # Extract enemy tileset 0\n");
-  printf("  zelda3_restool --extract-from-rom zelda3.sfc --extract-enemy-sheet 0\n\n");
-  printf("  # Extract overworld data\n");
-  printf("  zelda3_restool --extract-from-rom zelda3.sfc --extract-overworld\n\n");
-  printf("  # Extract with verbose output\n");
-  printf("  zelda3_restool -v --extract-from-rom zelda3.sfc --extract-graphics\n\n");
-  printf("  # Compile assets\n");
+  printf("  # Extract dialogue for German ROM\n");
+  printf("  zelda3_restool --extract-from-rom zelda3_de.sfc --extract-dialogue\n\n");
+  printf("  # Compile assets from existing extracted files\n");
   printf("  zelda3_restool --compile\n\n");
 }
 
@@ -3942,10 +4078,24 @@ static bool ParseArgs(int argc, char **argv, RestoolArgs *args) {
       args->test_link = true;
     } else if (strcmp(argv[i], "--test-dungeon") == 0) {
       args->test_dungeon = true;
+    } else if (strcmp(argv[i], "--no-compile") == 0) {
+      args->no_compile = true;
+    } else if (strcmp(argv[i], "--languages") == 0) {
+      if (i + 1 >= argc) {
+        LogError("--languages requires a comma-separated list of language codes");
+        return false;
+      }
+      args->languages = argv[++i];
     } else {
       LogError("Unknown option: %s", argv[i]);
       return false;
     }
+  }
+
+  // Auto-enable compilation when extracting from ROM (unless --no-compile)
+  if (args->extract_mode && !args->no_compile && !args->extract_dialogue &&
+      !args->extract_graphics && !args->extract_overworld && args->extract_enemy_sheet < 0) {
+    args->compile_mode = true;
   }
 
   // Validation
@@ -3996,10 +4146,11 @@ bool ExtractSoundBanks(AssetBuilder *builder) {
 }
 
 // Extract dialogue assets (pure C implementation - no Python dependency)
+// languages_arg: comma-separated list like "de,fr" (US is always included first), or NULL for US only
 // Returns true on success, false on error
-bool ExtractDialogue(AssetBuilder *builder) {
+bool ExtractDialogue(AssetBuilder *builder, const char *languages_arg) {
   // Call pure C implementation (replaces Python script)
-  ExtractDialogueAssets(builder);
+  ExtractDialogueAssets(builder, languages_arg);
   return true;
 }
 
@@ -4324,10 +4475,11 @@ int main(int argc, char **argv) {
     printf("  Extracting kEnemyDamageData (decompressed)...\n");
     DecompressedData *enemy_dmg = Snes_Decompress(rom, 0x83e800, true);
     if (enemy_dmg) {
+      size_t enemy_dmg_size = enemy_dmg->size;
       AssetBuilder_AddAsset(builder, "kEnemyDamageData", ASSET_TYPE_UINT8,
                             enemy_dmg->data, enemy_dmg->size);
       Snes_FreeDecompressed(enemy_dmg);
-      printf("    Added kEnemyDamageData (%zu bytes)\n", enemy_dmg->size);
+      printf("    Added kEnemyDamageData (%zu bytes)\n", enemy_dmg_size);
     }
 
     // 4. print_link_graphics() - 1 asset
@@ -4347,7 +4499,8 @@ int main(int argc, char **argv) {
     ExtractMiscAssets(rom, builder);
 
     // 9. print_dialogue() - 3 assets (kDialogue, kDialogueFont, kDialogueMap)
-    if (!ExtractDialogue(builder)) {
+    // Pass languages arg to support multi-language builds
+    if (!ExtractDialogue(builder, args.languages)) {
       LogError("Failed to extract dialogue");
       AssetBuilder_Free(builder);
       Rom_Free(rom);

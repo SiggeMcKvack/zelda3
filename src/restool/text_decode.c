@@ -301,9 +301,11 @@ static const LanguageConfig kLangUS = {
   .COMMAND_START = 0x67,
   .SWITCH_BANK = 0x80,
   .FINISH = 0xff,
+  .DICT_BASE_ENC = 0x88,
   .DICT_BASE_DEC = 0x88,
   .ESCAPE_CHARACTER = 0,
-  .has_escape = false
+  .has_escape = false,
+  .uses_new_format = false
 };
 
 static const LanguageConfig kLangEN = {
@@ -319,9 +321,11 @@ static const LanguageConfig kLangEN = {
   .COMMAND_START = 0x67,
   .SWITCH_BANK = 0x80,
   .FINISH = 0xff,
+  .DICT_BASE_ENC = 0x88,
   .DICT_BASE_DEC = 0x88,
   .ESCAPE_CHARACTER = 0,
-  .has_escape = false
+  .has_escape = false,
+  .uses_new_format = false
 };
 
 static const LanguageConfig kLangDE = {
@@ -337,9 +341,11 @@ static const LanguageConfig kLangDE = {
   .COMMAND_START = 0x70,
   .SWITCH_BANK = 0x88,
   .FINISH = 0x8f,
+  .DICT_BASE_ENC = 0x88,
   .DICT_BASE_DEC = 0x90,
   .ESCAPE_CHARACTER = 0,
-  .has_escape = false
+  .has_escape = false,
+  .uses_new_format = true
 };
 
 static const LanguageConfig kLangFR = {
@@ -355,9 +361,11 @@ static const LanguageConfig kLangFR = {
   .COMMAND_START = 0x70,
   .SWITCH_BANK = 0x88,
   .FINISH = 0x8f,
+  .DICT_BASE_ENC = 0x88,
   .DICT_BASE_DEC = 0x90,
   .ESCAPE_CHARACTER = 0,
-  .has_escape = false
+  .has_escape = false,
+  .uses_new_format = true
 };
 
 static const LanguageConfig kLangFR_C = {
@@ -373,9 +381,11 @@ static const LanguageConfig kLangFR_C = {
   .COMMAND_START = 0x70,
   .SWITCH_BANK = 0x88,
   .FINISH = 0x8f,
+  .DICT_BASE_ENC = 0x88,
   .DICT_BASE_DEC = 0x90,
   .ESCAPE_CHARACTER = 0,
-  .has_escape = false
+  .has_escape = false,
+  .uses_new_format = true
 };
 
 static const LanguageConfig kLangSV = {
@@ -391,9 +401,11 @@ static const LanguageConfig kLangSV = {
   .COMMAND_START = 0x67,
   .SWITCH_BANK = 0x80,
   .FINISH = 0xff,
+  .DICT_BASE_ENC = 0x88,
   .DICT_BASE_DEC = 0x88,
   .ESCAPE_CHARACTER = 0,
-  .has_escape = false
+  .has_escape = false,
+  .uses_new_format = false
 };
 
 static const LanguageConfig kLangPL = {
@@ -409,9 +421,11 @@ static const LanguageConfig kLangPL = {
   .COMMAND_START = 0x67,
   .SWITCH_BANK = 0x80,
   .FINISH = 0xff,
+  .DICT_BASE_ENC = 0x88,
   .DICT_BASE_DEC = 0x88,
   .ESCAPE_CHARACTER = 0,
-  .has_escape = false
+  .has_escape = false,
+  .uses_new_format = false
 };
 
 static const LanguageConfig kLangPT = {
@@ -427,9 +441,11 @@ static const LanguageConfig kLangPT = {
   .COMMAND_START = 0x67,
   .SWITCH_BANK = 0x80,
   .FINISH = 0xff,
+  .DICT_BASE_ENC = 0x88,
   .DICT_BASE_DEC = 0x88,
   .ESCAPE_CHARACTER = 0x62,
-  .has_escape = true
+  .has_escape = true,
+  .uses_new_format = true  // PT uses "new" EU encoder
 };
 
 static const LanguageConfig kLangES = {
@@ -445,9 +461,11 @@ static const LanguageConfig kLangES = {
   .COMMAND_START = 0x67,
   .SWITCH_BANK = 0x80,
   .FINISH = 0xff,
+  .DICT_BASE_ENC = 0x88,
   .DICT_BASE_DEC = 0x88,
   .ESCAPE_CHARACTER = 0,
-  .has_escape = false
+  .has_escape = false,
+  .uses_new_format = false
 };
 
 static const LanguageConfig kLangNL = {
@@ -463,9 +481,11 @@ static const LanguageConfig kLangNL = {
   .COMMAND_START = 0x67,
   .SWITCH_BANK = 0x80,
   .FINISH = 0xff,
+  .DICT_BASE_ENC = 0x88,
   .DICT_BASE_DEC = 0x88,
   .ESCAPE_CHARACTER = 0,
-  .has_escape = false
+  .has_escape = false,
+  .uses_new_format = false
 };
 
 // ============================================================================

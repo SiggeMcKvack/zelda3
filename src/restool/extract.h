@@ -71,10 +71,12 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom);
 // ============================================================================
 
 // Extract dialogue assets (kDialogue, kDialogueFont, kDialogueMap)
-void ExtractDialogueAssets(AssetBuilder *builder);
+// languages_arg: comma-separated list like "de,fr" (US is always included first), or NULL for US only
+void ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg);
 
 // Extract dialogue (wrapper for full extraction)
-bool ExtractDialogue(AssetBuilder *builder);
+// languages_arg: comma-separated list like "de,fr" (US is always included first), or NULL for US only
+bool ExtractDialogue(AssetBuilder *builder, const char *languages_arg);
 
 // ============================================================================
 // Misc Extraction (extract_misc.c)

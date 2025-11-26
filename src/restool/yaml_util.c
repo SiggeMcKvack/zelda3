@@ -11,26 +11,33 @@
 // Internal Structures
 // ============================================================================
 
-// Node pool for memory management - all nodes tied to document lifetime
-#define YAML_NODE_POOL_INITIAL_CAPACITY 256
+// Forward declaration
+struct YamlDoc;
+
+// YamlNode must be defined before YamlNodeListEntry
+struct YamlNode {
+  struct YamlDoc *doc;      // Back-pointer to owning document (for list allocation)
+  yaml_document_t *document;
+  yaml_node_t *node;
+};
+
+// Node list for memory management - all nodes tied to document lifetime
+// Using a linked list of individually allocated nodes to avoid realloc
+// which could invalidate pointers held by callers
+typedef struct YamlNodeListEntry {
+  struct YamlNodeListEntry *next;
+  YamlNode node;
+} YamlNodeListEntry;
 
 typedef struct {
-  YamlNode *nodes;
-  int count;
-  int capacity;
-} YamlNodePool;
+  YamlNodeListEntry *head;  // Linked list of allocated nodes
+} YamlNodeList;
 
 struct YamlDoc {
   yaml_document_t document;
   yaml_parser_t parser;
   FILE *file;
-  YamlNodePool node_pool;  // Memory pool for YamlNode allocations
-};
-
-struct YamlNode {
-  YamlDoc *doc;             // Back-pointer to owning document (for pool allocation)
-  yaml_document_t *document;
-  yaml_node_t *node;
+  YamlNodeList node_list;  // Linked list of YamlNode allocations
 };
 
 // Thread-local error message storage
@@ -61,39 +68,39 @@ const char* Yaml_GetLastError(void) {
 }
 
 // ============================================================================
-// Node Pool Management
+// Node List Management
 // ============================================================================
 
-// Allocate a YamlNode from the document's pool
+// Allocate a YamlNode from the document's list
+// Each node is individually malloc'd to avoid realloc invalidating pointers
 // Nodes are automatically freed when Yaml_Free() is called
 static YamlNode* AllocNode(YamlDoc *doc) {
   if (!doc) return NULL;
 
-  YamlNodePool *pool = &doc->node_pool;
-
-  // Grow pool if needed
-  if (pool->count >= pool->capacity) {
-    int new_capacity = pool->capacity ? pool->capacity * 2 : YAML_NODE_POOL_INITIAL_CAPACITY;
-    YamlNode *new_nodes = realloc(pool->nodes, new_capacity * sizeof(YamlNode));
-    if (!new_nodes) {
-      SetError("Failed to grow node pool");
-      return NULL;
-    }
-    pool->nodes = new_nodes;
-    pool->capacity = new_capacity;
+  YamlNodeListEntry *entry = malloc(sizeof(YamlNodeListEntry));
+  if (!entry) {
+    SetError("Failed to allocate node");
+    return NULL;
   }
 
-  return &pool->nodes[pool->count++];
+  // Add to front of list
+  entry->next = doc->node_list.head;
+  doc->node_list.head = entry;
+
+  return &entry->node;
 }
 
-// Free all nodes in the pool
-static void FreeNodePool(YamlNodePool *pool) {
-  if (pool && pool->nodes) {
-    free(pool->nodes);
-    pool->nodes = NULL;
-    pool->count = 0;
-    pool->capacity = 0;
+// Free all nodes in the list
+static void FreeNodeList(YamlNodeList *list) {
+  if (!list) return;
+
+  YamlNodeListEntry *entry = list->head;
+  while (entry) {
+    YamlNodeListEntry *next = entry->next;
+    free(entry);
+    entry = next;
   }
+  list->head = NULL;
 }
 
 // ============================================================================
@@ -185,8 +192,8 @@ YamlDoc* Yaml_LoadString(const uint8_t *data, size_t size) {
 void Yaml_Free(YamlDoc *doc) {
   if (!doc) return;
 
-  // Free the node pool (all YamlNode allocations)
-  FreeNodePool(&doc->node_pool);
+  // Free the node list (all YamlNode allocations)
+  FreeNodeList(&doc->node_list);
 
   yaml_document_delete(&doc->document);
   yaml_parser_delete(&doc->parser);
@@ -251,13 +258,17 @@ YamlNode* Yaml_GetMapping(YamlNode *node, const char *key) {
           return NULL;
         }
 
-        YamlNode *result = AllocNode(node->doc);
+        // Save node data BEFORE AllocNode - realloc may invalidate 'node' pointer
+        YamlDoc *saved_doc = node->doc;
+        yaml_document_t *saved_document = node->document;
+
+        YamlNode *result = AllocNode(saved_doc);
         if (!result) {
           return NULL;  // Error already set by AllocNode
         }
 
-        result->doc = node->doc;
-        result->document = node->document;
+        result->doc = saved_doc;
+        result->document = saved_document;
         result->node = value_node;
         return result;
       }
@@ -292,13 +303,17 @@ YamlNode* Yaml_GetSequence(YamlNode *node, int index) {
     return NULL;
   }
 
-  YamlNode *result = AllocNode(node->doc);
+  // Save node data BEFORE AllocNode - realloc may invalidate 'node' pointer
+  YamlDoc *saved_doc = node->doc;
+  yaml_document_t *saved_document = node->document;
+
+  YamlNode *result = AllocNode(saved_doc);
   if (!result) {
     return NULL;  // Error already set by AllocNode
   }
 
-  result->doc = node->doc;
-  result->document = node->document;
+  result->doc = saved_doc;
+  result->document = saved_document;
   result->node = item_node;
   return result;
 }

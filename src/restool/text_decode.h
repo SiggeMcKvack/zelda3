@@ -22,9 +22,11 @@ typedef struct {
   uint8_t COMMAND_START;
   uint8_t SWITCH_BANK;
   uint8_t FINISH;
-  uint8_t DICT_BASE_DEC;
+  uint8_t DICT_BASE_ENC;  // Dictionary base for encoding (0x88 for all)
+  uint8_t DICT_BASE_DEC;  // Dictionary base for decoding
   uint8_t ESCAPE_CHARACTER;  // 0 means no escape character
   bool has_escape;
+  bool uses_new_format;  // true for EU encoder, false for US encoder
 } LanguageConfig;
 
 // Decoded string result
