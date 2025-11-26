@@ -294,8 +294,12 @@ static const RomLanguageEntry kRomLanguages[] = {
   { ROM_SHA1_PT,     ROM_LANG_PT,    "Portuguese - https://www.romhacking.net/translations/6530/", "pt" },
   { ROM_SHA1_REDUX1, ROM_LANG_REDUX, "English Redux - https://www.romhacking.net/translations/6657/", "redux" },
   { ROM_SHA1_REDUX2, ROM_LANG_REDUX, "English Redux - https://www.romhacking.net/hacks/2594/", "redux" },
+  { ROM_SHA1_REDUX3, ROM_LANG_REDUX, "English Redux v10.2.3 - https://www.romhacking.net/hacks/2594/", "redux" },
+  { ROM_SHA1_REDUX4, ROM_LANG_REDUX, "English Redux v10.2.4 - https://www.romhacking.net/hacks/2594/", "redux" },
+  { ROM_SHA1_REDUX5, ROM_LANG_REDUX, "English Redux v10.2.3 - https://www.romhacking.net/hacks/2594/", "redux" },
   { ROM_SHA1_NL,     ROM_LANG_NL,    "Dutch - https://www.romhacking.net/translations/1124/", "nl" },
   { ROM_SHA1_SV,     ROM_LANG_SV,    "Swedish - https://www.romhacking.net/translations/982/", "sv" },
+  { ROM_SHA1_RETRANS_KAL, ROM_LANG_RETRANS_KAL, "English Retranslation (Kaleidoscope v1.0) - https://www.romhacking.net/hacks/5526/", "retrans-kal" },
   { NULL, ROM_LANG_UNKNOWN, NULL, NULL }  // Terminator
 };
 

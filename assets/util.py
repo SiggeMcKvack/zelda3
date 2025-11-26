@@ -24,8 +24,12 @@ ZELDA3_SHA1 = {
   'D0D09ED41F9C373FE6AFDCCAFBF0DA8C88D3D90D' : ('pt',  'Portuguese - https://www.romhacking.net/translations/6530/'),
   'B2A07A59E64C498BC1B2F28728F9BF4014C8D582' : ('redux', 'English Redux - https://www.romhacking.net/translations/6657/'),
   '9325C22EB0A2A1F0017157C8B620BC3A605CEDE1' : ('redux', 'English Redux - https://www.romhacking.net/hacks/2594/'),
+  '0DB9EB8AF889BB07B8172B5B034FFC971540ADA0' : ('redux', 'English Redux v10.2.3 - https://www.romhacking.net/hacks/2594/'),
+  '92DB633BC1FAD0D865794EB437EBC81EC076FDC7' : ('redux', 'English Redux v10.2.4 - https://www.romhacking.net/hacks/2594/'),
+  'D9786698EA43E5688AEEAAEC92502A4BF16C3EB5' : ('redux', 'English Redux v10.2.3 - https://www.romhacking.net/hacks/2594/'),
   'FA8ADFDBA2697C9A54D583A1284A22AC764C7637' : ('nl', 'Dutch - https://www.romhacking.net/translations/1124/'),
   '43CD3438469B2C3FE879EA2F410B3EF3CB3F1CA4' : ('sv', 'Swedish - https://www.romhacking.net/translations/982/'),
+  'EBF8D301FFAF5D412A8C3C832C0F0A92CFA2F16B' : ('retrans-kal', 'English Retranslation (Kaleidoscope v1.0) - https://www.romhacking.net/hacks/5526/'),
 }
 
 def load_rom(filename, support_multilanguage = False):

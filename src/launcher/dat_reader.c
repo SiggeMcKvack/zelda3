@@ -68,7 +68,7 @@ static const uint8_t* find_index_in_memblk(const uint8_t *data, size_t data_size
     return data + left_off;
 }
 
-int DatReader_GetLanguages(const char *dir, char languages[][8], int max_languages) {
+int DatReader_GetLanguages(const char *dir, char languages[][16], int max_languages) {
     char path[512];
     snprintf(path, sizeof(path), "%s/zelda3_assets.dat", dir);
 
@@ -168,7 +168,7 @@ int DatReader_GetLanguages(const char *dir, char languages[][8], int max_languag
         // Get first element (language code) from this entry
         size_t name_size;
         const uint8_t *name = find_index_in_memblk(entry, entry_size, 0, &name_size);
-        if (!name || name_size == 0 || name_size >= 8) continue;
+        if (!name || name_size == 0 || name_size >= 16) continue;
 
         // Bounds check before writing to output array
         if (count >= max_languages) break;

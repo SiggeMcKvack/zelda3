@@ -486,6 +486,7 @@ const LanguageConfig* TextDecode_GetLanguageConfig(const char *lang_code) {
   if (strcmp(lang_code, "es") == 0) return &kLangES;
   if (strcmp(lang_code, "nl") == 0) return &kLangNL;
   if (strcmp(lang_code, "redux") == 0) return &kLangUS;  // Redux uses US config
+  if (strcmp(lang_code, "retrans-kal") == 0) return &kLangUS;  // Kaleidoscope uses US config
 
   return NULL;
 }
@@ -503,6 +504,7 @@ const char* TextDecode_GetLanguageCode(RomLanguage lang) {
     case ROM_LANG_REDUX: return "redux";
     case ROM_LANG_NL: return "nl";
     case ROM_LANG_SV: return "sv";
+    case ROM_LANG_RETRANS_KAL: return "retrans-kal";
     default: return NULL;
   }
 }

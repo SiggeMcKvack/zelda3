@@ -10,9 +10,9 @@ bool DatReader_Exists(const char *dir);
 
 // Get available languages from DAT file
 // dir: directory containing zelda3_assets.dat
-// languages: output array for language codes (e.g., "us", "de", "fr")
+// languages: output array for language codes (e.g., "us", "de", "retrans-kal")
 // max_languages: size of languages array
 // Returns: number of languages found, 0 on error
-int DatReader_GetLanguages(const char *dir, char languages[][8], int max_languages);
+int DatReader_GetLanguages(const char *dir, char languages[][16], int max_languages);
 
 #endif // DAT_READER_H

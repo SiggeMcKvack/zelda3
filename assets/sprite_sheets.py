@@ -157,6 +157,7 @@ kFontTypes = {
   'redux': (0x8e8000, 256, 'font_redux.png', (0x8ECADF, 99)),
   'nl': (0x8e8000, 256, 'font_nl.png', (0x8ECADF, 99)),
   'sv': (0x8e8000, 256, 'font_sv.png', (0x8ECADF, 99)),
+  'retrans-kal': (0x8e8000, 256, 'font.png', (0x8ECADF, 99)),  # Uses US font
 }
 
 def decode_font():

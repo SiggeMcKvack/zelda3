@@ -20,6 +20,7 @@ typedef enum {
   ROM_LANG_REDUX,   // English Redux
   ROM_LANG_NL,      // Dutch translation
   ROM_LANG_SV,      // Swedish translation
+  ROM_LANG_RETRANS_KAL,  // Kaleidoscope retranslation
 } RomLanguage;
 
 // ROM structure
@@ -71,7 +72,11 @@ typedef struct {
 #define ROM_SHA1_PT     "d0d09ed41f9c373fe6afdccafbf0da8c88d3d90d"  // Portuguese translation
 #define ROM_SHA1_REDUX1 "b2a07a59e64c498bc1b2f28728f9bf4014c8d582"  // English Redux v1
 #define ROM_SHA1_REDUX2 "9325c22eb0a2a1f0017157c8b620bc3a605cede1"  // English Redux v2
+#define ROM_SHA1_REDUX3 "0db9eb8af889bb07b8172b5b034ffc971540ada0"  // English Redux v10.2.3
+#define ROM_SHA1_REDUX4 "92db633bc1fad0d865794eb437ebc81ec076fdc7"  // English Redux v10.2.4
+#define ROM_SHA1_REDUX5 "d9786698ea43e5688aeeaaec92502a4bf16c3eb5"  // English Redux v10.2.3 (alt)
 #define ROM_SHA1_NL     "fa8adfdba2697c9a54d583a1284a22ac764c7637"  // Dutch translation
 #define ROM_SHA1_SV     "43cd3438469b2c3fe879ea2f410b3ef3cb3f1ca4"  // Swedish translation
+#define ROM_SHA1_RETRANS_KAL "ebf8d301ffaf5d412a8c3c832c0f0a92cfa2f16b"  // Kaleidoscope retranslation v1.0
 
 #endif // RESTOOL_TYPES_H

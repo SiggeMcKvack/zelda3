@@ -496,6 +496,8 @@ static const char* get_language_display_name(const char *code) {
         {"pt", "Portuguese"},
         {"nl", "Dutch"},
         {"sv", "Swedish"},
+        {"redux", "English Redux"},
+        {"retrans-kal", "English (Kaleidoscope)"},
     };
     for (size_t i = 0; i < sizeof(kLangMap) / sizeof(kLangMap[0]); i++) {
         if (strcmp(code, kLangMap[i].code) == 0)
@@ -669,7 +671,7 @@ static void refresh_language_dropdown(const char *current_lang) {
     char exe_dir[512];
     LauncherUI_GetExecutableDir(exe_dir, sizeof(exe_dir));
 
-    char available_langs[16][8];
+    char available_langs[16][16];
     int num_langs = DatReader_GetLanguages(exe_dir, available_langs, 16);
 
     // Create list store: display name, code

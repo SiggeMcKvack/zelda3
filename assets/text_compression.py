@@ -400,6 +400,7 @@ kLanguages = {
   'redux' : LangUS(),
   'nl' : LangNL(),
   'sv' : LangSV(),
+  'retrans-kal' : LangUS(),  # Kaleidoscope retranslation uses US encoding
 }
 
 def dialogue_filename(s):

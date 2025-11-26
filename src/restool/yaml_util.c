@@ -12,7 +12,7 @@
 // ============================================================================
 
 // Node pool for memory management - all nodes tied to document lifetime
-#define YAML_NODE_POOL_INITIAL_CAPACITY 32
+#define YAML_NODE_POOL_INITIAL_CAPACITY 256
 
 typedef struct {
   YamlNode *nodes;
@@ -226,7 +226,7 @@ YamlNode* Yaml_GetRoot(YamlDoc *doc) {
 }
 
 YamlNode* Yaml_GetMapping(YamlNode *node, const char *key) {
-  if (!node || !key) {
+  if (!node || !node->node || !key) {
     SetError("NULL node or key");
     return NULL;
   }
@@ -269,7 +269,7 @@ YamlNode* Yaml_GetMapping(YamlNode *node, const char *key) {
 }
 
 YamlNode* Yaml_GetSequence(YamlNode *node, int index) {
-  if (!node) {
+  if (!node || !node->node) {
     SetError("NULL node");
     return NULL;
   }
@@ -304,7 +304,7 @@ YamlNode* Yaml_GetSequence(YamlNode *node, int index) {
 }
 
 int Yaml_GetSequenceLength(YamlNode *node) {
-  if (!node || node->node->type != YAML_SEQUENCE_NODE) {
+  if (!node || !node->node || node->node->type != YAML_SEQUENCE_NODE) {
     return 0;
   }
 
@@ -312,7 +312,7 @@ int Yaml_GetSequenceLength(YamlNode *node) {
 }
 
 bool Yaml_HasKey(YamlNode *node, const char *key) {
-  if (!node || !key || node->node->type != YAML_MAPPING_NODE) {
+  if (!node || !node->node || !key || node->node->type != YAML_MAPPING_NODE) {
     return false;
   }
 
@@ -337,7 +337,7 @@ bool Yaml_HasKey(YamlNode *node, const char *key) {
 
 const char* Yaml_GetString(YamlNode *node, const char *key, const char *default_value) {
   YamlNode *value_node = Yaml_GetMapping(node, key);
-  if (!value_node) {
+  if (!value_node || !value_node->node) {
     g_yaml_error[0] = '\0';  // Clear error for default returns
     return default_value;
   }
@@ -390,7 +390,7 @@ bool Yaml_GetBool(YamlNode *node, const char *key, bool default_value) {
 // ============================================================================
 
 const char* Yaml_AsString(YamlNode *node) {
-  if (!node || node->node->type != YAML_SCALAR_NODE) {
+  if (!node || !node->node || node->node->type != YAML_SCALAR_NODE) {
     return NULL;
   }
   return (const char*)node->node->data.scalar.value;
