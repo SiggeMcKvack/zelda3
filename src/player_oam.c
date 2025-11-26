@@ -819,7 +819,7 @@ void LinkOam_Main() {  // 8da18e
 
   if (link_player_handler_state == kPlayerState_Swimming) {
     yt = 0x11, rt &= 1;
-    if (submodule_index == 0 && (joypad1H_last & 0xf) != 0 || (swimcoll_var7[0] | swimcoll_var7[1]))
+    if ((submodule_index == 0 && (joypad1H_last & 0xf) != 0) || (swimcoll_var7[0] | swimcoll_var7[1]))
       yt = 0x13, rt = byte_7E02CC;
     if (link_maybe_swim_faster)
       yt = 0x12, rt = link_maybe_swim_faster - 1;
@@ -1052,11 +1052,11 @@ continue_after_set:
           uint8 oam_x = xcoord + kOffsToShadowGivenDir_X[link_direction_facing_mirror >> 1];
           int oam_pos = ((scratch_0_var ? kShadow_oam_indexes_1 : kShadow_oam_indexes_0)[r4loc] + sort_sprites_offset_into_oam_buffer)>>2;
 
-          uint16 td = kLinkShadows_Chardata[shadow_idx*2] & ~0x3000 | oam_priority_value_2;
+          uint16 td = (kLinkShadows_Chardata[shadow_idx*2] & ~0x3000) | oam_priority_value_2;
           if (!link_palette_bits_of_oam)
-            td = td & ~0xe00 | 0x600;
+            td = (td & ~0xe00) | 0x600;
           WORD(oam_buf[oam_pos+0].charnum) = td;
-          WORD(oam_buf[oam_pos+1].charnum) = td & ~0xC000 | 0x4000;
+          WORD(oam_buf[oam_pos+1].charnum) = (td & ~0xC000) | 0x4000;
           WORD(oam_buf[oam_pos+0].x) = (uint8)oam_x | oam_y << 8;
           WORD(oam_buf[oam_pos+1].x) = (uint8)(oam_x + 8) | oam_y << 8;
           bytewise_extended_oam[oam_pos+0] = 0;
@@ -1082,13 +1082,13 @@ continue_after_set:
       uint16 td = sp->tile << 8;
 
       if ((td & 0xf000) != 0xf000) {
-        WORD(oam_buf[oam_pos].charnum) = td & 0xf000 | oam_priority_value | link_palette_bits_of_oam;
+        WORD(oam_buf[oam_pos].charnum) = (td & 0xf000) | oam_priority_value | link_palette_bits_of_oam;
         WORD(oam_buf[oam_pos].x) = oam_x | oam_y << 8;
         bytewise_extended_oam[oam_pos] = 2 + (oam_x >= 0xf8);
       }
 
       if ((td << 4 & 0xf000) != 0xf000) {
-        WORD(oam_buf[oam_pos+1].charnum) = td << 4 & 0xf000 | oam_priority_value | link_palette_bits_of_oam | 2;
+        WORD(oam_buf[oam_pos+1].charnum) = (td << 4 & 0xf000) | oam_priority_value | link_palette_bits_of_oam | 2;
         WORD(oam_buf[oam_pos+1].x) = (uint8)(xcoord) | (ycoord - zcoord + 8) << 8;
         bytewise_extended_oam[oam_pos+1] = 2;
       }
@@ -1097,9 +1097,9 @@ continue_after_set:
 
   uint16 t;
   bool hide_shadow = true;
-  if (is_standing_in_doorway && ((t = link_x_coord - BG2HOFS_copy2) < 4 || t >= 252 || (t = link_y_coord - BG2VOFS_copy2) < 4 || t >= 224) ||
+  if ((is_standing_in_doorway && ((t = link_x_coord - BG2HOFS_copy2) < 4 || t >= 252 || (t = link_y_coord - BG2VOFS_copy2) < 4 || t >= 224)) ||
       (hide_shadow = false,
-      submodule_index == 0 && countdown_for_blink && --countdown_for_blink >= 4 && (countdown_for_blink & 1) == 0 ||
+      (submodule_index == 0 && countdown_for_blink && --countdown_for_blink >= 4 && (countdown_for_blink & 1) == 0) ||
       link_visibility_status == 12 ||
       link_cape_mode != 0)) {
     int shadow_oam_pos = (!hide_shadow && link_visibility_status != 12) ?
@@ -1182,9 +1182,9 @@ int LinkOam_CalculateSwordSparklePosition(int oam_pos, uint8 oam_x, uint8 oam_y)
   uint16 td = kSwordTipSomething[i];
   if (td == 0xffff)
     return oam_pos;
-  td = td & ~0x3000 | oam_priority_value;
+  td = (td & ~0x3000) | oam_priority_value;
   if (!link_palette_bits_of_oam)
-    td = td & ~0xe00 | 0x600;
+    td = (td & ~0xe00) | 0x600;
   WORD(oam_buf[oam_pos].charnum) = td;
   player_oam_x_offset = kSwordOamXOffs_Good[i];
   player_oam_y_offset = kSwordOamYOffs_Good[i];
@@ -1204,7 +1204,7 @@ void LinkOam_UnusedWeaponSettings(int r4loc, uint8 oam_x, uint8 oam_y) {  // 8da
   for (int i = 0; i != 4; i++, j++) {
     uint8 st = kPlayerOam_DrawOam_Throwing_State[j];
     if (st != 0xff) {
-      WORD(oam->charnum) = 0x2609 & ~0x3000 | oam_priority_value;
+      WORD(oam->charnum) = (0x2609 & ~0x3000) | oam_priority_value;
       oam->x = oam_x + kPlayerOam_DrawOam_Throwing_X[j];
       oam->y = oam_y + kPlayerOam_DrawOam_Throwing_Y[j];
       bytewise_extended_oam[oam_pos] = 0;
@@ -1227,7 +1227,7 @@ void LinkOam_DrawDungeonFallShadow(int r4loc, uint8 xcoord) {  // 8dae3b
   for (int i = 0; i != 2; i++, oam_pos++, yv++) {
     uint16 td = kLinkShadows_Chardata[yv];
     if (td != 0xffff) {
-      WORD(oam_buf[oam_pos].charnum) = td & ~0x3000 | oam_priority_value_2;
+      WORD(oam_buf[oam_pos].charnum) = (td & ~0x3000) | oam_priority_value_2;
       WORD(oam_buf[oam_pos].x) = xcoord | ycoord << 8;
     }
     bytewise_extended_oam[oam_pos] = 0;
@@ -1265,10 +1265,10 @@ void LinkOam_DrawFootObject(int r4loc, uint8 oam_x, uint8 oam_y) {  // 8daed1
 
   if (yv >= 11) {
     // OOB read
-    WORD(oam[0].charnum) = 0x00 & ~0x3000 | oam_priority_value_2;
+    WORD(oam[0].charnum) = (0x00 & ~0x3000) | oam_priority_value_2;
     WORD(oam[1].charnum) = 0xAE | oam_priority_value_2;
   } else {
-    WORD(oam[0].charnum) = kLinkShadows_Chardata[yv * 2 + 0] & ~0x3000 | oam_priority_value_2;
+    WORD(oam[0].charnum) = (kLinkShadows_Chardata[yv * 2 + 0] & ~0x3000) | oam_priority_value_2;
     WORD(oam[1].charnum) = kLinkShadows_Chardata[yv * 2 + 1] | oam_priority_value_2;
 
   }

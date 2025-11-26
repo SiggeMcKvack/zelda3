@@ -346,7 +346,7 @@ static bool ParseBoolBit(const char *value, uint32 *data, uint32 mask) {
   bool tmp;
   if (!ParseBool(value, &tmp))
     return false;
-  *data = *data & ~mask | (tmp ? mask : 0);
+  *data = (*data & ~mask) | (tmp ? mask : 0);
   return true;
 }
 

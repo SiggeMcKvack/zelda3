@@ -281,7 +281,7 @@ static void Channel_SetInstrument(SpcPlayer *p, Channel *c, uint8 instrument) {
   uint8 reg = c->index * 16;
   if (ip[0] & 0x80) {
     // noise
-    p->reg_FLG = (p->reg_FLG & 0x20) | ip[0] & 0x1f;
+    p->reg_FLG = (p->reg_FLG & 0x20) | (ip[0] & 0x1f);
     p->reg_NON |= p->cur_chan_bit;
     Dsp_Write(p, reg + V0SRCN, 0);
   } else {

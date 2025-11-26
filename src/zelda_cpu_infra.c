@@ -275,7 +275,7 @@ void RunOrigAsmCodeOneLoop(Snes *snes) {
       dma_doDma(snes->dma);
 
     uint32_t pc = snes->cpu->k << 16 | snes->cpu->pc;
-    if (pc == 0x8034 || pc == 0x9f81d && loops >= 10 || pc == 0x8225 || pc == 0x82D2)
+    if (pc == 0x8034 || (pc == 0x9f81d && loops >= 10) || pc == 0x8225 || pc == 0x82D2)
       break;
   }
 }

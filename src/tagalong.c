@@ -142,7 +142,7 @@ bool Follower_ValidateMessageFreedom() {  // 87f46f
   uint8 ps = link_player_handler_state;
   if (ps != kPlayerState_Ground && ps != kPlayerState_Swimming && ps != kPlayerState_StartDash)
     return false;
-  uint8 t = button_mask_b_y & 0x80 | link_unk_master_sword | link_item_in_hand |
+  uint8 t = (button_mask_b_y & 0x80) | link_unk_master_sword | link_item_in_hand |
             link_position_mode | flag_is_ancilla_to_pick_up | flag_is_sprite_to_pick_up |
             link_state_bits | link_grabbing_wall;
   return t == 0;
@@ -622,9 +622,9 @@ void Follower_AnimateMovement_preserved(uint8 ain, uint16 xin, uint16 yin) {  //
     av = link_is_running ? (frame_counter & 4) : ((frame_counter >> 1) & 4);
   } else if (follower_indicator == 11) {
     av = (frame_counter >> 1) & 4;
-  } else if ((follower_indicator == 12 || follower_indicator == 13) && follower_dropped || flag_is_link_immobilized ||
-             submodule_index == 10 || main_module_index == 9 && submodule_index == 0x23 ||
-             main_module_index == 14 && (submodule_index == 1 || submodule_index == 2) ||
+  } else if (((follower_indicator == 12 || follower_indicator == 13) && follower_dropped) || flag_is_link_immobilized ||
+             submodule_index == 10 || (main_module_index == 9 && submodule_index == 0x23) ||
+             (main_module_index == 14 && (submodule_index == 1 || submodule_index == 2)) ||
              (link_y_vel | link_x_vel) == 0) {
     av = sc = 4;
   } else {
@@ -633,7 +633,7 @@ void Follower_AnimateMovement_preserved(uint8 ain, uint16 xin, uint16 yin) {  //
   uint8 frame = (ain & 3) + av + yt;
 
   int spr_offs =
-    (link_y_coord == yin && !(ain & 3) || link_y_coord < yin) ?
+    ((link_y_coord == yin && !(ain & 3)) || link_y_coord < yin) ?
       kTagalongDraw_SprOffs0[sort_sprites_setting] >> 2:
       kTagalongDraw_SprOffs1[sort_sprites_setting] >> 2;
   oam_ext_cur_ptr = 0xa20 + spr_offs;

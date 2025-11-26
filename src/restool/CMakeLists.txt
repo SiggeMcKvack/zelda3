@@ -13,6 +13,10 @@ find_package(YAML REQUIRED)
 # Warning flags
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
+  # Suppress warning for intentional use of GNU ## extension in variadic macros
+  if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+    add_compile_options(-Wno-gnu-zero-variadic-macro-arguments)
+  endif()
 endif()
 
 # ============================================================================

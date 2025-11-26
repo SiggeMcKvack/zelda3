@@ -319,71 +319,6 @@ void ExtractTilemaps(Rom *rom, AssetBuilder *builder) {
   fflush(stdout);
 }
 
-// Helper: Copy asset from Python's asset file (placeholder for complex assets)
-static void CopyAssetFromPython(AssetBuilder *builder, const char *name,
-                                  const char *python_file) {
-  // This is temporary - TODO: replace with proper C implementation
-  FILE *fp = fopen(python_file, "rb");
-  if (!fp) {
-    LogError("Failed to open Python asset file: %s", python_file);
-    return;
-  }
-
-  fseek(fp, 0, SEEK_END);
-  size_t file_size = ftell(fp);
-  fseek(fp, 0, SEEK_SET);
-
-  uint8_t *data = malloc(file_size);
-  if (!data) {
-    LogError("Failed to allocate %zu bytes for Python asset file", file_size);
-    fclose(fp);
-    return;
-  }
-  fread(data, 1, file_size, fp);
-  fclose(fp);
-
-  // Parse Python asset file to find our asset
-  uint32_t num_assets = *(uint32_t*)(data + 80);
-  uint32_t key_sig_size = *(uint32_t*)(data + 84);
-
-  uint32_t *sizes = (uint32_t*)(data + 88);
-  uint8_t *key_sig = data + 88 + num_assets * 4;
-
-  // Find asset by name
-  uint32_t idx = 0;
-  uint8_t *name_ptr = key_sig;
-  for (uint32_t i = 0; i < num_assets; i++) {
-    if (strcmp((char*)name_ptr, name) == 0) {
-      idx = i;
-      break;
-    }
-    name_ptr += strlen((char*)name_ptr) + 1;
-  }
-
-  // Calculate offset to asset data
-  uint32_t offset = 88 + num_assets * 4 + key_sig_size;
-  for (uint32_t i = 0; i < idx; i++) {
-    while (offset % 4 != 0) offset++;
-    offset += sizes[i];
-  }
-  while (offset % 4 != 0) offset++;
-
-  // Copy asset data
-  uint8_t *asset_data = malloc(sizes[idx]);
-  if (!asset_data) {
-    LogError("Failed to allocate %u bytes for asset %s", sizes[idx], name);
-    free(data);
-    return;
-  }
-  memcpy(asset_data, data + offset, sizes[idx]);
-
-  // Determine type (uint8 is most common)
-  AssetBuilder_AddAsset(builder, name, ASSET_TYPE_UINT8, asset_data, sizes[idx]);
-
-  free(asset_data);
-  free(data);
-}
-
 // Extract misc assets - simple ROM reads (28 assets from print_misc)
 void ExtractMiscAssets(Rom *rom, AssetBuilder *builder) {
   printf("  Extracting misc assets (28 simple ROM reads)...\n");
@@ -781,7 +716,7 @@ void ExtractLinkGraphics(AssetBuilder *builder) {
     return;
   }
 
-  printf("    Loaded linksprite.png: %ux%u, palette mode with %u colors\n",
+  printf("    Loaded linksprite.png: %ux%u, palette mode with %zu colors\n",
          width, height, state.info_png.color.palettesize);
 
   // Verify dimensions (should be 128x448 = 16x56 tiles)
@@ -2199,7 +2134,7 @@ static size_t AppendScanBytes(uint8_t **big_ptr, size_t *big_len, size_t *big_ca
   for (int n = little_len; n >= 0; n--) {
     // Check if last n bytes of big match first n bytes of little
     bool match = true;
-    if (n > 0 && *big_len >= n) {
+    if (n > 0 && *big_len >= (size_t)n) {
       for (int i = 0; i < n; i++) {
         if (big[*big_len - n + i] != little[i]) {
           match = false;

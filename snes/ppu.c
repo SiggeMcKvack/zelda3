@@ -892,7 +892,7 @@ static NOINLINE void PpuDrawWholeLine(Ppu *ppu, uint y) {
     uint32 clip_color_mask = (cw_clip_math & 1) ? 0x1f : 0;
     uint32 math_enabled_cur = (cw_clip_math & 0x100) ? math_enabled : 0;
     uint32 fixed_color = ppu->fixedColorR | ppu->fixedColorG << 5 | ppu->fixedColorB << 10;
-    if (math_enabled_cur == 0 || fixed_color == 0 && !ppu->halfColor && !rendered_subscreen) {
+    if (math_enabled_cur == 0 || (fixed_color == 0 && !ppu->halfColor && !rendered_subscreen)) {
       // Math is disabled (or has no effect), so can avoid the per-pixel maths check
       uint32 i = left;
       do {
@@ -1297,7 +1297,7 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
         for (int px = px_left; px < px_right; px++, dst++) {
           int shift = oam1 & 0x4000 ? px : 7 - px;
           uint32 bits = plane >> shift;
-          int pixel = (bits >> 0) & 1 | (bits >> 7) & 2 | (bits >> 14) & 4 | (bits >> 21) & 8;
+          int pixel = ((bits >> 0) & 1) | ((bits >> 7) & 2) | ((bits >> 14) & 4) | ((bits >> 21) & 8);
           // draw it in the buffer if there is a pixel here, and the buffer there is still empty
           if (pixel != 0 && (dst[0] & 0xff) == 0)
             dst[0] = z + pixel;

@@ -248,7 +248,7 @@ void PlayerHandler_00_Ground_3() {  // 8781a0
       // down don't assume this and change the module indexes randomly.
       // This also fixes a bug where bombos, ether, quake get aborted if you use spin attack at the same time.
       if ((enhanced_features0 & kFeatures0_MiscBugFixes) && (
-          main_module_index == 14 && submodule_index != 2 ||
+          (main_module_index == 14 && submodule_index != 2) ||
           link_player_handler_state == kPlayerState_Bombos ||
           link_player_handler_state == kPlayerState_Ether ||
           link_player_handler_state == kPlayerState_Quake))
@@ -1840,7 +1840,7 @@ void Link_SetTheMaxAccel() {  // 879903
   uint8 mask = 12;
   for (int i = 0; i < 2; i++, mask >>= 2) {
     if ((joypad1H_last & mask) && swimcoll_var5[i] != 2) {
-      if (swimcoll_var1[i] || swimcoll_var7[i] >= 240 && swimcoll_var7[i] >= swimcoll_var9[i]) {
+      if (swimcoll_var1[i] || (swimcoll_var7[i] >= 240 && swimcoll_var7[i] >= swimcoll_var9[i])) {
         swimcoll_var5[i] = 0;
         if (swimcoll_var7[i] >= 240) {
           swimcoll_var1[i] = 1;
@@ -2663,7 +2663,7 @@ void LinkItem_Ether() {  // 87a494
   button_mask_b_y &= ~0x40;
 
   if (is_standing_in_doorway || flag_block_link_menu || dung_savegame_state_bits & 0x8000 || !((uint8)(link_sword_type + 1) & ~1) ||
-      follower_dropped && follower_indicator == 13) {
+      (follower_dropped && follower_indicator == 13)) {
     Ancilla_Sfx2_Near(60);
     return;
   }
@@ -2712,7 +2712,7 @@ void LinkItem_Bombos() {  // 87a569
   button_mask_b_y &= ~0x40;
 
   if (is_standing_in_doorway || flag_block_link_menu || dung_savegame_state_bits & 0x8000 || !((uint8)(link_sword_type + 1) & ~1) ||
-      follower_dropped && follower_indicator == 13) {
+      (follower_dropped && follower_indicator == 13)) {
     Ancilla_Sfx2_Near(60);
     return;
   }
@@ -2760,7 +2760,7 @@ void LinkItem_Quake() {  // 87a64b
   button_mask_b_y &= ~0x40;
 
   if (is_standing_in_doorway || flag_block_link_menu || dung_savegame_state_bits & 0x8000 || !((uint8)(link_sword_type + 1) & ~1) ||
-      follower_dropped && follower_indicator == 13) {
+      (follower_dropped && follower_indicator == 13)) {
     Ancilla_Sfx2_Near(60);
     return;
   }
@@ -2928,9 +2928,9 @@ void LinkItem_Mirror() {  // 87a91a
   }
   button_mask_b_y &= ~0x40;
 
-  if (is_standing_in_doorway || 
-      !cheatWalkThroughWalls && !(enhanced_features0 & kFeatures0_MirrorToDarkworld) && 
-      !player_is_indoors && !(overworld_screen_index & 0x40)) {
+  if (is_standing_in_doorway ||
+      (!cheatWalkThroughWalls && !(enhanced_features0 & kFeatures0_MirrorToDarkworld) &&
+      !player_is_indoors && !(overworld_screen_index & 0x40))) {
     Ancilla_Sfx2_Near(60);
     return;
   }
@@ -3254,7 +3254,7 @@ void LinkItem_Cape() {  // 87adc1
     if (!--cape_decrement_counter) {
       cape_decrement_counter = kCapeDepletionTimers[link_magic_consumption];
       // Avoid magic underflow if an anti-fairy consumes magic.
-      if (link_magic_power == 0 && (enhanced_features0 & kFeatures0_MiscBugFixes) ||
+      if ((link_magic_power == 0 && (enhanced_features0 & kFeatures0_MiscBugFixes)) ||
           !--link_magic_power) {
         Link_ForceUnequipCape();
         return;
@@ -5711,7 +5711,7 @@ void Player_HandleIncapacitated_Inner2() {  // 87e1d7
 }
 
 void Link_HandleVelocity() {  // 87e245
-  if (submodule_index == 2 && main_module_index == 14 || link_prevent_from_moving) {
+  if ((submodule_index == 2 && main_module_index == 14) || link_prevent_from_moving) {
     link_y_coord_safe_return_lo = link_y_coord;
     link_y_coord_safe_return_hi = link_y_coord >> 8;
     link_x_coord_safe_return_lo = link_x_coord;
@@ -6406,7 +6406,7 @@ void SomariaBlock_HandlePlayerInteraction(int k) {  // 88e7e6
     return;
 
   if (!ancilla_H[k]) {
-    if (link_auxiliary_state || (link_state_bits & 1) || ancilla_z[k] != 0 && ancilla_z[k] != 0xff || ancilla_K[k] || ancilla_L[k])
+    if (link_auxiliary_state || (link_state_bits & 1) || (ancilla_z[k] != 0 && ancilla_z[k] != 0xff) || ancilla_K[k] || ancilla_L[k])
       return;
     if (!(joypad1H_last & kJoypadH_AnyDir)) {
       ancilla_arr3[k] = 0;

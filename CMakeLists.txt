@@ -120,6 +120,10 @@ else()
         $<$<CONFIG:Debug>:-O0 -g>
         -Wall
     )
+    # Suppress warning for intentional use of GNU ## extension in variadic macros
+    if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+        target_compile_options(zelda3 PRIVATE -Wno-gnu-zero-variadic-macro-arguments)
+    endif()
 endif()
 
 # Optional: Enable -Werror (disabled by default due to pre-existing warnings)

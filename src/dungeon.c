@@ -1711,10 +1711,10 @@ water_face_open:
 
     int h = -1;
     if (dung_hdr_tag[0] == 0x27 || dung_hdr_tag[0] == 0x3c ||
-        dung_hdr_tag[0] == 0x3e || dung_hdr_tag[0] >= 0x29 && dung_hdr_tag[0] < 0x33)
+        dung_hdr_tag[0] == 0x3e || (dung_hdr_tag[0] >= 0x29 && dung_hdr_tag[0] < 0x33))
       h = 0;
     else if (dung_hdr_tag[1] == 0x27 || dung_hdr_tag[1] == 0x3c ||
-             dung_hdr_tag[1] == 0x3e || dung_hdr_tag[1] >= 0x29 && dung_hdr_tag[1] < 0x33)
+             dung_hdr_tag[1] == 0x3e || (dung_hdr_tag[1] >= 0x29 && dung_hdr_tag[1] < 0x33))
       h = 1;
 
     dung_chest_locations[i] = 2 * (dsto | (dung_line_ptrs_row0 != 0x4000 ? 0 : 0x1000));
@@ -2710,7 +2710,7 @@ void RoomData_DrawObject(uint16 r0, const uint8 *level_data) {  // 81893c
       LoadType1ObjectSubtype3(idx, DstoPtr(dst), dst);
     }
   } else {
-    uint8 x = (r0 & 3) << 4 | (r0 >> 12) & 0xf;
+    uint8 x = (r0 & 3) << 4 | ((r0 >> 12) & 0xf);
     uint8 y = ((r0 >> 8) & 0xf) << 2 | (idx >> 6);
     uint16 dst = y * 64 + x;
     LoadType1ObjectSubtype2(idx & 0x3f, DstoPtr(dst), dst);
@@ -3677,7 +3677,7 @@ void Dungeon_LoadHeader() {  // 81b564
   if (submodule_index == 0) {
     dung_loade_bgoffs_h_copy = BG2HOFS_copy2 & ~0x1FF;
     dung_loade_bgoffs_v_copy = BG2VOFS_copy2 & ~0x1FF;
-  } else if (submodule_index == 21 || submodule_index < 18 && submodule_index >= 6) {
+  } else if (submodule_index == 21 || (submodule_index < 18 && submodule_index >= 6)) {
     dung_loade_bgoffs_h_copy = (BG2HOFS_copy2 + 0x20) & ~0x1FF;
     dung_loade_bgoffs_v_copy = (BG2VOFS_copy2 + 0x20) & ~0x1FF;
   } else {
@@ -4018,9 +4018,9 @@ skip3:
 
   t = 0x5858, i = 0;
   if (dung_num_chests_x2) {
-    if (dung_hdr_tag[0] == 0x27 || dung_hdr_tag[0] == 0x3c || dung_hdr_tag[0] == 0x3e || dung_hdr_tag[0] >= 0x29 && dung_hdr_tag[0] < 0x33)
+    if (dung_hdr_tag[0] == 0x27 || dung_hdr_tag[0] == 0x3c || dung_hdr_tag[0] == 0x3e || (dung_hdr_tag[0] >= 0x29 && dung_hdr_tag[0] < 0x33))
       goto no_big_key_locks;
-    if (dung_hdr_tag[1] == 0x27 || dung_hdr_tag[1] == 0x3c || dung_hdr_tag[1] == 0x3e || dung_hdr_tag[1] >= 0x29 && dung_hdr_tag[1] < 0x33)
+    if (dung_hdr_tag[1] == 0x27 || dung_hdr_tag[1] == 0x3c || dung_hdr_tag[1] == 0x3e || (dung_hdr_tag[1] >= 0x29 && dung_hdr_tag[1] < 0x33))
       goto no_big_key_locks;
 
     for (; i != dung_num_chests_x2; i += 2, t += 0x101) {
@@ -4602,7 +4602,7 @@ void RoomTag_Agahnim(int k) {  // 81c74e
 
 void RoomTag_GanonDoor(int tagidx) {  // 81c767
   for (int k = 15; k >= 0; k--) {
-    if (sprite_state[k] == 4 || !(sprite_flags4[k] & 64) && sprite_state[k])
+    if (sprite_state[k] == 4 || (!(sprite_flags4[k] & 64) && sprite_state[k]))
       return;
   }
   if (link_player_handler_state != kPlayerState_FallingIntoHole) {
@@ -6915,7 +6915,7 @@ table:
 }
 
 void Module07_0E_01_HandleMusicAndResetProps() {  // 828c78
-  if ((dungeon_room_index == 7 || dungeon_room_index == 23 && !ZeldaIsPlayingMusicTrack(17)) && !(link_which_pendants & 1))
+  if ((dungeon_room_index == 7 || (dungeon_room_index == 23 && !ZeldaIsPlayingMusicTrack(17))) && !(link_which_pendants & 1))
     music_control = 0xf1;
   staircase_var1 = (which_staircase_index & 4) ? 106 : 88;
   overworld_map_state = 0;
@@ -8539,7 +8539,7 @@ void PushBlock_HandleCollision(uint8 i, uint16 x, uint16 y) {  // 87efb9
 
   bitmask_of_dragstate &= ~4;
 
-  if (r0 >= r4 && r0 < r6 || r2 >= r4 && r2 < r6) {
+  if ((r0 >= r4 && r0 < r6) || (r2 >= r4 && r2 < r6)) {
     if (link_direction_facing == pushedblock_facing[i])
       bitmask_of_dragstate |= index_of_changable_dungeon_objs[i] ? 4 : 1;
     if (dir & 1 ? (r8 >= r10 && (uint16)(r8 - r10) < 8) : (uint16)(r8 - r10) >= 0xfff8) {

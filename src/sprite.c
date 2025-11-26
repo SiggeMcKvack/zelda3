@@ -577,7 +577,7 @@ static int Overworld_AllocSprite(uint8 type) {
           (type == 0xd0) ? 5 :
           (type == 0xeb || type == 0x53 || type  == 0xf3) ? 14 : 13;
   for (; i >= 0; i--) {
-    if (sprite_state[i] == 0 || sprite_type[i] == 0x41 && sprite_C[i] != 0)
+    if (sprite_state[i] == 0 || (sprite_type[i] == 0x41 && sprite_C[i] != 0))
       break;
   }
   return i;
@@ -600,7 +600,7 @@ void Garnish_SparkleCommon(int k, uint8 shift) {
   OamEnt *oam = GetOamCurPtr();
   int j = garnish_sprite[k];
   SetOamPlain(oam, pt.x, pt.y, kGarnishSparkle_Char[t],
-               (sprite_oam_flags[j] | sprite_obj_prio[j]) & 0xf0 | 4, 0);
+               ((sprite_oam_flags[j] | sprite_obj_prio[j]) & 0xf0) | 4, 0);
 }
 
 void Garnish_DustCommon(int k, uint8 shift) {
@@ -717,7 +717,7 @@ void SpriteDeath_MainEx(int k, bool second_entry) {
       ThrowableScenery_ScatterIntoDebris(k);
       return;
     }
-    if (type == 0x53 || type == 0x54 || type == 0x92 || type == 0x4a && sprite_C[k] >= 2) {
+    if (type == 0x53 || type == 0x54 || type == 0x92 || (type == 0x4a && sprite_C[k] >= 2)) {
       SpriteActive_Main(k);
       return;
     }
@@ -913,7 +913,7 @@ void Sprite_DrawMultiple(int k, const DrawMultipleData *src, int n, PrepOamCoord
   do {
     uint16 d = src->char_flags ^ WORD(info->r4);
     if (word_7E0CFE >= 1)
-      d = d & ~0xE00 | 0x400;
+      d = (d & ~0xE00) | 0x400;
     SetOamHelper0(oam, src->x + info->x, src->y + info->y, d, d >> 8, src->ext);
 
   } while (src++, oam++, --n);
@@ -1201,7 +1201,7 @@ void Sprite_TimersAndOam(int k) {  // 8683f2
   int floor = link_is_on_lower_level;
   if (floor != 3)
     floor = sprite_floor[k];
-  sprite_obj_prio[k] = sprite_obj_prio[k] & 0xcf | kSpritePrios[floor];
+  sprite_obj_prio[k] = (sprite_obj_prio[k] & 0xcf) | kSpritePrios[floor];
 }
 
 void Sprite_Get16BitCoords(int k) {  // 8684c1
@@ -1491,11 +1491,11 @@ void Sprite_InvertSpeed_XY(int k) {  // 86d9d5
 }
 
 bool Sprite_ReturnIfInactive(int k) {  // 86d9ec
-  return (sprite_state[k] != 9 || flag_unk1 || submodule_index || !(sprite_defl_bits[k] & 0x80) && sprite_pause[k]);
+  return (sprite_state[k] != 9 || flag_unk1 || submodule_index || (!(sprite_defl_bits[k] & 0x80) && sprite_pause[k]));
 }
 
 bool Sprite_ReturnIfPaused(int k) {  // 86d9f3
-  return (flag_unk1 || submodule_index || !(sprite_defl_bits[k] & 0x80) && sprite_pause[k]);
+  return (flag_unk1 || submodule_index || (!(sprite_defl_bits[k] & 0x80) && sprite_pause[k]));
 }
 
 void SpriteDraw_SingleLarge(int k) {  // 86dc10
@@ -1521,7 +1521,7 @@ void Sprite_PrepAndDrawSingleLargeNoPrep(int k, PrepOamCoordsRet *info) {  // 86
 void SpriteDraw_Shadow_custom(int k, PrepOamCoordsRet *info, uint8 a) {  // 86dc5c
   uint16 y = Sprite_GetY(k) + a;
   info->y = y;
-  if (sprite_pause[k] || sprite_state[k] == 10 && sprite_unk3[k] == 3)
+  if (sprite_pause[k] || (sprite_state[k] == 10 && sprite_unk3[k] == 3))
     return;
   y -= BG2VOFS_copy2;
   info->y = y;
@@ -1639,7 +1639,7 @@ void CarriedSprite_CheckForThrow(int k) {  // 86df6d
   sprite_state[k] = sprite_unk4[k];
   sprite_z_vel[k] = 0;
   sprite_unk3[k] = 0;
-  sprite_flags3[k] = sprite_flags3[k] & ~0x10 | kSpriteInit_Flags3[sprite_type[k]] & 0x10;
+  sprite_flags3[k] = (sprite_flags3[k] & ~0x10) | (kSpriteInit_Flags3[sprite_type[k]] & 0x10);
   int j = link_direction_facing >> 1;
   sprite_x_vel[k] = kSpriteHeld_Throw_Xvel[j];
   sprite_y_vel[k] = kSpriteHeld_Throw_Yvel[j];
@@ -1683,7 +1683,7 @@ void ThrownSprite_CheckDamageToSprites(int k) {  // 86e172
     return;
   for (int i = 15; i >= 0; i--) {
     if (i != cur_object_index && sprite_type[k] != 0xd2 && sprite_state[i] >= 9 &&
-      ((i ^ frame_counter) & 3 | sprite_ignore_projectile[i] | sprite_hit_timer[i]) == 0 && sprite_floor[k] == sprite_floor[i])
+      (((i ^ frame_counter) & 3) | sprite_ignore_projectile[i] | sprite_hit_timer[i]) == 0 && sprite_floor[k] == sprite_floor[i])
       ThrownSprite_CheckDamageToSingleSprite(k, i);
   }
 }
@@ -1767,7 +1767,7 @@ void SpriteStunned_Main_Func1(int k) {  // 86e2ba
   SpriteActive_Main(k);
   if (sprite_unk5[k]) {
     if (sprite_delay_main[k] < 32)
-      sprite_oam_flags[k] = sprite_oam_flags[k] & 0xf1 | 4;
+      sprite_oam_flags[k] = (sprite_oam_flags[k] & 0xf1) | 4;
     uint8 t = ((k << 4) ^ frame_counter) | submodule_index;
     if (t & kSpriteStunned_Main_Func1_Masks[sprite_delay_main[k] >> 4])
       return;
@@ -1844,7 +1844,7 @@ bool Sprite_PrepOamCoordOrDoubleRet(int k, PrepOamCoordsRet *ret) {  // 86e41e
   int xt = (enhanced_features0 & kFeatures0_ExtendScreen64) ? 0x40 : 0;
 
   if ((uint16)(x + 0x40 + xt) >= (0x170 + xt * 2) ||
-      (uint16)(y + 0x40) >= 0x170 && !(sprite_flags4[k] & 0x20)) {
+      ((uint16)(y + 0x40) >= 0x170 && !(sprite_flags4[k] & 0x20))) {
     sprite_pause[k]++;
     if (!(sprite_defl_bits[k] & 0x80))
       Sprite_KillSelf(k);
@@ -2000,7 +2000,7 @@ bool Sprite_CheckTileProperty(int k, int j) {  // 86e73c
     uint8 type = sprite_type[k];
     if ((type == 0xd2 || type == 0x8a) && b == 9)
       return false;
-    if (type == 0x94 && !sprite_E[k] || type == 0xe3 || type == 0x8c || type == 0x9a || type == 0x81)
+    if ((type == 0x94 && !sprite_E[k]) || type == 0xe3 || type == 0x8c || type == 0x9a || type == 0x81)
       return (b != 8) && (b != 9);
   }
 
@@ -2302,7 +2302,7 @@ void Guard_ParrySwordAttacks(int k) {  // 86eb5e
 
 void Sprite_AttemptZapDamage(int k) {  // 86ec02
   uint8 a = sprite_type[k];
-  if ((a == 0x7a || a == 0xd && (a = link_sword_type) < 4 || (a == 0x24 || a == 0x23) && sprite_delay_main[k] != 0) && sprite_state[k] == 9) {
+  if ((a == 0x7a || (a == 0xd && (a = link_sword_type) < 4) || ((a == 0x24 || a == 0x23) && sprite_delay_main[k] != 0)) && sprite_state[k] == 9) {
     if (!countdown_for_blink) {
       sprite_delay_aux1[k] = 64;
       link_electrocute_on_touch = 64;
@@ -2594,7 +2594,7 @@ bool Sprite_CheckDamageToLink(int k) {  // 86f145
 }
 
 bool Sprite_CheckDamageToPlayer_1(int k) {  // 86f14a
-  if ((k ^ frame_counter) & 3 | sprite_hit_timer[k])
+  if (((k ^ frame_counter) & 3) | sprite_hit_timer[k])
     return false;
   return Sprite_CheckDamageToLink_same_layer(k);
 }
@@ -3127,7 +3127,7 @@ void SpriteModule_Fall2(int k) {  // 86fbea
 
   if (delay >= 0x40) {
     if (sprite_oam_flags[k] != 5) {
-      if (!(delay & 7 | submodule_index | flag_unk1))
+      if (!((delay & 7) | submodule_index | flag_unk1))
         SpriteSfx_QueueSfx3WithPan(k, 0x31);
       SpriteActive_Main(k);
       PrepOamCoordsRet info;
@@ -3154,7 +3154,7 @@ void SpriteModule_Fall2(int k) {  // 86fbea
     sprite_graphics[k] = t;
     SpriteDraw_FallingHumanoid(k);
   }
-  if (frame_counter & kSpriteFall_Tab3[sprite_delay_main[k] >> 3] | submodule_index)
+  if ((frame_counter & kSpriteFall_Tab3[sprite_delay_main[k] >> 3]) | submodule_index)
     return;
   Sprite_CheckTileProperty(k, 0x68);
   if (sprite_tiletype != 0x20) {
@@ -3403,7 +3403,7 @@ void Garnish13_PyramidDebris(int k) {  // 89b216
   }
   oam->y = t;
   oam->charnum = 0x5c;
-  oam->flags = (frame_counter << 3) & 0xc0 | 0x34;
+  oam->flags = ((frame_counter << 3) & 0xc0) | 0x34;
   bytewise_extended_oam[oam - oam_buf] = 0;
 }
 
@@ -3478,12 +3478,12 @@ void Garnish09_LightningTrail(int k) {  // 89b429
   int j = garnish_sprite[k];
   SetOamPlain(GetOamCurPtr(), pt.x, pt.y,
                kLightningTrail_Char[j] - (BYTE(dungeon_room_index2) == 0x20 ? 0x80 : 0),
-               (frame_counter << 1) & 0xe | kLightningTrail_Flags[j], 2);
+               ((frame_counter << 1) & 0xe) | kLightningTrail_Flags[j], 2);
   Garnish_CheckPlayerCollision(k, pt.x, pt.y);
 }
 
 void Garnish_CheckPlayerCollision(int k, int x, int y) {  // 89b459
-  if ((k ^ frame_counter) & 7 | countdown_for_blink | link_disable_sprite_damage)
+  if (((k ^ frame_counter) & 7) | countdown_for_blink | link_disable_sprite_damage)
     return;
 
   if ((uint8)(link_x_coord - BG2HOFS_copy2 - x + 12) < 24 &&
@@ -3542,7 +3542,7 @@ void Garnish0E_TrinexxFireBreath(int k) {  // 89b55d
     return;
   int j = garnish_sprite[k];
   SetOamPlain(GetOamCurPtr(), pt.x, pt.y, kTrinexxLavaBubble_Char[garnish_countdown[k] >> 3],
-               (sprite_oam_flags[j] | sprite_obj_prio[j]) & 0xf0 | 0xe, 0);
+               ((sprite_oam_flags[j] | sprite_obj_prio[j]) & 0xf0) | 0xe, 0);
 }
 
 void Garnish0F_BlindLaserTrail(int k) {  // 89b591
@@ -3799,7 +3799,7 @@ void Overworld_LoadSprites() {  // 89c4ac
     }
     uint8 r2 = (src[0] >> 4) << 2;
     uint8 r6 = (src[1] >> 4) + r2;
-    uint8 r5 = src[1] & 0xf | src[0] << 4;
+    uint8 r5 = (src[1] & 0xf) | (src[0] << 4);
     sprite_where_in_overworld[r5 | r6 << 8] = src[2] + 1;
   }
 }
@@ -3859,7 +3859,7 @@ void Sprite_Overworld_ProximityMotivatedLoad(uint16 x, uint16 y) {  // 89c6f5
     return;
 
   uint8 r1 = (yt >> 8) * 4 | (xt >> 8);
-  uint8 r0 = y & 0xf0 | x >> 4 & 0xf;
+  uint8 r0 = (y & 0xf0) | ((x >> 4) & 0xf);
   Overworld_LoadProximaSpriteIfAlive(r1 << 8 | r0);
 }
 
@@ -3982,7 +3982,7 @@ void Garnish16_ThrownItemDebris(int k) {  // 89f0cb
   OamEnt *oam = GetOamCurPtr();
   tmp_counter = garnish_sprite[k];
   uint8 base = ((garnish_countdown[k] >> 2) ^ 7) << 2;
-  if (tmp_counter == 4 || tmp_counter == 2 && !player_is_indoors)
+  if (tmp_counter == 4 || (tmp_counter == 2 && !player_is_indoors))
     base += 0x20;
   for (int i = 3; i >= 0; i--, oam++) {
     int j = i + base;
@@ -4340,7 +4340,7 @@ void SpriteFall_Draw(int k, PrepOamCoordsRet *info) {  // 9dffc5
   oam->x = info->x + 4;
   oam->y = info->y + 4;
   oam->charnum = kSpriteFall_Char[sprite_delay_main[k] >> 2];
-  oam->flags = info->flags & 0x30 | 0x04;
+  oam->flags = (info->flags & 0x30) | 0x04;
   Sprite_CorrectOamEntries(k, 0, 0);
 }
 

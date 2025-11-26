@@ -530,6 +530,8 @@ void Snes_FreeDecompressed(DecompressedData *data) {
 // ============================================================================
 
 CompressedData* Snes_Compress(const uint8_t *src, size_t src_len) {
+  (void)src;
+  (void)src_len;
   // TODO: Implement compression
   LogWarn("SNES compression not yet implemented");
   return NULL;

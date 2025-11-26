@@ -435,7 +435,7 @@ void Overlord08_BlobSpawner(int k) {  // 89bcc3
     sprite_ai_state[j] = 2;
     sprite_E[j] = 2;
     sprite_C[j] = 2;
-    sprite_head_dir[j] = GetRandomNumber() & 31 | 16;
+    sprite_head_dir[j] = (GetRandomNumber() & 31) | 16;
   }
 }
 

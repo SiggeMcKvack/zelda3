@@ -506,7 +506,7 @@ void Polyhedral_InitializeThread() {  // 89f7de
 void Module00_Intro() {  // 8cc120
   uint8 skip_at = enhanced_features0 & kFeatures0_SkipIntroOnKeypress ? 4 : 8;
 
-  if (submodule_index >= skip_at && ((filtered_joypad_L & 0xc0 | filtered_joypad_H) & 0xd0)) {
+  if (submodule_index >= skip_at && (((filtered_joypad_L & 0xc0) | filtered_joypad_H) & 0xd0)) {
     FadeMusicAndResetSRAMMirror();
     return;
   }
@@ -610,7 +610,7 @@ void Intro_FadeInBg() {  // 8cc284
     if (frame_counter & 1)
       Palette_FadeIntro2();
   } else {
-    if ((filtered_joypad_L & 0xc0 | filtered_joypad_H) & 0xd0)
+    if (((filtered_joypad_L & 0xc0) | filtered_joypad_H) & 0xd0)
       FadeMusicAndResetSRAMMirror();
     else {
       if (!--subsubmodule_index)
@@ -1488,7 +1488,7 @@ void Credits_HandleSceneFade() {  // 8e9a2a
     BYTE(flag_travel_bird) = kEnding_Case2_Tab0[frame_counter >> 2 & 1];
     k = 6;
     j = sprite_x_vel[k] >> 7 & 1;
-    sprite_oam_flags[k] = (sprite_x_vel[k] + kEnding_Case2_Tab1[j]) >> 1 & 0x40 | 0x32;
+    sprite_oam_flags[k] = ((sprite_x_vel[k] + kEnding_Case2_Tab1[j]) >> 1 & 0x40) | 0x32;
     Credits_SpriteDraw_Single(k, 2, 0x24);
     Credits_SpriteDraw_CirclingBirds(k);
     k -= 1;
@@ -1546,7 +1546,7 @@ void Credits_HandleSceneFade() {  // 8e9a2a
     Credits_SpriteDraw_Single(k, 1, 0x3c);
     k--;
     do {
-      sprite_oam_flags[k] = (sprite_x_vel[k] - 1) >> 1 & 0x40 ^ 0x71;
+      sprite_oam_flags[k] = ((sprite_x_vel[k] - 1) >> 1 & 0x40) ^ 0x71;
       sprite_graphics[k] = frame_counter >> 3 & 1;
       if (g_r16 >= kEnding_Case4_Ctr[k] && !sprite_delay_main[k]) {
         uint8 a = kEnding_Case4_DelayVel[sprite_A[k]];
@@ -1761,7 +1761,7 @@ void Credits_HandleSceneFade() {  // 8e9a2a
       Sprite_MoveXY(k);
     }
 
-    sprite_oam_flags[k] = sprite_x_vel[k] >> 1 & 0x40 ^ 0x7e;
+    sprite_oam_flags[k] = (sprite_x_vel[k] >> 1 & 0x40) ^ 0x7e;
     sprite_flags2[k] = 1;
     sprite_flags3[k] = 0x30;
     sprite_z[k] = 16;
@@ -1875,7 +1875,7 @@ void Credits_HandleSceneFade() {  // 8e9a2a
         if (sprite_B[k] == 8)
           sprite_B[k] = 0;
         sprite_delay_aux1[k] = kEnding_Case15_Delay[sprite_B[k] & 7];
-        sprite_graphics[k] = sprite_graphics[k] & 1 ^ 1;
+        sprite_graphics[k] = (sprite_graphics[k] & 1) ^ 1;
         sprite_B[k]++;
       }
       Credits_SpriteDraw_Single(k, 1, 20);
@@ -1941,7 +1941,7 @@ void Ending_Func2(int k, uint8 ain) {  // 8ea645
   }
   uint8 a = kEnding_Func2_Tab0[j];
   sprite_graphics[k] = (a == 255) ? frame_counter >> 3 & 1 : a;
-  if ((j < 5 || j >= 10 && j < 15) && !(frame_counter & 1))
+  if ((j < 5 || (j >= 10 && j < 15)) && !(frame_counter & 1))
     sprite_y_lo[k]++;
 }
 

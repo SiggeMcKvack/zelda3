@@ -577,7 +577,7 @@ void Module05_LoadFile() {  // 828136
     subsubmodule_index = 0;
     death_var4 = 0;
   } else {
-    if (mosaic_level || death_var5 != 0 && !death_var4 || sram_progress_indicator < 2 || which_starting_point == 5) {
+    if (mosaic_level || (death_var5 != 0 && !death_var4) || sram_progress_indicator < 2 || which_starting_point == 5) {
       LoadDungeonRoomRebuildHUD();
       return;
     }
@@ -769,7 +769,7 @@ void AncillaAdd_ItemReceipt(uint8 ain, uint8 yin, int chest_pos) {  // 8985e8
       *p = 1;
       Hud_RefreshIcon();
     }
-  } else if ((t = 1, j == 0x24) || item_receipt_method != 2 && (j == 0x27 || (t = 3, j == 0x28) || (t = 10, j == 0x31))) {
+  } else if ((t = 1, j == 0x24) || (item_receipt_method != 2 && (j == 0x27 || (t = 3, j == 0x28) || (t = 10, j == 0x31)))) {
     *p += t;
     if (*p > 99)
       *p = 99;

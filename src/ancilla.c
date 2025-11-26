@@ -413,7 +413,7 @@ void SpinSpark_Draw(int k, int offs) {
   for(int i = 0; i < 4; i++, t++) {
     if (kInitialSpinSpark_Char[t] != 0xff) {
       Ancilla_SetOam(oam, info.x + kInitialSpinSpark_X[t], info.y + kInitialSpinSpark_Y[t],
-                     kInitialSpinSpark_Char[t], kInitialSpinSpark_Flags[t] & ~0x30 | HIBYTE(oam_priority_value), 0);
+                     kInitialSpinSpark_Char[t], (kInitialSpinSpark_Flags[t] & ~0x30) | HIBYTE(oam_priority_value), 0);
       oam++;
     }
   }
@@ -633,7 +633,7 @@ ProjectSpeedRet Ancilla_ProjectReflexiveSpeedOntoSprite(int k, uint16 x, uint16 
 
 void Bomb_CheckSpriteDamage(int k) {  // 888287
   for (int j = 15; j >= 0; j--) {
-    if ((j ^ frame_counter) & 3 | sprite_hit_timer[j] | sprite_ignore_projectile[j])
+    if ((((j ^ frame_counter) & 3)) | sprite_hit_timer[j] | sprite_ignore_projectile[j])
       continue;
     if (sprite_floor[j] != ancilla_floor[k] || sprite_state[j] < 9)
       continue;
@@ -1065,7 +1065,7 @@ void Ancilla04_BeamHit(int k) {  // 888d19
 
 int Ancilla_CheckSpriteCollision(int k) {  // 888d68
   for (int j = 15; j >= 0; j--) {
-    if (ancilla_type[k] == 9 || ancilla_type[k] == 0x1f || ((j ^ frame_counter) & 3 | sprite_pause[j]) == 0) {
+    if (ancilla_type[k] == 9 || ancilla_type[k] == 0x1f || ((((j ^ frame_counter) & 3)) | sprite_pause[j]) == 0) {
       if ((sprite_state[j] >= 9 && (sprite_defl_bits[j] & 2 || !ancilla_objprio[k])) && ancilla_floor[k] == sprite_floor[j]) {
         if (Ancilla_CheckSpriteCollision_Single(k, j))
           return j;
@@ -1272,7 +1272,7 @@ void Ancilla05_Boomerang(int k) {  // 8890fc
 
   if (!ancilla_aux_timer[k]) {
     if (button_b_frames < 9 && player_handler_timer == 0) {
-      if (link_is_bunny_mirror || link_auxiliary_state || link_item_in_hand == 0 && (enhanced_features0 & kFeatures0_MiscBugFixes)) {
+      if (link_is_bunny_mirror || link_auxiliary_state || (link_item_in_hand == 0 && (enhanced_features0 & kFeatures0_MiscBugFixes))) {
         Boomerang_Terminate(k);
         return;
       }
@@ -1396,7 +1396,7 @@ void Boomerang_Draw(int k) {  // 889338
     oam_ext_cur_ptr = (i >> 2) + 0xa20;
     oam_cur_ptr = i + 0x800;
   }
-  Ancilla_SetOam_Safe(GetOamCurPtr(), x, y, 0x26, kBoomerang_Flags[ancilla_G[k] * 4 + j] & ~0x30 | HIBYTE(oam_priority_value), 2);
+  Ancilla_SetOam_Safe(GetOamCurPtr(), x, y, 0x26, (kBoomerang_Flags[ancilla_G[k] * 4 + j] & ~0x30) | HIBYTE(oam_priority_value), 2);
 }
 
 void Ancilla06_WallHit(int k) {  // 8893e8
@@ -1452,7 +1452,7 @@ void WallHit_Draw(int k) {  // 8894df
   for (int n = 3; n >= 0; n--, t++) {
     if (kWallHit_Char[t] != 0) {
       Ancilla_SetOam(oam, info.x + kWallHit_X[t], info.y + kWallHit_Y[t], kWallHit_Char[t],
-                     kWallHit_Flags[t] & ~0x30 | HIBYTE(oam_priority_value), 0);
+                     (kWallHit_Flags[t] & ~0x30) | HIBYTE(oam_priority_value), 0);
       oam++;
     }
     oam = Ancilla_AllocateOamFromCustomRegion(oam);
@@ -1517,7 +1517,7 @@ label1:
         old_y = Ancilla_GetY(k) + dung_floor_y_vel;
         Ancilla_SetX(k, Ancilla_GetX(k) + dung_floor_x_vel);
       }
-    } else if (a == 0x20 || (a & 0xf0) == 0xb0 && a != 0xb6 && a != 0xbc) {
+    } else if (a == 0x20 || ((a & 0xf0) == 0xb0 && a != 0xb6 && a != 0xbc)) {
       if (!(link_state_bits & 0x80)) {
         if (k + 1 == flag_is_ancilla_to_pick_up)
           flag_is_ancilla_to_pick_up = 0;
@@ -1690,7 +1690,7 @@ clear_pickup_item:
 
     if (flag_is_ancilla_to_pick_up != k + 1)
       return;
-    if (!link_disable_sprite_damage && link_incapacitated_timer || byte_7E03FD || link_auxiliary_state == 1) {
+    if ((!link_disable_sprite_damage && link_incapacitated_timer) || byte_7E03FD || link_auxiliary_state == 1) {
       ancilla_R[k] = 1;
       ancilla_z_vel[k] = 0;
       flag_is_ancilla_to_pick_up = 0;
@@ -1840,9 +1840,9 @@ void Bomb_Draw(int k) {  // 889e9e
   }
 
   if (ancilla_item_to_link[k] == 0) {
-    if (ancilla_L[k] == 0 && (sprite_type[0] == 0x92 || k + 1 == flag_is_ancilla_to_pick_up ) && (!(link_state_bits & 0x80) || ancilla_K[k] != 3 && link_direction_facing == 0)) {
+    if (ancilla_L[k] == 0 && (sprite_type[0] == 0x92 || k + 1 == flag_is_ancilla_to_pick_up ) && (!(link_state_bits & 0x80) || (ancilla_K[k] != 3 && link_direction_facing == 0))) {
       Ancilla_AllocateOamFromRegion_B_or_E(12);
-    } else if (sort_sprites_setting && ancilla_floor[k] && (ancilla_L[k] || k + 1 == flag_is_ancilla_to_pick_up && (link_state_bits & 0x80))) {
+    } else if (sort_sprites_setting && ancilla_floor[k] && (ancilla_L[k] || (k + 1 == flag_is_ancilla_to_pick_up && (link_state_bits & 0x80)))) {
       oam_cur_ptr = 0x800 + 0x34 * 4;
       oam_ext_cur_ptr = 0xa20 + 0x34;
     }
@@ -1896,7 +1896,7 @@ void DoorDebris_Draw(int k) {  // 88a091
     //kDoorDebris_XY
     uint16 d = kDoorDebris_CharFlags[t];
     Ancilla_SetOam(oam, x + kDoorDebris_XY[t * 2 + 1], y + kDoorDebris_XY[t * 2 + 0],
-                   d, (d >> 8) & 0xc0 | HIBYTE(oam_priority_value), 0);
+                   d, ((d >> 8) & 0xc0) | HIBYTE(oam_priority_value), 0);
     oam = Ancilla_AllocateOamFromCustomRegion(oam + 1);
   }
 }
@@ -2009,7 +2009,7 @@ void Arrow_Draw(int k) {  // 88a36e
   for (int i = 0; i != 2; i++, j++) {
     if (kArrow_Draw_Char[j] != 0xff) {
       Ancilla_SetOam(oam, x + kArrow_Draw_X[j], y + kArrow_Draw_Y[j],
-                     kArrow_Draw_Char[j], kArrow_Draw_Flags[j] & ~0x3E | flags | HIBYTE(oam_priority_value), 0);
+                     kArrow_Draw_Char[j], (kArrow_Draw_Flags[j] & ~0x3E) | flags | HIBYTE(oam_priority_value), 0);
       oam++;
     }
   }
@@ -2045,7 +2045,7 @@ void Ancilla0B_IceRodShot(int k) {  // 88a4dd
     if (sign8(--ancilla_aux_timer[k])) {
       if (++ancilla_item_to_link[k] & ~1) {
         ancilla_step[k] = 1;
-        ancilla_item_to_link[k] = ancilla_item_to_link[k] & 7 | 4;
+        ancilla_item_to_link[k] = (ancilla_item_to_link[k] & 7) | 4;
       }
       ancilla_aux_timer[k] = 3;
     }
@@ -2098,7 +2098,7 @@ void IceShotSpread_Draw(int k) {  // 88a571
     }
     oam->y = yv;
     oam->charnum = kIceShotSpread_CharFlags[j * 2 + 0];
-    oam->flags = kIceShotSpread_CharFlags[j * 2 + 1] & ~0x30 | HIBYTE(oam_priority_value);
+    oam->flags = (kIceShotSpread_CharFlags[j * 2 + 1] & ~0x30) | HIBYTE(oam_priority_value);
     bytewise_extended_oam[oam - oam_buf] = 0;
     oam = Ancilla_AllocateOamFromCustomRegion(oam + 1);
   }
@@ -2197,7 +2197,7 @@ OamEnt *AncillaDraw_Explosion(OamEnt *oam, int frame, int idx, int idx_end, uint
       int i = idx + base_frame;
       Ancilla_SetOam_Safe(oam, x + kBomb_DrawExplosion_XY[i * 2 + 1], y + kBomb_DrawExplosion_XY[i * 2 + 0],
                           kBomb_DrawExplosion_CharFlags[frame * 2],
-                          kBomb_DrawExplosion_CharFlags[frame * 2 + 1] & ~0x3E | HIBYTE(oam_priority_value) | r11,
+                          (kBomb_DrawExplosion_CharFlags[frame * 2 + 1] & ~0x3E) | HIBYTE(oam_priority_value) | r11,
                           kBomb_DrawExplosion_Ext[frame]);
       oam++;
     }
@@ -2583,8 +2583,8 @@ void AncillaAdd_BombosSpell(uint8 a, uint8 y) {  // 88af66
 
   uint8 t = kGeneratedBombosArr[frame_counter];
   t = (t < 0xe0) ? t : t & 0x7f;
-  bombos_x_coord[0] = link_x_coord & ~0xff | t;
-  bombos_y_coord[0] = link_y_coord & ~0xff | t;
+  bombos_x_coord[0] = (link_x_coord & ~0xff) | t;
+  bombos_y_coord[0] = (link_y_coord & ~0xff) | t;
 
   static const int16 kBombos_YDelta[4] = {16, 24, -128, -16};
   static const int16 kBombos_XDelta[4] = {-16, -128, 0, 128};
@@ -2920,7 +2920,7 @@ void AncillaDraw_QuakeInitialBolts(int k) {  // 88b793
       if (y < 0xf0)
         yval = y;
     }
-    SetOamPlain(oam, xval, yval, kQuakeDrawGroundBolts_Char[p->f & 0x0f], p->f & 0xc0 | 0x3c, 2);
+    SetOamPlain(oam, xval, yval, kQuakeDrawGroundBolts_Char[p->f & 0x0f], (p->f & 0xc0) | 0x3c, 2);
     oam++, oam_cur_ptr += 4, oam_ext_cur_ptr += 1;
   } while (++p != pend);
 }
@@ -2940,7 +2940,7 @@ void QuakeSpell_SpreadBolts(int k) {  // 88b84f
   const QuakeItem *p = &kQuakeItems2[idx], *pend = p + num;
   OamEnt *oam = GetOamCurPtr();
   do {
-    SetOamPlain(oam, p->x, p->y, kQuakeDrawGroundBolts_Char[p->f & 0x0f], p->f & 0xc0 | 0x3c, p->f >> 4 & 3);
+    SetOamPlain(oam, p->x, p->y, kQuakeDrawGroundBolts_Char[p->f & 0x0f], (p->f & 0xc0) | 0x3c, p->f >> 4 & 3);
     oam_cur_ptr += 4, oam_ext_cur_ptr += 1;
     oam = Ancilla_AllocateOamFromCustomRegion(oam + 1);
   } while (++p != pend);
@@ -2995,7 +2995,7 @@ void Ancilla_MagicPowder_Draw(int k) {  // 88baeb
   int b = ancilla_arr25[k];
   for (int i = 0; i < 4; i++, oam++) {
     Ancilla_SetOam(oam, info.x + kMagicPowder_DrawX[b * 4 + i], info.y + kMagicPowder_DrawY[b * 4 + i],
-                   kMagicPowder_Draw_Char[b], kMagicPowder_Draw_Flags[b * 4 + i] & ~0x30 | HIBYTE(oam_priority_value), 0);
+                   kMagicPowder_Draw_Char[b], (kMagicPowder_Draw_Flags[b * 4 + i] & ~0x30) | HIBYTE(oam_priority_value), 0);
   }
 }
 
@@ -3140,7 +3140,7 @@ void Ancilla1F_Hookshot(int k) {  // 88bd74
     if (r0 == 0)
       goto endif_7;
   } else {
-    if (!((detection_of_ledge_tiles_horiz_uphoriz & 3 | tiledetect_vertical_ledge | detection_of_unknown_tile_types) & 0x33))
+    if (!(((detection_of_ledge_tiles_horiz_uphoriz & 3) | tiledetect_vertical_ledge | detection_of_unknown_tile_types) & 0x33))
       goto endif_7;
   }
   if (sign8(--ancilla_G[k])) {
@@ -3354,7 +3354,7 @@ void Ancilla35_MasterSwordReceipt(int k) {  // 88c25f
 
   for (int i = 0; i < 4; i++, j++, oam++) {
     Ancilla_SetOam(oam, pt.x + kSwordCeremony_X[j], pt.y + kSwordCeremony_Y[j],
-                   kSwordCeremony_Char[j], kSwordCeremony_Flags[j] & ~0x30 | 4 | HIBYTE(oam_priority_value), 0);
+                   kSwordCeremony_Char[j], (kSwordCeremony_Flags[j] & ~0x30) | 4 | HIBYTE(oam_priority_value), 0);
   }
 }
 
@@ -3398,7 +3398,7 @@ void Ancilla22_ItemReceipt(int k) {  // 88c38a
   if (a == 0)
     goto label_a;
   if (a == 1) {
-    if (ancilla_item_to_link[k] != 0x37 && ancilla_item_to_link[k] != 0x38 && ancilla_item_to_link[k] != 0x39 || zelda_read_apui00() == 0)
+    if ((ancilla_item_to_link[k] != 0x37 && ancilla_item_to_link[k] != 0x38 && ancilla_item_to_link[k] != 0x39) || zelda_read_apui00() == 0)
       goto endif_6;
     ancilla_aux_timer[k]++;
   }
@@ -3579,7 +3579,7 @@ void WishPondItem_Draw(int k) {  // 88c760
 
   OamEnt *oam = Ancilla_ReceiveItem_Draw(k, pt.x, pt.y - (int8)ancilla_z[k]);
 
-  if (link_picking_throw_state != 2 || !sign8(ancilla_z_vel[k]) && ancilla_z_vel[k] >= 2)
+  if (link_picking_throw_state != 2 || (!sign8(ancilla_z_vel[k]) && ancilla_z_vel[k] >= 2))
     return;
 
   uint8 xx = kGeneratedWishPondItem[ancilla_item_to_link[k]];
@@ -4450,7 +4450,7 @@ void Ancilla30_ByrnaWindupSpark(int k) {  // 88db24
     if (kInitialCaneSpark_Draw_Char[j] != 255) {
       Ancilla_SetOam(oam, pt.x + kInitialCaneSpark_Draw_X[j], pt.y + kInitialCaneSpark_Draw_Y[j],
                      kInitialCaneSpark_Draw_Char[j],
-                     kInitialCaneSpark_Draw_Flags[j] & ~0x30 | HIBYTE(oam_priority_value), 0);
+                     (kInitialCaneSpark_Draw_Flags[j] & ~0x30) | HIBYTE(oam_priority_value), 0);
       oam++;
     }
   }
@@ -4646,7 +4646,7 @@ void Ancilla27_Duck(int k) {  // 88dde8
     Ancilla_Sfx3_Pan(k, 0x1e);
   }
 
-  if (ancilla_L[k] || ancilla_step[k] && (flag_unk1++, true)) {
+  if (ancilla_L[k] || (ancilla_step[k] && (flag_unk1++, true))) {
     ancilla_z_vel[k]--;
     Ancilla_MoveZ(k);
   }
@@ -4828,9 +4828,9 @@ void SomariaBlock_CheckForTransitTile(int k) {  // 88e191
 
 int Ancilla_CheckBasicSpriteCollision(int k) {  // 88e1f9
   for (int j = 15; j >= 0; j--) {
-    if (((j ^ frame_counter) & 3 | sprite_pause[j] | sprite_hit_timer[j]) != 0)
+    if ((((j ^ frame_counter) & 3) | sprite_pause[j] | sprite_hit_timer[j]) != 0)
       continue;
-    if (sprite_state[j] < 9 || !(sprite_defl_bits[j] & 2) && ancilla_objprio[k])
+    if (sprite_state[j] < 9 || (!(sprite_defl_bits[j] & 2) && ancilla_objprio[k]))
       continue;
     if (ancilla_floor[k] != sprite_floor[j])
       continue;
@@ -4962,7 +4962,7 @@ label1:
         old_y = Ancilla_GetY(k) + dung_floor_y_vel;
         Ancilla_SetX(k, Ancilla_GetX(k) + dung_floor_x_vel);
       }
-    } else if (a == 0x20 || (a & 0xf0) == 0xb0 && a != 0xb6 && a != 0xbc) {
+    } else if (a == 0x20 || ((a & 0xf0) == 0xb0 && a != 0xb6 && a != 0xbc)) {
       if (!(link_state_bits & 0x80)) {
         if (k + 1 == flag_is_ancilla_to_pick_up)
           flag_is_ancilla_to_pick_up = 0;
@@ -5018,7 +5018,7 @@ void AncillaDraw_SomariaBlock(int k) {  // 88e61b
 
   if (k + 1 == flag_is_ancilla_to_pick_up && link_state_bits & 0x80 && ancilla_K[k] != 3 && link_direction_facing == 0) {
     Ancilla_AllocateOamFromRegion_B_or_E(ancilla_numspr[k]);
-  } else if (sort_sprites_setting && ancilla_floor[k] && (ancilla_L[k] || k + 1 == flag_is_ancilla_to_pick_up && (link_state_bits & 0x80))) {
+  } else if (sort_sprites_setting && ancilla_floor[k] && (ancilla_L[k] || (k + 1 == flag_is_ancilla_to_pick_up && (link_state_bits & 0x80)))) {
     oam_cur_ptr = 0x8d0;
     oam_ext_cur_ptr = 0xa20 + 0x34;
   }
@@ -5034,7 +5034,7 @@ void AncillaDraw_SomariaBlock(int k) {  // 88e61b
   int r8 = 0;
   do {
     Ancilla_SetOam_Safe(oam, pt.x + kSomarianBlock_Draw_X[j], pt.y + kSomarianBlock_Draw_Y[j], 0xe9,
-                        kSomarianBlock_Draw_Flags[j] & ~0x30 | 2 | HIBYTE(oam_priority_value), 0);
+                        (kSomarianBlock_Draw_Flags[j] & ~0x30) | 2 | HIBYTE(oam_priority_value), 0);
     oam++;
   } while (j++, ++r8 & 3);
 
@@ -5111,7 +5111,7 @@ void Ancilla2D_SomariaBlockFizz(int k) {  // 88e9e8
     if (kSomariaBlockFizzle_Char[j] != 0xff) {
       Ancilla_SetOam(oam, x + kSomariaBlockFizzle_X[j], y + kSomariaBlockFizzle_Y[j],
                      kSomariaBlockFizzle_Char[j],
-                     kSomariaBlockFizzle_Flags[j] & ~0x30 | HIBYTE(oam_priority_value), 0);
+                     (kSomariaBlockFizzle_Flags[j] & ~0x30) | HIBYTE(oam_priority_value), 0);
     }
   }
 }
@@ -5122,7 +5122,7 @@ void Ancilla39_SomariaPlatformPoof(int k) {  // 88ea83
     return;
   ancilla_type[k] = 0;
   SpriteSpawnInfo info;
-  int x = Ancilla_GetX(k) & ~7 | 4, y = Ancilla_GetY(k) & ~7 | 4;
+  int x = (Ancilla_GetX(k) & ~7) | 4, y = (Ancilla_GetY(k) & ~7) | 4;
   uint8 floor = ancilla_floor[k];
   int j = Sprite_SpawnDynamically(k, 0xed, &info);  // wtf
   if (j >= 0) {
@@ -5171,7 +5171,7 @@ void Ancilla2E_SomariaBlockFission(int k) {  // 88eb3e
   int j = ancilla_item_to_link[k] * 8;
   for (int i = 0; i != 8; i++, j++, oam++) {
     Ancilla_SetOam(oam, pt.x + kSomarianBlockDivide_X[j], pt.y + kSomarianBlockDivide_Y[j] - z,
-                   kSomarianBlockDivide_Char[j], kSomarianBlockDivide_Flags[j] & ~0x30 | HIBYTE(oam_priority_value), 0);
+                   kSomarianBlockDivide_Char[j], (kSomarianBlockDivide_Flags[j] & ~0x30) | HIBYTE(oam_priority_value), 0);
   }
 }
 
@@ -5603,11 +5603,11 @@ void AncillaDraw_Shadow(OamEnt *oam, int k, int x, int y, uint8 pal) {  // 88f89
     x += 4;
   Ancilla_SetOam_Safe(oam, x, y,
                       kAncilla_DrawShadow_Char[k * 2],
-                      kAncilla_DrawShadow_Flags[k * 2] & ~0x30 | pal, 0);
+                      (kAncilla_DrawShadow_Flags[k * 2] & ~0x30) | pal, 0);
   uint8 ch = kAncilla_DrawShadow_Char[k * 2 + 1];
   if (ch != 0xff) {
     x += 8;
-    Ancilla_SetOam_Safe(oam + 1, x, y, ch, kAncilla_DrawShadow_Flags[k * 2 + 1] & ~0x30 | pal, 0);
+    Ancilla_SetOam_Safe(oam + 1, x, y, ch, (kAncilla_DrawShadow_Flags[k * 2 + 1] & ~0x30) | pal, 0);
   }
 }
 
@@ -6695,7 +6695,7 @@ void AncillaAdd_WaterfallSplash() {  // 899b68
 }
 
 void AncillaAdd_GTCutscene() {  // 899b83
-  if (link_state_bits & 0x80 | link_auxiliary_state ||
+  if ((link_state_bits & 0x80) | link_auxiliary_state ||
      (link_has_crystals & 0x7f) != 0x7f ||
       save_ow_event_info[0x43] & 0x20)
     return;

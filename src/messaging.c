@@ -763,7 +763,7 @@ do_inc:
       sound_effect_2 = 32;
     }
   }
-  if (!((filtered_joypad_L & 0xc0 | filtered_joypad_H) & 0xd0))
+  if (!(((filtered_joypad_L & 0xc0) | filtered_joypad_H) & 0xd0))
     return;
   sound_effect_1 = 44;
   // Only death with save/continue or save/quit counts as a death
@@ -2290,7 +2290,7 @@ void Text_LoadCharacterBuffer() {  // 8ec4e2
       text_msgbox_topleft = kText_Positions[TEXTCMD_PARAM(cmd)];
       break;
     case kTextCmd_Color:
-      text_tilemap_cur = ((0x387F & 0xe300) | 0x180) | (TEXTCMD_PARAM(cmd) << 10) & 0x3c00;
+      text_tilemap_cur = ((0x387F & 0xe300) | 0x180) | ((TEXTCMD_PARAM(cmd) << 10) & 0x3c00);
       break;
     default:
       // This combination is handled when rendering instead of here
@@ -2311,7 +2311,7 @@ uint8 *Text_WritePlayerName(uint8 *p) {  // 8ec5b3
   for (int i = 0; i < 6; i++) {
     uint8 *pp = &g_zenv.sram[0x3d9 + offs + i * 2];
     uint16 a = WORD(*pp);
-    p[i] = Text_FilterPlayerNameCharacters(a & 0xf | (a >> 1) & 0xf0);
+    p[i] = Text_FilterPlayerNameCharacters((a & 0xf) | ((a >> 1) & 0xf0));
   }
   int i = 6;
   while (i && p[i - 1] == 0x59)
@@ -2619,7 +2619,7 @@ void RenderText_FindYItem_Previous() {  // 8ecdc8
     uint8 x = choice_in_multiselect_box;
     if (sign8(x))
       choice_in_multiselect_box = x = 31;
-    if (x != 15 && ((&link_item_bow)[x] || x == 32 && (&link_item_bow)[x + 1]))
+    if (x != 15 && ((&link_item_bow)[x] || (x == 32 && (&link_item_bow)[x + 1])))
       break;
     choice_in_multiselect_box--;
   }
@@ -2631,7 +2631,7 @@ void RenderText_FindYItem_Next() {  // 8ecded
     uint8 x = choice_in_multiselect_box;
     if (x >= 32)
       choice_in_multiselect_box = x = 0;
-    if (x != 15 && ((&link_item_bow)[x] || x == 32 && (&link_item_bow)[x + 1]))
+    if (x != 15 && ((&link_item_bow)[x] || (x == 32 && (&link_item_bow)[x + 1])))
       break;
     choice_in_multiselect_box++;
   }
@@ -2671,7 +2671,7 @@ void RenderText_Draw_Choose3() {  // 8ecef7
   if (text_wait_countdown2 != 0) {
     if (--text_wait_countdown2 == 1)
       sound_effect_2 = 36;
-  } else if ((y = filtered_joypad_L & 0xc0 | filtered_joypad_H) & 0xd0) {
+  } else if ((y = (filtered_joypad_L & 0xc0) | filtered_joypad_H) & 0xd0) {
     sound_effect_1 = 43;
     text_render_state = 4;
   } else if (y & 12) {
@@ -2693,7 +2693,7 @@ void RenderText_Draw_Choose1Or2() {  // 8ecf72
   if (text_wait_countdown2 != 0) {
     if (--text_wait_countdown2 == 1)
       sound_effect_2 = 36;
-  } else if ((y = filtered_joypad_L & 0xc0 | filtered_joypad_H) & 0xd0) {
+  } else if ((y = (filtered_joypad_L & 0xc0) | filtered_joypad_H) & 0xd0) {
     sound_effect_1 = 43;
     text_render_state = 4;
   } else if (y & 12) {

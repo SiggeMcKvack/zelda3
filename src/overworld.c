@@ -269,7 +269,7 @@ int LookupInOwEntranceTab2(uint16 pos) {
 
 bool CanEnterWithTagalong(int e) {
   uint8 t = follower_indicator;
-  return t == 0 || t == 5 || t == 14 || t == 1 || (t == 7 || t == 8) && e >= 59;
+  return t == 0 || t == 5 || t == 14 || t == 1 || ((t == 7 || t == 8) && e >= 59);
 }
 
 int DirToEnum(int dir) {
@@ -438,7 +438,7 @@ void PreOverworld_LoadProperties() {  // 8283c7
     xt = 9;
   } else if (ow_anim_tiles = 0x5a, sc >= 0x40) {
     goto dark;
-  } else if (dr == 0xe3 || dr == 0x18 || dr == 0x2f || dr == 0x1f && sc == 0x18) {
+  } else if (dr == 0xe3 || dr == 0x18 || dr == 0x2f || (dr == 0x1f && sc == 0x18)) {
     xt = sram_progress_indicator < 3 ? 7 : 2;
   } else {
     xt = savegame_has_master_sword_flags & 0x40 ? 2 : 5;
@@ -729,7 +729,7 @@ void Module09_Overworld() {  // 82a475
 void OverworldOverlay_HandleRain() {  // 82a4cd
   static const uint8 kOverworld_DrawBadWeather_X[4] = { 1, 0, 1, 0 };
   static const uint8 kOverworld_DrawBadWeather_Y[4] = { 0, 17, 0, 17 };
-  if (BYTE(overworld_screen_index) != 0x70 && sram_progress_indicator >= 2 || (save_ow_event_info[0x70] & 0x20))
+  if ((BYTE(overworld_screen_index) != 0x70 && sram_progress_indicator >= 2) || (save_ow_event_info[0x70] & 0x20))
     return;
   if (frame_counter == 3 || frame_counter == 88) {
     CGADSUB_copy = 0x32;
@@ -1166,7 +1166,7 @@ load_overlay:
   if (xv == 0x97 || xv == 0x94 || xv == 0x93 || xv == 0x9d || xv == 0x9e || xv == 0x9f)
     CGADSUB_copy = 0x72;
   else if (xv == 0x95 || xv == 0x9c || BYTE(overworld_screen_index_prev) == 0x5b ||
-           BYTE(overworld_screen_index_prev) == 0x1b && (submodule_index == 35 || submodule_index == 44))
+           (BYTE(overworld_screen_index_prev) == 0x1b && (submodule_index == 35 || submodule_index == 44)))
     CGADSUB_copy = 0x20;
   else
     TS_copy = 0, CGADSUB_copy = 0x20;

@@ -437,13 +437,6 @@ static void Serializer_WriteByte(Serializer *s, uint8_t b) {
     s->addr++;
 }
 
-static void Serializer_WriteAt(Serializer *s, uint16_t addr, const uint8_t *data, int len) {
-    for (int i = 0; i < len; i++) {
-        s->memory[addr + i] = data[i];
-        s->written[addr + i] = true;
-    }
-}
-
 static void Serializer_WriteWordAt(Serializer *s, uint16_t addr, uint16_t val) {
     s->memory[addr] = val & 0xff;
     s->memory[addr + 1] = (val >> 8) & 0xff;

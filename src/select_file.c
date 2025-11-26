@@ -123,7 +123,7 @@ void SelectFile_Func16() {
     sound_effect_2 = 0x20;
   }
 
-  uint8 a = (filtered_joypad_L & 0xc0 | filtered_joypad_H) & 0xd0;
+  uint8 a = ((filtered_joypad_L & 0xc0) | filtered_joypad_H) & 0xd0;
   if (a != 0) {
     sound_effect_1 = 0x2c;
     if (selectfile_R16 == 0) {
@@ -326,7 +326,7 @@ void FileSelect_Main() {  // 8ccebd
   FileSelect_DrawFairy(0x1c, kSelectFile_Faerie_Y[selectfile_R16]);
   nmi_load_bg_from_vram = 1;
 
-  uint8 a = (filtered_joypad_L & 0xc0 | filtered_joypad_H) & 0xfc;
+  uint8 a = ((filtered_joypad_L & 0xc0) | filtered_joypad_H) & 0xfc;
   if (a & 0x2c) {
     if (a & 8) {
       sound_effect_2 = 0x20;
@@ -454,7 +454,7 @@ void CopyFile_SelectionAndBlinker() {  // 8cd13f
   }
   FileSelect_DrawFairy(kCopyFile_SelectionAndBlinker_FaerieX[selectfile_R16], kCopyFile_SelectionAndBlinker_FaerieY[selectfile_R16]);
 
-  uint8 a = (filtered_joypad_L & 0xc0 | filtered_joypad_H) & 0xfc;
+  uint8 a = ((filtered_joypad_L & 0xc0) | filtered_joypad_H) & 0xfc;
   if (a & 0x2c) {
     uint8 k = selectfile_R16;
     if (a & 8) {
@@ -554,7 +554,7 @@ void CopyFile_TargetSelectionAndBlink() {  // 8cd27b
 
   FileSelect_DrawFairy(kCopyFile_TargetSelectionAndBlink_FaerieX[selectfile_R16], kCopyFile_TargetSelectionAndBlink_FaerieY[selectfile_R16]);
 
-  uint8 a = (filtered_joypad_L & 0xc0 | filtered_joypad_H) & 0xfc;
+  uint8 a = ((filtered_joypad_L & 0xc0) | filtered_joypad_H) & 0xfc;
   if (a & 0x2c) {
     uint8 k = selectfile_R16;
     if (a & 8) {
@@ -589,7 +589,7 @@ void CopyFile_HandleConfirmation() {  // 8cd371
   static const uint8 kCopyFile_HandleConfirmation_FaerieY[2] = {0xaf, 0xbf};
   FileSelect_DrawFairy(0x1c, kCopyFile_HandleConfirmation_FaerieY[selectfile_R16]);
 
-  uint8 a = (filtered_joypad_L & 0xc0 | filtered_joypad_H) & 0xfc;
+  uint8 a = ((filtered_joypad_L & 0xc0) | filtered_joypad_H) & 0xfc;
   if (a & 0x2c) {
     sound_effect_2 = 0x20;
     if (a & 0x24) {
@@ -701,7 +701,7 @@ void KILLFile_ChooseTarget() {  // 8cd4ba
   }
   selectfile_R16 = k;
 
-  uint8 a = (filtered_joypad_L & 0xc0 | filtered_joypad_H) & 0xd0;
+  uint8 a = ((filtered_joypad_L & 0xc0) | filtered_joypad_H) & 0xd0;
   if (a) {
     sound_effect_1 = 0x2c;
     if (k == 3) {
