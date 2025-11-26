@@ -4429,40 +4429,76 @@ int main(int argc, char **argv) {
     printf("  Extracting kOverworld compressed data (160 areas each)...\n");
     uint8_t **hibytes = malloc(160 * sizeof(uint8_t*));
     uint32_t *hi_sizes = malloc(160 * sizeof(uint32_t));
+    if (!hibytes || !hi_sizes) {
+      LogError("Failed to allocate overworld hibytes arrays");
+      free(hibytes);
+      free(hi_sizes);
+      AssetBuilder_Free(builder);
+      Rom_Free(rom);
+      return 1;
+    }
+    memset(hibytes, 0, 160 * sizeof(uint8_t*));  // Initialize to NULL for safe cleanup
     for (int i = 0; i < 160; i++) {
       uint32_t addr = Rom_ReadAddr(rom, 0x82F94D + i * 3);
       DecompressedData *decomp = Snes_Decompress(rom, addr, true);
       if (decomp) {
         hi_sizes[i] = decomp->compressed_size;
         hibytes[i] = malloc(hi_sizes[i]);
-        memcpy(hibytes[i], Rom_ReadPtr(rom, addr, hi_sizes[i]), hi_sizes[i]);
+        if (hibytes[i]) {
+          memcpy(hibytes[i], Rom_ReadPtr(rom, addr, hi_sizes[i]), hi_sizes[i]);
+        } else {
+          hi_sizes[i] = 0;
+        }
         Snes_FreeDecompressed(decomp);
+      } else {
+        hibytes[i] = NULL;
+        hi_sizes[i] = 0;
       }
     }
     uint32_t hi_packed_size;
     uint8_t *hi_packed = AssetBuilder_PackArrays(hibytes, hi_sizes, 160, &hi_packed_size);
-    AssetBuilder_AddAsset(builder, "kOverworld_Hibytes_Comp", ASSET_TYPE_PACKED, hi_packed, hi_packed_size);
-    free(hi_packed);
+    if (hi_packed) {
+      AssetBuilder_AddAsset(builder, "kOverworld_Hibytes_Comp", ASSET_TYPE_PACKED, hi_packed, hi_packed_size);
+      free(hi_packed);
+    }
     for (int i = 0; i < 160; i++) free(hibytes[i]);
     free(hibytes);
     free(hi_sizes);
 
     uint8_t **lobytes = malloc(160 * sizeof(uint8_t*));
     uint32_t *lo_sizes = malloc(160 * sizeof(uint32_t));
+    if (!lobytes || !lo_sizes) {
+      LogError("Failed to allocate overworld lobytes arrays");
+      free(lobytes);
+      free(lo_sizes);
+      AssetBuilder_Free(builder);
+      Rom_Free(rom);
+      return 1;
+    }
+    memset(lobytes, 0, 160 * sizeof(uint8_t*));  // Initialize to NULL for safe cleanup
     for (int i = 0; i < 160; i++) {
       uint32_t addr = Rom_ReadAddr(rom, 0x82FB2D + i * 3);
       DecompressedData *decomp = Snes_Decompress(rom, addr, true);
       if (decomp) {
         lo_sizes[i] = decomp->compressed_size;
         lobytes[i] = malloc(lo_sizes[i]);
-        memcpy(lobytes[i], Rom_ReadPtr(rom, addr, lo_sizes[i]), lo_sizes[i]);
+        if (lobytes[i]) {
+          memcpy(lobytes[i], Rom_ReadPtr(rom, addr, lo_sizes[i]), lo_sizes[i]);
+        } else {
+          lo_sizes[i] = 0;
+        }
         Snes_FreeDecompressed(decomp);
+      } else {
+        lobytes[i] = NULL;
+        lo_sizes[i] = 0;
       }
     }
-    uint32_t lo_packed_size;
+    uint32_t lo_packed_size = 0;
     uint8_t *lo_packed = AssetBuilder_PackArrays(lobytes, lo_sizes, 160, &lo_packed_size);
-    AssetBuilder_AddAsset(builder, "kOverworld_Lobytes_Comp", ASSET_TYPE_PACKED, lo_packed, lo_packed_size);
-    free(lo_packed);
+    if (lo_packed) {
+      AssetBuilder_AddAsset(builder, "kOverworld_Lobytes_Comp", ASSET_TYPE_PACKED, lo_packed, lo_packed_size);
+      free(lo_packed);
+    }
     for (int i = 0; i < 160; i++) free(lobytes[i]);
     free(lobytes);
     free(lo_sizes);
@@ -4475,737 +4511,6 @@ int main(int argc, char **argv) {
     // NOTE: ExtractRomBasedAssets removed - all ROM assets are now added inline in correct order
 
     printf("  Total: %u assets extracted in Python order\n", builder->asset_count);
-
-    /* COMMENTED OUT - Wrong extractions
-    // Extract and compile overworld data
-    printf("  Extracting overworld data...\n");
-    OverworldArea **areas = Overworld_ExtractAll(rom);
-    if (areas) {
-      // Pack area metadata into arrays
-      uint8_t area_sizes[OVERWORLD_AREA_COUNT];
-      uint8_t area_gfx[OVERWORLD_AREA_COUNT];
-      uint8_t area_palettes[OVERWORLD_AREA_COUNT];
-      uint8_t area_music[OVERWORLD_AREA_COUNT];
-
-      for (int i = 0; i < OVERWORLD_AREA_COUNT; i++) {
-        if (areas[i]) {
-          area_sizes[i] = areas[i]->size;
-          area_gfx[i] = areas[i]->gfx_id;
-          area_palettes[i] = areas[i]->palette_id;
-          area_music[i] = areas[i]->music_track;
-        } else {
-          area_sizes[i] = area_gfx[i] = area_palettes[i] = area_music[i] = 0;
-        }
-      }
-
-      AssetBuilder_AddAsset(builder, "kOverworld_AreaSizes", ASSET_TYPE_UINT8, area_sizes, OVERWORLD_AREA_COUNT);
-      AssetBuilder_AddAsset(builder, "kOverworld_AreaGfx", ASSET_TYPE_UINT8, area_gfx, OVERWORLD_AREA_COUNT);
-      AssetBuilder_AddAsset(builder, "kOverworld_AreaPalettes", ASSET_TYPE_UINT8, area_palettes, OVERWORLD_AREA_COUNT);
-      AssetBuilder_AddAsset(builder, "kOverworld_AreaMusic", ASSET_TYPE_UINT8, area_music, OVERWORLD_AREA_COUNT);
-
-      printf("    Added overworld metadata (%d areas)\n", OVERWORLD_AREA_COUNT);
-
-      Overworld_FreeAll(areas, OVERWORLD_AREA_COUNT);
-    }
-
-    // Extract and compile Link sprite graphics
-    printf("  Extracting Link sprite graphics...\n");
-    size_t link_gfx_size = 896 * 32;  // 896 tiles, 32 bytes per 4bpp tile = 28672
-    uint8_t *link_gfx = Rom_ReadPtr(rom, 0x108000, link_gfx_size);
-    if (link_gfx) {
-      AssetBuilder_AddAsset(builder, "kLinkGraphics", ASSET_TYPE_UINT8, link_gfx, link_gfx_size);
-
-      // Link palette data (BGR555 format)
-      uint16_t link_palette[] = {
-        0x0000, 0x7fff, 0x237e, 0x11b7, 0x369e, 0x14a5, 0x01ff, 0x1078,
-        0x599d, 0x3647, 0x3b68, 0x0a4a, 0x12ef, 0x2a5c, 0x1571, 0x7a18
-      };
-      AssetBuilder_AddAsset(builder, "kLinkPalette", ASSET_TYPE_UINT16, (uint8_t*)link_palette, 16 * sizeof(uint16_t));
-
-      printf("    Added Link graphics (896 tiles, 28672 bytes) and palette (16 colors)\n");
-    }
-
-    // Extract and compile enemy sprite graphics (3bpp, 64 tiles each)
-    printf("  Extracting enemy sprite graphics...\n");
-    // Enemy sprite addresses (from Python tool's kCompSpritePtrs)
-    static const uint32_t kCompSpritePtrs[] = {
-      0x10f000, 0x10f600, 0x10fc00, 0x118200, 0x118800, 0x118e00, 0x119400, 0x119a00,
-      0x11a000, 0x11a600, 0x11ac00, 0x11b200
-    };
-
-    for (int tileset_id = 0; tileset_id < 12; tileset_id++) {
-      // Each tileset: 64 tiles * 24 bytes per 3bpp tile = 1536 bytes
-      uint32_t snes_addr = kCompSpritePtrs[tileset_id];
-      uint8_t *enemy_gfx = Rom_ReadPtr(rom, snes_addr, 64 * 24);
-
-      if (enemy_gfx) {
-        char asset_name[64];
-        snprintf(asset_name, sizeof(asset_name), "kEnemySprites_Tileset%d", tileset_id);
-        AssetBuilder_AddAsset(builder, asset_name, ASSET_TYPE_UINT8, enemy_gfx, 64 * 24);
-      }
-    }
-    printf("    Added enemy sprite tilesets (12 tilesets, 64 tiles each, 3bpp)\n");
-
-    // Extract and compile HUD graphics
-    printf("  Extracting HUD graphics...\n");
-    uint8_t *hud_gfx = Rom_ReadPtr(rom, 0xDC800, 128 * 32);  // 128 tiles, 4bpp
-    if (hud_gfx) {
-      AssetBuilder_AddAsset(builder, "kHudGraphics", ASSET_TYPE_UINT8, hud_gfx, 128 * 32);
-      printf("    Added HUD graphics (128 tiles)\n");
-    }
-
-    // Extract and compile font/text graphics
-    printf("  Extracting font graphics...\n");
-    uint8_t *font_gfx = Rom_ReadPtr(rom, 0x1C8000, 96 * 32);  // 96 tiles, 4bpp (ROM offset $E0000)
-    if (font_gfx) {
-      AssetBuilder_AddAsset(builder, "kFontGraphics", ASSET_TYPE_UINT8, font_gfx, 96 * 32);
-      printf("    Added font graphics (96 tiles)\n");
-    }
-
-    // Extract and compile dungeon tilesets (starting with first few)
-    printf("  Extracting dungeon tilesets...\n");
-    // Main dungeon tileset (shared across dungeons)
-    uint8_t *dungeon_main = Rom_ReadPtr(rom, 0xD8800, 256 * 32);  // 256 tiles, 4bpp
-    if (dungeon_main) {
-      AssetBuilder_AddAsset(builder, "kDungeonMain", ASSET_TYPE_UINT8, dungeon_main, 256 * 32);
-      printf("    Added main dungeon tileset (256 tiles)\n");
-    }
-
-    // Extract and compile palettes
-    printf("  Extracting palettes...\n");
-    // Sprite palettes (each palette is 16 colors = 32 bytes, BGR555 format)
-    uint8_t *sprite_palettes = Rom_ReadPtr(rom, 0xDD218, 24 * 32);  // 24 sprite palettes
-    if (sprite_palettes) {
-      AssetBuilder_AddAsset(builder, "kSpritePalettes", ASSET_TYPE_UINT16, sprite_palettes, 24 * 32);
-    }
-
-    // Overworld palettes
-    uint8_t *ow_palettes = Rom_ReadPtr(rom, 0xDE604, 36 * 32);  // 36 overworld palettes
-    if (ow_palettes) {
-      AssetBuilder_AddAsset(builder, "kOverworldPalettes", ASSET_TYPE_UINT16, ow_palettes, 36 * 32);
-    }
-
-    // Dungeon palettes
-    uint8_t *dungeon_palettes = Rom_ReadPtr(rom, 0xDD218, 20 * 32);  // 20 dungeon palettes
-    if (dungeon_palettes) {
-      AssetBuilder_AddAsset(builder, "kDungeonPalettes", ASSET_TYPE_UINT16, dungeon_palettes, 20 * 32);
-    }
-    printf("    Added palettes (sprite, overworld, dungeon)\n");
-
-    // Extract and compile sprite data tables
-    printf("  Extracting sprite data tables...\n");
-    // Sprite properties (health, damage, behavior flags)
-    // ROM offsets converted to SNES addresses
-    uint8_t *sprite_health = Rom_ReadPtr(rom, 0x10E8D7, 243);  // ROM $868D7 → SNES $10E8D7
-    uint8_t *sprite_damage = Rom_ReadPtr(rom, 0x10E9C8, 243); // ROM $869C8 → SNES $10E9C8
-    uint8_t *sprite_flags = Rom_ReadPtr(rom, 0x10EAB9, 243);  // ROM $86AB9 → SNES $10EAB9
-
-    if (sprite_health) AssetBuilder_AddAsset(builder, "kSpriteHealth", ASSET_TYPE_UINT8, sprite_health, 243);
-    if (sprite_damage) AssetBuilder_AddAsset(builder, "kSpriteDamage", ASSET_TYPE_UINT8, sprite_damage, 243);
-    if (sprite_flags) AssetBuilder_AddAsset(builder, "kSpriteFlags", ASSET_TYPE_UINT8, sprite_flags, 243);
-    printf("    Added sprite properties (health, damage, flags)\n");
-
-    // Extract and compile dungeon room data
-    printf("  Extracting dungeon room headers...\n");
-    // Dungeon room layout table (296 rooms)
-    uint8_t *room_layout = Rom_ReadPtr(rom, 0xF8000, 296 * 2);  // 2 bytes per room
-    if (room_layout) {
-      AssetBuilder_AddAsset(builder, "kDungeonRoomLayout", ASSET_TYPE_UINT16, room_layout, 296 * 2);
-      printf("    Added dungeon room layout (296 rooms)\n");
-    }
-
-    // Extract and compile map tile data
-    printf("  Extracting map tile data...\n");
-    // Overworld map tile data (32x32 tile maps for each area)
-    uint8_t *ow_map_lw = Rom_ReadPtr(rom, 0x878000, 4096);  // Light world map (64x64 tiles)
-    uint8_t *ow_map_dw = Rom_ReadPtr(rom, 0x879000, 4096);  // Dark world map (64x64 tiles)
-
-    if (ow_map_lw) AssetBuilder_AddAsset(builder, "kOverworldMapLightWorld", ASSET_TYPE_UINT8, ow_map_lw, 4096);
-    if (ow_map_dw) AssetBuilder_AddAsset(builder, "kOverworldMapDarkWorld", ASSET_TYPE_UINT8, ow_map_dw, 4096);
-    printf("    Added overworld map data (light + dark world)\n");
-
-    // Extract and compile item/equipment data
-    printf("  Extracting item data...\n");
-    // Item properties (type, behavior, graphics)
-    uint8_t *item_graphics = Rom_ReadPtr(rom, 0x8DDE9, 64);  // Item graphics table
-    uint8_t *item_receipt = Rom_ReadPtr(rom, 0x89B48, 64);   // Item receipt behavior
-
-    if (item_graphics) AssetBuilder_AddAsset(builder, "kItemGraphics", ASSET_TYPE_UINT8, item_graphics, 64);
-    if (item_receipt) AssetBuilder_AddAsset(builder, "kItemReceipt", ASSET_TYPE_UINT8, item_receipt, 64);
-    printf("    Added item data tables\n");
-
-    // Extract and compile animation frame data
-    printf("  Extracting animation data...\n");
-    // Link animation frame sequences
-    uint8_t *link_anim = Rom_ReadPtr(rom, 0x8DB97, 128);  // Link animation lookup table
-    if (link_anim) {
-      AssetBuilder_AddAsset(builder, "kLinkAnimation", ASSET_TYPE_UINT8, link_anim, 128);
-      printf("    Added Link animation data\n");
-    }
-
-    // Extract and compile sound effect mapping
-    printf("  Extracting sound data...\n");
-    // Sound effect ID tables
-    uint8_t *sfx_table1 = Rom_ReadPtr(rom, 0x8CFC2, 64);  // SFX bank 1
-    uint8_t *sfx_table2 = Rom_ReadPtr(rom, 0x8D002, 64);  // SFX bank 2
-
-    if (sfx_table1) AssetBuilder_AddAsset(builder, "kSfxTable1", ASSET_TYPE_UINT8, sfx_table1, 64);
-    if (sfx_table2) AssetBuilder_AddAsset(builder, "kSfxTable2", ASSET_TYPE_UINT8, sfx_table2, 64);
-    printf("    Added sound effect tables\n");
-
-    // Extract and compile text data
-    printf("  Extracting text data...\n");
-
-    // ALTTP text is stored in banks $0E-$0F
-    // For now, extract raw text data blocks (will add proper string parsing later)
-
-    // Main dialogue text block (ROM $70000 → SNES $0E8000)
-    uint8_t *dialogue_block = Rom_ReadPtr(rom, 0x0E8000, 8192);  // 8KB dialogue block
-    if (dialogue_block) {
-      AssetBuilder_AddAsset(builder, "kDialogueText", ASSET_TYPE_UINT8, dialogue_block, 8192);
-      printf("    Added dialogue text block (8KB)\n");
-    }
-
-    // Item names/descriptions text block (ROM $74000 → SNES $0EC000)
-    uint8_t *item_text = Rom_ReadPtr(rom, 0x0EC000, 2048);  // 2KB item text
-    if (item_text) {
-      AssetBuilder_AddAsset(builder, "kItemText", ASSET_TYPE_UINT8, item_text, 2048);
-      printf("    Added item text block (2KB)\n");
-    }
-
-    // Menu/system text block (ROM $76000 → SNES $0EE000)
-    uint8_t *menu_text = Rom_ReadPtr(rom, 0x0EE000, 1024);  // 1KB menu text
-    if (menu_text) {
-      AssetBuilder_AddAsset(builder, "kMenuText", ASSET_TYPE_UINT8, menu_text, 1024);
-      printf("    Added menu text block (1KB)\n");
-    }
-
-    // Extract and compile additional sprite/enemy data
-    printf("  Extracting additional sprite data...\n");
-    // Sprite AI behavior tables (ROM offsets → SNES addresses)
-    uint8_t *sprite_ai = Rom_ReadPtr(rom, 0x10E8A0, 243);   // ROM $868A0 → SNES $10E8A0
-    uint8_t *sprite_gfx = Rom_ReadPtr(rom, 0x10EBAA, 243);  // ROM $86BAA → SNES $10EBAA
-    uint8_t *sprite_pal = Rom_ReadPtr(rom, 0x10EC9B, 243);  // ROM $86C9B → SNES $10EC9B
-
-    if (sprite_ai) AssetBuilder_AddAsset(builder, "kSpriteAI", ASSET_TYPE_UINT8, sprite_ai, 243);
-    if (sprite_gfx) AssetBuilder_AddAsset(builder, "kSpriteGraphicsSet", ASSET_TYPE_UINT8, sprite_gfx, 243);
-    if (sprite_pal) AssetBuilder_AddAsset(builder, "kSpritePaletteSet", ASSET_TYPE_UINT8, sprite_pal, 243);
-    printf("    Added sprite AI, graphics, and palette assignments\n");
-
-    // Extract and compile entrance data (basic - just room numbers for now)
-    printf("  Extracting entrance data...\n");
-    // Entrance room numbers (133 entrances) - ROM $DB96F → SNES $1BB96F
-    uint8_t *entrance_rooms = Rom_ReadPtr(rom, 0x1BB96F, 133);
-    if (entrance_rooms) {
-      AssetBuilder_AddAsset(builder, "kEntranceRooms", ASSET_TYPE_UINT8, entrance_rooms, 133);
-      printf("    Added entrance room data (133 entrances)\n");
-    }
-
-    // Extract and compile overworld sprite data
-    printf("  Extracting overworld sprite assignments...\n");
-    // Overworld sprite graphics - ROM $82FB4 → SNES $10AFB4
-    uint8_t *ow_sprite_gfx = Rom_ReadPtr(rom, 0x10AFB4, 3);
-    if (ow_sprite_gfx) {
-      AssetBuilder_AddAsset(builder, "kOverworldSpriteGfx", ASSET_TYPE_UINT8, ow_sprite_gfx, 3);
-      printf("    Added overworld sprite graphics assignments\n");
-    }
-
-    // Extract and compile more entrance data (coordinates, settings)
-    printf("  Extracting entrance coordinates...\n");
-    // ROM offsets converted to SNES addresses
-    uint8_t *entrance_scroll_x = Rom_ReadPtr(rom, 0x02C813, 133);    // ROM $14813 → SNES $02C813
-    uint8_t *entrance_scroll_y = Rom_ReadPtr(rom, 0x02C894, 133);    // ROM $14894 → SNES $02C894
-    uint8_t *entrance_player_x = Rom_ReadPtr(rom, 0x02CBC7, 133);    // ROM $14BC7 → SNES $02CBC7
-    uint8_t *entrance_player_y = Rom_ReadPtr(rom, 0x02CC48, 133);    // ROM $14C48 → SNES $02CC48
-    uint8_t *entrance_camera_x = Rom_ReadPtr(rom, 0x02CCC9, 133);    // ROM $14CC9 → SNES $02CCC9
-    uint8_t *entrance_camera_y = Rom_ReadPtr(rom, 0x02CD4A, 133);    // ROM $14D4A → SNES $02CD4A
-
-    if (entrance_scroll_x) AssetBuilder_AddAsset(builder, "kEntranceScrollX", ASSET_TYPE_UINT8, entrance_scroll_x, 133);
-    if (entrance_scroll_y) AssetBuilder_AddAsset(builder, "kEntranceScrollY", ASSET_TYPE_UINT8, entrance_scroll_y, 133);
-    if (entrance_player_x) AssetBuilder_AddAsset(builder, "kEntrancePlayerX", ASSET_TYPE_UINT8, entrance_player_x, 133);
-    if (entrance_player_y) AssetBuilder_AddAsset(builder, "kEntrancePlayerY", ASSET_TYPE_UINT8, entrance_player_y, 133);
-    if (entrance_camera_x) AssetBuilder_AddAsset(builder, "kEntranceCameraX", ASSET_TYPE_UINT8, entrance_camera_x, 133);
-    if (entrance_camera_y) AssetBuilder_AddAsset(builder, "kEntranceCameraY", ASSET_TYPE_UINT8, entrance_camera_y, 133);
-    printf("    Added entrance coordinates (6 tables × 133 entries)\n");
-
-    // Extract and compile entrance settings
-    printf("  Extracting entrance settings...\n");
-    uint8_t *entrance_blockset = Rom_ReadPtr(rom, 0x02CDCB, 133);     // ROM $14DCB → SNES $02CDCB
-    uint8_t *entrance_floor = Rom_ReadPtr(rom, 0x02CE4C, 133);        // ROM $14E4C → SNES $02CE4C
-    uint8_t *entrance_dungeon = Rom_ReadPtr(rom, 0x02CECD, 133);      // ROM $14ECD → SNES $02CECD
-    uint8_t *entrance_door = Rom_ReadPtr(rom, 0x02CF4E, 133);         // ROM $14F4E → SNES $02CF4E
-    uint8_t *entrance_music = Rom_ReadPtr(rom, 0x02CFCF, 133);        // ROM $14FCF → SNES $02CFCF
-
-    if (entrance_blockset) AssetBuilder_AddAsset(builder, "kEntranceBlockset", ASSET_TYPE_UINT8, entrance_blockset, 133);
-    if (entrance_floor) AssetBuilder_AddAsset(builder, "kEntranceFloor", ASSET_TYPE_UINT8, entrance_floor, 133);
-    if (entrance_dungeon) AssetBuilder_AddAsset(builder, "kEntranceDungeon", ASSET_TYPE_UINT8, entrance_dungeon, 133);
-    if (entrance_door) AssetBuilder_AddAsset(builder, "kEntranceDoor", ASSET_TYPE_UINT8, entrance_door, 133);
-    if (entrance_music) AssetBuilder_AddAsset(builder, "kEntranceMusic", ASSET_TYPE_UINT8, entrance_music, 133);
-    printf("    Added entrance settings (5 tables × 133 entries)\n");
-
-    // Extract and compile dungeon metadata
-    printf("  Extracting dungeon metadata...\n");
-    uint8_t *dungeon_room_gfx = Rom_ReadPtr(rom, 0x11F800, 296);      // ROM $8F800 → SNES $11F800
-    uint8_t *dungeon_room_collision = Rom_ReadPtr(rom, 0x11FB28, 296); // ROM $8FB28 → SNES $11FB28
-
-    if (dungeon_room_gfx) AssetBuilder_AddAsset(builder, "kDungeonRoomGfx", ASSET_TYPE_UINT8, dungeon_room_gfx, 296);
-    if (dungeon_room_collision) AssetBuilder_AddAsset(builder, "kDungeonRoomCollision", ASSET_TYPE_UINT8, dungeon_room_collision, 296);
-    printf("    Added dungeon room metadata (2 tables × 296 rooms)\n");
-
-    // Extract and compile more sprite properties
-    printf("  Extracting additional sprite properties...\n");
-    uint8_t *sprite_hitbox = Rom_ReadPtr(rom, 0x0DF86D, 243);        // ROM $6F86D → SNES $0DF86D
-    uint8_t *sprite_tile_attr = Rom_ReadPtr(rom, 0x0DF95E, 243);    // ROM $6F95E → SNES $0DF95E
-
-    if (sprite_hitbox) AssetBuilder_AddAsset(builder, "kSpriteHitbox", ASSET_TYPE_UINT8, sprite_hitbox, 243);
-    if (sprite_tile_attr) AssetBuilder_AddAsset(builder, "kSpriteTileAttr", ASSET_TYPE_UINT8, sprite_tile_attr, 243);
-    printf("    Added sprite hitboxes and tile attributes\n");
-
-    // Extract and compile weapon/item damage tables
-    printf("  Extracting weapon and item properties...\n");
-    // Weapon damage values (ROM addresses from ALTTP disassembly)
-    uint8_t *sword_damage = Rom_ReadPtr(rom, 0x0DB6C1, 4);          // ROM $5B6C1 → SNES $0DB6C1 (4 sword levels)
-    uint8_t *bow_damage = Rom_ReadPtr(rom, 0x0DB8B3, 3);            // ROM $5B8B3 → SNES $0DB8B3 (3 arrow types)
-    uint8_t *boomerang_damage = Rom_ReadPtr(rom, 0x0DB8BB, 3);      // ROM $5B8BB → SNES $0DB8BB (3 boomerang levels)
-    uint8_t *hookshot_damage = Rom_ReadPtr(rom, 0x0DB8AE, 1);       // ROM $5B8AE → SNES $0DB8AE
-
-    if (sword_damage) AssetBuilder_AddAsset(builder, "kWeaponDamage_Sword", ASSET_TYPE_UINT8, sword_damage, 4);
-    if (bow_damage) AssetBuilder_AddAsset(builder, "kWeaponDamage_Bow", ASSET_TYPE_UINT8, bow_damage, 3);
-    if (boomerang_damage) AssetBuilder_AddAsset(builder, "kWeaponDamage_Boomerang", ASSET_TYPE_UINT8, boomerang_damage, 3);
-    if (hookshot_damage) AssetBuilder_AddAsset(builder, "kWeaponDamage_Hookshot", ASSET_TYPE_UINT8, hookshot_damage, 1);
-    printf("    Added weapon damage tables (4 tables)\n");
-
-    // Extract and compile armor defense values
-    uint8_t *armor_defense = Rom_ReadPtr(rom, 0x0DB6F6, 3);         // ROM $5B6F6 → SNES $0DB6F6 (3 armor levels)
-    if (armor_defense) {
-        AssetBuilder_AddAsset(builder, "kArmorDefense", ASSET_TYPE_UINT8, armor_defense, 3);
-        printf("    Added armor defense values\n");
-    }
-
-    // Extract and compile more overworld data
-    printf("  Extracting overworld properties...\n");
-    // Overworld tile type/collision data
-    uint8_t *ow_tile_attr = Rom_ReadPtr(rom, 0x0FE000, 512);        // ROM $7E000 → SNES $0FE000 (tile attributes)
-    uint8_t *ow_event_data = Rom_ReadPtr(rom, 0x878400, 128);       // Overworld event triggers
-
-    if (ow_tile_attr) AssetBuilder_AddAsset(builder, "kOverworldTileAttr", ASSET_TYPE_UINT8, ow_tile_attr, 512);
-    if (ow_event_data) AssetBuilder_AddAsset(builder, "kOverworldEventData", ASSET_TYPE_UINT8, ow_event_data, 128);
-    printf("    Added overworld tile attributes and event data\n");
-
-    // Extract and compile Link-specific properties
-    printf("  Extracting Link properties...\n");
-    // Link speed/movement tables (ROM addresses from ALTTP disassembly)
-    uint8_t *link_speed_normal = Rom_ReadPtr(rom, 0x07829D, 16);    // ROM $829D → SNES $07829D (normal speeds)
-    uint8_t *link_speed_dash = Rom_ReadPtr(rom, 0x0782AD, 16);      // ROM $82AD → SNES $0782AD (dash speeds)
-    uint8_t *link_swim_speed = Rom_ReadPtr(rom, 0x0782BD, 4);       // ROM $82BD → SNES $0782BD (swim speeds)
-
-    if (link_speed_normal) AssetBuilder_AddAsset(builder, "kLinkSpeedNormal", ASSET_TYPE_UINT8, link_speed_normal, 16);
-    if (link_speed_dash) AssetBuilder_AddAsset(builder, "kLinkSpeedDash", ASSET_TYPE_UINT8, link_speed_dash, 16);
-    if (link_swim_speed) AssetBuilder_AddAsset(builder, "kLinkSpeedSwim", ASSET_TYPE_UINT8, link_swim_speed, 4);
-    printf("    Added Link movement speed tables (3 tables)\n");
-
-    // Extract and compile projectile properties
-    printf("  Extracting projectile data...\n");
-    // Projectile speeds and behavior (ancilla data)
-    uint8_t *projectile_speed = Rom_ReadPtr(rom, 0x098B92, 64);     // ROM $18B92 → SNES $098B92 (ancilla speeds)
-    uint8_t *projectile_type = Rom_ReadPtr(rom, 0x098BD2, 64);      // ROM $18BD2 → SNES $098BD2 (ancilla types)
-
-    if (projectile_speed) AssetBuilder_AddAsset(builder, "kProjectileSpeed", ASSET_TYPE_UINT8, projectile_speed, 64);
-    if (projectile_type) AssetBuilder_AddAsset(builder, "kProjectileType", ASSET_TYPE_UINT8, projectile_type, 64);
-    printf("    Added projectile properties (2 tables)\n");
-
-    // Extract and compile misc game data
-    printf("  Extracting misc game data...\n");
-    // Rupee reward tables
-    uint8_t *rupee_rewards = Rom_ReadPtr(rom, 0x0DB6DC, 16);        // ROM $5B6DC → SNES $0DB6DC (enemy rupee drops)
-    // Magic cost table
-    uint8_t *magic_costs = Rom_ReadPtr(rom, 0x0DB6EC, 8);           // ROM $5B6EC → SNES $0DB6EC (item magic costs)
-    // Heart piece locations count
-    uint8_t *heart_pieces = Rom_ReadPtr(rom, 0x0DB73A, 4);          // ROM $5B73A → SNES $0DB73A
-
-    if (rupee_rewards) AssetBuilder_AddAsset(builder, "kRupeeRewards", ASSET_TYPE_UINT8, rupee_rewards, 16);
-    if (magic_costs) AssetBuilder_AddAsset(builder, "kMagicCosts", ASSET_TYPE_UINT8, magic_costs, 8);
-    if (heart_pieces) AssetBuilder_AddAsset(builder, "kHeartPieceData", ASSET_TYPE_UINT8, heart_pieces, 4);
-    printf("    Added rupee rewards, magic costs, and heart piece data (3 tables)\n");
-
-    // Extract and compile more sprite behavior data
-    printf("  Extracting sprite behavior tables...\n");
-    // Sprite interaction and behavior properties
-    uint8_t *sprite_prize = Rom_ReadPtr(rom, 0x10ED8C, 243);        // ROM $86D8C → SNES $10ED8C (drop prizes)
-    uint8_t *sprite_bump_dmg = Rom_ReadPtr(rom, 0x0DB8E0, 243);     // ROM $5B8E0 → SNES $0DB8E0 (bump damage)
-    uint8_t *sprite_stun = Rom_ReadPtr(rom, 0x0DB9CB, 243);         // ROM $5B9CB → SNES $0DB9CB (stun flags)
-    uint8_t *sprite_impervious = Rom_ReadPtr(rom, 0x0DBAB6, 243);  // ROM $5BAB6 → SNES $0DBAB6 (impervious flags)
-
-    if (sprite_prize) AssetBuilder_AddAsset(builder, "kSpritePrize", ASSET_TYPE_UINT8, sprite_prize, 243);
-    if (sprite_bump_dmg) AssetBuilder_AddAsset(builder, "kSpriteBumpDamage", ASSET_TYPE_UINT8, sprite_bump_dmg, 243);
-    if (sprite_stun) AssetBuilder_AddAsset(builder, "kSpriteStun", ASSET_TYPE_UINT8, sprite_stun, 243);
-    if (sprite_impervious) AssetBuilder_AddAsset(builder, "kSpriteImpervious", ASSET_TYPE_UINT8, sprite_impervious, 243);
-    printf("    Added sprite behavior tables (4 tables × 243 entries)\n");
-
-    // Extract and compile tile collision data
-    printf("  Extracting collision data...\n");
-    // Tile collision/interaction properties
-    uint8_t *tile_collision = Rom_ReadPtr(rom, 0x01B5E7, 256);      // ROM $1B5E7 → SNES $01B5E7 (tile types)
-    uint8_t *ladder_tiles = Rom_ReadPtr(rom, 0x00DB3C, 16);         // ROM $DB3C → SNES $00DB3C (ladder tile IDs)
-    uint8_t *water_tiles = Rom_ReadPtr(rom, 0x00DB4C, 16);          // ROM $DB4C → SNES $00DB4C (water tile IDs)
-
-    if (tile_collision) AssetBuilder_AddAsset(builder, "kTileCollisionTypes", ASSET_TYPE_UINT8, tile_collision, 256);
-    if (ladder_tiles) AssetBuilder_AddAsset(builder, "kLadderTiles", ASSET_TYPE_UINT8, ladder_tiles, 16);
-    if (water_tiles) AssetBuilder_AddAsset(builder, "kWaterTiles", ASSET_TYPE_UINT8, water_tiles, 16);
-    printf("    Added collision and tile type tables (3 tables)\n");
-
-    // Extract and compile NPC/enemy spawn data
-    printf("  Extracting spawn and AI data...\n");
-    // Enemy spawn conditions and AI parameters
-    uint8_t *sprite_init_hp = Rom_ReadPtr(rom, 0x10EE7D, 243);      // ROM $86E7D → SNES $10EE7D (initial HP)
-    uint8_t *sprite_layer = Rom_ReadPtr(rom, 0x10EF6E, 243);        // ROM $86F6E → SNES $10EF6E (layer flags)
-    uint8_t *sprite_shadow = Rom_ReadPtr(rom, 0x10F05F, 243);       // ROM $8705F → SNES $10F05F (shadow size)
-
-    if (sprite_init_hp) AssetBuilder_AddAsset(builder, "kSpriteInitHP", ASSET_TYPE_UINT8, sprite_init_hp, 243);
-    if (sprite_layer) AssetBuilder_AddAsset(builder, "kSpriteLayer", ASSET_TYPE_UINT8, sprite_layer, 243);
-    if (sprite_shadow) AssetBuilder_AddAsset(builder, "kSpriteShadow", ASSET_TYPE_UINT8, sprite_shadow, 243);
-    printf("    Added spawn and layer data (3 tables × 243 entries)\n");
-
-    // Extract and compile boss data
-    printf("  Extracting boss and miniboss data...\n");
-    // Boss health and properties
-    uint8_t *boss_health = Rom_ReadPtr(rom, 0x0DB4D2, 20);          // ROM $5B4D2 → SNES $0DB4D2 (boss HP values)
-    uint8_t *boss_damage = Rom_ReadPtr(rom, 0x0DB4E6, 20);          // ROM $5B4E6 → SNES $0DB4E6 (boss damage values)
-    uint8_t *boss_behavior = Rom_ReadPtr(rom, 0x0DB4FA, 20);        // ROM $5B4FA → SNES $0DB4FA (boss AI flags)
-
-    if (boss_health) AssetBuilder_AddAsset(builder, "kBossHealth", ASSET_TYPE_UINT8, boss_health, 20);
-    if (boss_damage) AssetBuilder_AddAsset(builder, "kBossDamage", ASSET_TYPE_UINT8, boss_damage, 20);
-    if (boss_behavior) AssetBuilder_AddAsset(builder, "kBossBehavior", ASSET_TYPE_UINT8, boss_behavior, 20);
-    printf("    Added boss properties (3 tables × 20 bosses)\n");
-
-    // Extract and compile treasure/chest data
-    printf("  Extracting treasure and chest data...\n");
-    // Item drop and chest contents tables
-    uint8_t *chest_keys = Rom_ReadPtr(rom, 0x0DB69, 216);           // ROM $5B69 → SNES $0DB69 (small keys in chests)
-    uint8_t *pot_items = Rom_ReadPtr(rom, 0x0DB3D8, 64);            // ROM $5B3D8 → SNES $0DB3D8 (items under pots)
-    uint8_t *secret_items = Rom_ReadPtr(rom, 0x0DB418, 64);         // ROM $5B418 → SNES $0DB418 (secret/hidden items)
-
-    if (chest_keys) AssetBuilder_AddAsset(builder, "kChestSmallKeys", ASSET_TYPE_UINT8, chest_keys, 216);
-    if (pot_items) AssetBuilder_AddAsset(builder, "kPotItems", ASSET_TYPE_UINT8, pot_items, 64);
-    if (secret_items) AssetBuilder_AddAsset(builder, "kSecretItems", ASSET_TYPE_UINT8, secret_items, 64);
-    printf("    Added treasure and secret item tables (3 tables)\n");
-
-    // Extract and compile door and barrier data
-    printf("  Extracting door and barrier data...\n");
-    // Door types and barrier properties
-    uint8_t *door_types = Rom_ReadPtr(rom, 0x0DB8D6, 10);           // ROM $5B8D6 → SNES $0DB8D6 (door type IDs)
-    uint8_t *barrier_hp = Rom_ReadPtr(rom, 0x0DB95A, 16);           // ROM $5B95A → SNES $0DB95A (barrier HP values)
-    uint8_t *key_doors = Rom_ReadPtr(rom, 0x0DB99A, 32);            // ROM $5B99A → SNES $0DB99A (keyed door flags)
-
-    if (door_types) AssetBuilder_AddAsset(builder, "kDoorTypes", ASSET_TYPE_UINT8, door_types, 10);
-    if (barrier_hp) AssetBuilder_AddAsset(builder, "kBarrierHP", ASSET_TYPE_UINT8, barrier_hp, 16);
-    if (key_doors) AssetBuilder_AddAsset(builder, "kKeyDoors", ASSET_TYPE_UINT8, key_doors, 32);
-    printf("    Added door and barrier tables (3 tables)\n");
-
-    // Extract and compile special object data
-    printf("  Extracting special objects...\n");
-    // Torches, crystals, switches
-    uint8_t *torch_data = Rom_ReadPtr(rom, 0x00FD94, 32);           // ROM $FD94 → SNES $00FD94 (torch positions)
-    uint8_t *crystal_switch = Rom_ReadPtr(rom, 0x00FDB4, 16);       // ROM $FDB4 → SNES $00FDB4 (crystal switch states)
-    uint8_t *movable_blocks = Rom_ReadPtr(rom, 0x0BF3C, 64);        // ROM $BF3C → SNES $0BF3C (pushable block IDs)
-
-    if (torch_data) AssetBuilder_AddAsset(builder, "kTorchData", ASSET_TYPE_UINT8, torch_data, 32);
-    if (crystal_switch) AssetBuilder_AddAsset(builder, "kCrystalSwitch", ASSET_TYPE_UINT8, crystal_switch, 16);
-    if (movable_blocks) AssetBuilder_AddAsset(builder, "kMovableBlocks", ASSET_TYPE_UINT8, movable_blocks, 64);
-    printf("    Added special object tables (3 tables)\n");
-
-    // Extract and compile damage and stun tables
-    printf("  Extracting damage calculation tables...\n");
-    // Additional damage calculation data
-    uint8_t *beam_damage = Rom_ReadPtr(rom, 0x0DB8C7, 5);           // ROM $5B8C7 → SNES $0DB8C7 (beam weapon damage)
-    uint8_t *powder_effect = Rom_ReadPtr(rom, 0x0DB8CC, 4);         // ROM $5B8CC → SNES $0DB8CC (magic powder effects)
-    uint8_t *fire_damage = Rom_ReadPtr(rom, 0x0DB8D0, 3);           // ROM $5B8D0 → SNES $0DB8D0 (fire rod damage)
-
-    if (beam_damage) AssetBuilder_AddAsset(builder, "kBeamDamage", ASSET_TYPE_UINT8, beam_damage, 5);
-    if (powder_effect) AssetBuilder_AddAsset(builder, "kPowderEffect", ASSET_TYPE_UINT8, powder_effect, 4);
-    if (fire_damage) AssetBuilder_AddAsset(builder, "kFireDamage", ASSET_TYPE_UINT8, fire_damage, 3);
-    printf("    Added damage calculation tables (3 tables)\n");
-
-    // Extract and compile bomb and explosion data
-    printf("  Extracting bomb and explosion data...\n");
-    uint8_t *bomb_damage = Rom_ReadPtr(rom, 0x0DB8D3, 3);           // ROM $5B8D3 → SNES $0DB8D3 (bomb damage values)
-    uint8_t *explosion_radius = Rom_ReadPtr(rom, 0x0DBBA1, 16);     // ROM $5BBA1 → SNES $0DBBA1 (explosion radii)
-
-    if (bomb_damage) AssetBuilder_AddAsset(builder, "kBombDamage", ASSET_TYPE_UINT8, bomb_damage, 3);
-    if (explosion_radius) AssetBuilder_AddAsset(builder, "kExplosionRadius", ASSET_TYPE_UINT8, explosion_radius, 16);
-    printf("    Added bomb and explosion tables (2 tables)\n");
-
-    // Extract and compile shield and reflect data
-    printf("  Extracting shield and reflection data...\n");
-    uint8_t *shield_levels = Rom_ReadPtr(rom, 0x0DB6F9, 3);         // ROM $5B6F9 → SNES $0DB6F9 (shield defense)
-    uint8_t *reflect_table = Rom_ReadPtr(rom, 0x0DBBF1, 32);        // ROM $5BBF1 → SNES $0DBBF1 (projectile reflection)
-
-    if (shield_levels) AssetBuilder_AddAsset(builder, "kShieldLevels", ASSET_TYPE_UINT8, shield_levels, 3);
-    if (reflect_table) AssetBuilder_AddAsset(builder, "kReflectTable", ASSET_TYPE_UINT8, reflect_table, 32);
-    printf("    Added shield and reflection tables (2 tables)\n");
-
-    // Extract and compile status effect data
-    printf("  Extracting status effects...\n");
-    uint8_t *freeze_duration = Rom_ReadPtr(rom, 0x0DBC21, 16);      // ROM $5BC21 → SNES $0DBC21 (freeze timers)
-    uint8_t *stun_duration = Rom_ReadPtr(rom, 0x0DBC31, 16);        // ROM $5BC31 → SNES $0DBC31 (stun timers)
-    uint8_t *poison_damage = Rom_ReadPtr(rom, 0x0DBC41, 8);         // ROM $5BC41 → SNES $0DBC41 (poison damage)
-
-    if (freeze_duration) AssetBuilder_AddAsset(builder, "kFreezeDuration", ASSET_TYPE_UINT8, freeze_duration, 16);
-    if (stun_duration) AssetBuilder_AddAsset(builder, "kStunDuration", ASSET_TYPE_UINT8, stun_duration, 16);
-    if (poison_damage) AssetBuilder_AddAsset(builder, "kPoisonDamage", ASSET_TYPE_UINT8, poison_damage, 8);
-    printf("    Added status effect tables (3 tables)\n");
-
-    // Extract and compile enemy AI parameters
-    printf("  Extracting AI behavior parameters...\n");
-    uint8_t *ai_aggro_range = Rom_ReadPtr(rom, 0x0DBC49, 64);       // ROM $5BC49 → SNES $0DBC49 (aggro distances)
-    uint8_t *ai_move_speed = Rom_ReadPtr(rom, 0x0DBC89, 64);        // ROM $5BC89 → SNES $0DBC89 (movement speeds)
-    uint8_t *ai_attack_rate = Rom_ReadPtr(rom, 0x0DBCC9, 64);       // ROM $5BCC9 → SNES $0DBCC9 (attack frequencies)
-
-    if (ai_aggro_range) AssetBuilder_AddAsset(builder, "kAIAggroRange", ASSET_TYPE_UINT8, ai_aggro_range, 64);
-    if (ai_move_speed) AssetBuilder_AddAsset(builder, "kAIMoveSpeed", ASSET_TYPE_UINT8, ai_move_speed, 64);
-    if (ai_attack_rate) AssetBuilder_AddAsset(builder, "kAIAttackRate", ASSET_TYPE_UINT8, ai_attack_rate, 64);
-    printf("    Added AI behavior parameter tables (3 tables)\n");
-
-    // Extract and compile more overworld mechanics
-    printf("  Extracting overworld mechanics...\n");
-    uint8_t *ow_screen_trans = Rom_ReadPtr(rom, 0x878600, 128);     // Overworld screen transitions
-    uint8_t *ow_warp_points = Rom_ReadPtr(rom, 0x878680, 64);       // Warp/portal locations
-    uint8_t *ow_cliff_data = Rom_ReadPtr(rom, 0x8786C0, 32);        // Cliff/ledge jump data
-
-    if (ow_screen_trans) AssetBuilder_AddAsset(builder, "kOverworldScreenTrans", ASSET_TYPE_UINT8, ow_screen_trans, 128);
-    if (ow_warp_points) AssetBuilder_AddAsset(builder, "kOverworldWarpPoints", ASSET_TYPE_UINT8, ow_warp_points, 64);
-    if (ow_cliff_data) AssetBuilder_AddAsset(builder, "kOverworldCliffData", ASSET_TYPE_UINT8, ow_cliff_data, 32);
-    printf("    Added overworld mechanics (3 tables)\n");
-
-    // Extract and compile shop and NPC data
-    printf("  Extracting shop and NPC data...\n");
-    uint8_t *shop_items = Rom_ReadPtr(rom, 0x00F800, 64);           // ROM $F800 → SNES $00F800 (shop item IDs)
-    uint8_t *shop_prices = Rom_ReadPtr(rom, 0x00F840, 64);          // ROM $F840 → SNES $00F840 (item prices)
-    uint8_t *npc_types = Rom_ReadPtr(rom, 0x00F880, 32);            // ROM $F880 → SNES $00F880 (NPC type IDs)
-
-    if (shop_items) AssetBuilder_AddAsset(builder, "kShopItems", ASSET_TYPE_UINT8, shop_items, 64);
-    if (shop_prices) AssetBuilder_AddAsset(builder, "kShopPrices", ASSET_TYPE_UINT8, shop_prices, 64);
-    if (npc_types) AssetBuilder_AddAsset(builder, "kNPCTypes", ASSET_TYPE_UINT8, npc_types, 32);
-    printf("    Added shop and NPC tables (3 tables)\n");
-
-    // Extract and compile environment effects
-    printf("  Extracting environment effects...\n");
-    uint8_t *weather_zones = Rom_ReadPtr(rom, 0x0FE200, 64);        // ROM $7E200 → SNES $0FE200 (weather/rain areas)
-    uint8_t *light_levels = Rom_ReadPtr(rom, 0x0FE240, 32);         // ROM $7E240 → SNES $0FE240 (darkness/light)
-    uint8_t *water_levels = Rom_ReadPtr(rom, 0x0FE260, 16);         // ROM $7E260 → SNES $0FE260 (water height)
-
-    if (weather_zones) AssetBuilder_AddAsset(builder, "kWeatherZones", ASSET_TYPE_UINT8, weather_zones, 64);
-    if (light_levels) AssetBuilder_AddAsset(builder, "kLightLevels", ASSET_TYPE_UINT8, light_levels, 32);
-    if (water_levels) AssetBuilder_AddAsset(builder, "kWaterLevels", ASSET_TYPE_UINT8, water_levels, 16);
-    printf("    Added environment effect tables (3 tables)\n");
-
-    // Extract and compile trap and hazard data
-    printf("  Extracting traps and hazards...\n");
-    uint8_t *spike_damage = Rom_ReadPtr(rom, 0x0DBD09, 8);          // ROM $5BD09 → SNES $0DBD09 (spike trap damage)
-    uint8_t *pit_damage = Rom_ReadPtr(rom, 0x0DBD11, 8);            // ROM $5BD11 → SNES $0DBD11 (fall damage)
-    uint8_t *laser_damage = Rom_ReadPtr(rom, 0x0DBD19, 8);          // ROM $5BD19 → SNES $0DBD19 (laser beam damage)
-    uint8_t *conveyor_speed = Rom_ReadPtr(rom, 0x0DBD21, 16);       // ROM $5BD21 → SNES $0DBD21 (conveyor belt speeds)
-
-    if (spike_damage) AssetBuilder_AddAsset(builder, "kSpikeDamage", ASSET_TYPE_UINT8, spike_damage, 8);
-    if (pit_damage) AssetBuilder_AddAsset(builder, "kPitDamage", ASSET_TYPE_UINT8, pit_damage, 8);
-    if (laser_damage) AssetBuilder_AddAsset(builder, "kLaserDamage", ASSET_TYPE_UINT8, laser_damage, 8);
-    if (conveyor_speed) AssetBuilder_AddAsset(builder, "kConveyorSpeed", ASSET_TYPE_UINT8, conveyor_speed, 16);
-    printf("    Added trap and hazard tables (4 tables)\n");
-
-    // Extract and compile fairy and bottle data
-    printf("  Extracting fairy and bottle mechanics...\n");
-    uint8_t *fairy_heal = Rom_ReadPtr(rom, 0x0DBD31, 4);            // ROM $5BD31 → SNES $0DBD31 (fairy healing amounts)
-    uint8_t *potion_heal = Rom_ReadPtr(rom, 0x0DBD35, 4);           // ROM $5BD35 → SNES $0DBD35 (potion healing)
-    uint8_t *bottle_items = Rom_ReadPtr(rom, 0x0DBD39, 16);         // ROM $5BD39 → SNES $0DBD39 (bottleable items)
-
-    if (fairy_heal) AssetBuilder_AddAsset(builder, "kFairyHeal", ASSET_TYPE_UINT8, fairy_heal, 4);
-    if (potion_heal) AssetBuilder_AddAsset(builder, "kPotionHeal", ASSET_TYPE_UINT8, potion_heal, 4);
-    if (bottle_items) AssetBuilder_AddAsset(builder, "kBottleItems", ASSET_TYPE_UINT8, bottle_items, 16);
-    printf("    Added fairy and bottle tables (3 tables)\n");
-
-    // Extract and compile timer and counter data
-    printf("  Extracting timers and counters...\n");
-    uint8_t *invincibility_time = Rom_ReadPtr(rom, 0x0DBD49, 16);   // ROM $5BD49 → SNES $0DBD49 (invincibility frames)
-    uint8_t *effect_duration = Rom_ReadPtr(rom, 0x0DBD59, 32);      // ROM $5BD59 → SNES $0DBD59 (visual effect timers)
-    uint8_t *spawn_timers = Rom_ReadPtr(rom, 0x0DBD79, 16);         // ROM $5BD79 → SNES $0DBD79 (enemy spawn delays)
-
-    if (invincibility_time) AssetBuilder_AddAsset(builder, "kInvincibilityTime", ASSET_TYPE_UINT8, invincibility_time, 16);
-    if (effect_duration) AssetBuilder_AddAsset(builder, "kEffectDuration", ASSET_TYPE_UINT8, effect_duration, 32);
-    if (spawn_timers) AssetBuilder_AddAsset(builder, "kSpawnTimers", ASSET_TYPE_UINT8, spawn_timers, 16);
-    printf("    Added timer and counter tables (3 tables)\n");
-
-    // Extract and compile physics and movement
-    printf("  Extracting physics parameters...\n");
-    uint8_t *gravity_values = Rom_ReadPtr(rom, 0x0DBD89, 8);        // ROM $5BD89 → SNES $0DBD89 (gravity strengths)
-    uint8_t *friction_values = Rom_ReadPtr(rom, 0x0DBD91, 8);       // ROM $5BD91 → SNES $0DBD91 (surface friction)
-    uint8_t *jump_heights = Rom_ReadPtr(rom, 0x0DBD99, 16);         // ROM $5BD99 → SNES $0DBD99 (jump velocities)
-
-    if (gravity_values) AssetBuilder_AddAsset(builder, "kGravityValues", ASSET_TYPE_UINT8, gravity_values, 8);
-    if (friction_values) AssetBuilder_AddAsset(builder, "kFrictionValues", ASSET_TYPE_UINT8, friction_values, 8);
-    if (jump_heights) AssetBuilder_AddAsset(builder, "kJumpHeights", ASSET_TYPE_UINT8, jump_heights, 16);
-    printf("    Added physics parameter tables (3 tables)\n");
-
-    // Extract and compile equipment upgrade data
-    printf("  Extracting equipment upgrades...\n");
-    uint8_t *bomb_capacity = Rom_ReadPtr(rom, 0x0DBDA9, 4);         // ROM $5BDA9 → SNES $0DBDA9 (bomb bag sizes)
-    uint8_t *arrow_capacity = Rom_ReadPtr(rom, 0x0DBDAD, 4);        // ROM $5BDAD → SNES $0DBDAD (quiver sizes)
-    uint8_t *heart_containers = Rom_ReadPtr(rom, 0x0DBDB1, 4);      // ROM $5BDB1 → SNES $0DBDB1 (max health levels)
-
-    if (bomb_capacity) AssetBuilder_AddAsset(builder, "kBombCapacity", ASSET_TYPE_UINT8, bomb_capacity, 4);
-    if (arrow_capacity) AssetBuilder_AddAsset(builder, "kArrowCapacity", ASSET_TYPE_UINT8, arrow_capacity, 4);
-    if (heart_containers) AssetBuilder_AddAsset(builder, "kHeartContainers", ASSET_TYPE_UINT8, heart_containers, 4);
-    printf("    Added equipment upgrade tables (3 tables)\n");
-
-    // Extract and compile visual effect data
-    printf("  Extracting visual effects...\n");
-    uint8_t *particle_types = Rom_ReadPtr(rom, 0x0DBDB5, 32);       // ROM $5BDB5 → SNES $0DBDB5 (particle effect IDs)
-    uint8_t *flash_colors = Rom_ReadPtr(rom, 0x0DBDD5, 16);         // ROM $5BDD5 → SNES $0DBDD5 (screen flash colors)
-    uint8_t *shake_intensity = Rom_ReadPtr(rom, 0x0DBDE5, 8);       // ROM $5BDE5 → SNES $0DBDE5 (screen shake values)
-
-    if (particle_types) AssetBuilder_AddAsset(builder, "kParticleTypes", ASSET_TYPE_UINT8, particle_types, 32);
-    if (flash_colors) AssetBuilder_AddAsset(builder, "kFlashColors", ASSET_TYPE_UINT8, flash_colors, 16);
-    if (shake_intensity) AssetBuilder_AddAsset(builder, "kShakeIntensity", ASSET_TYPE_UINT8, shake_intensity, 8);
-    printf("    Added visual effect tables (3 tables)\n");
-
-    // Extract and compile sound trigger data
-    printf("  Extracting sound triggers...\n");
-    uint8_t *footstep_sounds = Rom_ReadPtr(rom, 0x0DBDED, 16);      // ROM $5BDED → SNES $0DBDED (surface sounds)
-    uint8_t *impact_sounds = Rom_ReadPtr(rom, 0x0DBDFD, 32);        // ROM $5BDFD → SNES $0DBDFD (collision sounds)
-
-    if (footstep_sounds) AssetBuilder_AddAsset(builder, "kFootstepSounds", ASSET_TYPE_UINT8, footstep_sounds, 16);
-    if (impact_sounds) AssetBuilder_AddAsset(builder, "kImpactSounds", ASSET_TYPE_UINT8, impact_sounds, 32);
-    printf("    Added sound trigger tables (2 tables)\n");
-
-    // Extract and compile cutscene and event data
-    printf("  Extracting cutscene and event data...\n");
-    uint8_t *cutscene_triggers = Rom_ReadPtr(rom, 0x0DBE1D, 32);    // ROM $5BE1D → SNES $0DBE1D (cutscene trigger IDs)
-    uint8_t *event_flags = Rom_ReadPtr(rom, 0x0DBE3D, 64);          // ROM $5BE3D → SNES $0DBE3D (game event flags)
-    uint8_t *dialogue_triggers = Rom_ReadPtr(rom, 0x0DBE7D, 32);    // ROM $5BE7D → SNES $0DBE7D (NPC dialogue triggers)
-
-    if (cutscene_triggers) AssetBuilder_AddAsset(builder, "kCutsceneTriggers", ASSET_TYPE_UINT8, cutscene_triggers, 32);
-    if (event_flags) AssetBuilder_AddAsset(builder, "kEventFlags", ASSET_TYPE_UINT8, event_flags, 64);
-    if (dialogue_triggers) AssetBuilder_AddAsset(builder, "kDialogueTriggers", ASSET_TYPE_UINT8, dialogue_triggers, 32);
-    printf("    Added cutscene and event tables (3 tables)\n");
-
-    // Extract and compile minigame data
-    printf("  Extracting minigame data...\n");
-    uint8_t *minigame_scores = Rom_ReadPtr(rom, 0x0DBE9D, 16);      // ROM $5BE9D → SNES $0DBE9D (high score thresholds)
-    uint8_t *minigame_rewards = Rom_ReadPtr(rom, 0x0DBEAD, 16);     // ROM $5BEAD → SNES $0DBEAD (prize items)
-    uint8_t *race_timers = Rom_ReadPtr(rom, 0x0DBEBD, 8);           // ROM $5BEBD → SNES $0DBEBD (race time limits)
-
-    if (minigame_scores) AssetBuilder_AddAsset(builder, "kMinigameScores", ASSET_TYPE_UINT8, minigame_scores, 16);
-    if (minigame_rewards) AssetBuilder_AddAsset(builder, "kMinigameRewards", ASSET_TYPE_UINT8, minigame_rewards, 16);
-    if (race_timers) AssetBuilder_AddAsset(builder, "kRaceTimers", ASSET_TYPE_UINT8, race_timers, 8);
-    printf("    Added minigame tables (3 tables)\n");
-
-    // Extract and compile teleport and transport data
-    printf("  Extracting teleport and transport...\n");
-    uint8_t *teleport_dest = Rom_ReadPtr(rom, 0x0DBEC5, 32);        // ROM $5BEC5 → SNES $0DBEC5 (teleport destinations)
-    uint8_t *mirror_coords = Rom_ReadPtr(rom, 0x0DBEE5, 16);        // ROM $5BEE5 → SNES $0DBEE5 (magic mirror coordinates)
-    uint8_t *flute_spots = Rom_ReadPtr(rom, 0x0DBEF5, 8);           // ROM $5BEF5 → SNES $0DBEF5 (flute travel points)
-
-    if (teleport_dest) AssetBuilder_AddAsset(builder, "kTeleportDest", ASSET_TYPE_UINT8, teleport_dest, 32);
-    if (mirror_coords) AssetBuilder_AddAsset(builder, "kMirrorCoords", ASSET_TYPE_UINT8, mirror_coords, 16);
-    if (flute_spots) AssetBuilder_AddAsset(builder, "kFluteSpots", ASSET_TYPE_UINT8, flute_spots, 8);
-    printf("    Added teleport and transport tables (3 tables)\n");
-
-    // Extract and compile quest progression data
-    printf("  Extracting quest progression...\n");
-    uint8_t *pendant_flags = Rom_ReadPtr(rom, 0x0DBEFD, 3);         // ROM $5BEFD → SNES $0DBEFD (pendant collection flags)
-    uint8_t *crystal_flags = Rom_ReadPtr(rom, 0x0DBF00, 7);         // ROM $5BF00 → SNES $0DBF00 (crystal collection flags)
-    uint8_t *medallion_flags = Rom_ReadPtr(rom, 0x0DBF07, 3);       // ROM $5BF07 → SNES $0DBF07 (medallion flags)
-
-    if (pendant_flags) AssetBuilder_AddAsset(builder, "kPendantFlags", ASSET_TYPE_UINT8, pendant_flags, 3);
-    if (crystal_flags) AssetBuilder_AddAsset(builder, "kCrystalFlags", ASSET_TYPE_UINT8, crystal_flags, 7);
-    if (medallion_flags) AssetBuilder_AddAsset(builder, "kMedallionFlags", ASSET_TYPE_UINT8, medallion_flags, 3);
-    printf("    Added quest progression tables (3 tables)\n");
-
-    // Extract and compile world transition data
-    printf("  Extracting world transitions...\n");
-    uint8_t *lw_to_dw_trans = Rom_ReadPtr(rom, 0x878700, 64);       // Light/Dark world transitions
-    uint8_t *screen_edge_trans = Rom_ReadPtr(rom, 0x878740, 32);    // Screen edge transition behavior
-    uint8_t *dungeon_to_ow = Rom_ReadPtr(rom, 0x878760, 32);        // Dungeon to overworld exits
-
-    if (lw_to_dw_trans) AssetBuilder_AddAsset(builder, "kLWtoDWTransitions", ASSET_TYPE_UINT8, lw_to_dw_trans, 64);
-    if (screen_edge_trans) AssetBuilder_AddAsset(builder, "kScreenEdgeTrans", ASSET_TYPE_UINT8, screen_edge_trans, 32);
-    if (dungeon_to_ow) AssetBuilder_AddAsset(builder, "kDungeonToOverworld", ASSET_TYPE_UINT8, dungeon_to_ow, 32);
-    printf("    Added world transition tables (3 tables)\n");
-
-    // Extract and compile save data structure info
-    printf("  Extracting save data info...\n");
-    uint8_t *save_checksum = Rom_ReadPtr(rom, 0x0DBF0A, 16);        // ROM $5BF0A → SNES $0DBF0A (save validation data)
-    uint8_t *default_values = Rom_ReadPtr(rom, 0x0DBF1A, 32);       // ROM $5BF1A → SNES $0DBF1A (default game state)
-
-    if (save_checksum) AssetBuilder_AddAsset(builder, "kSaveChecksum", ASSET_TYPE_UINT8, save_checksum, 16);
-    if (default_values) AssetBuilder_AddAsset(builder, "kDefaultGameState", ASSET_TYPE_UINT8, default_values, 32);
-    printf("    Added save data tables (2 tables)\n");
-
-    // Extract and compile camera and scrolling data
-    printf("  Extracting camera behavior...\n");
-    uint8_t *camera_bounds = Rom_ReadPtr(rom, 0x0FE270, 64);        // ROM $7E270 → SNES $0FE270 (camera boundary limits)
-    uint8_t *scroll_speeds = Rom_ReadPtr(rom, 0x0FE2B0, 16);        // ROM $7E2B0 → SNES $0FE2B0 (auto-scroll speeds)
-    uint8_t *zoom_levels = Rom_ReadPtr(rom, 0x0FE2C0, 8);           // ROM $7E2C0 → SNES $0FE2C0 (camera zoom settings)
-
-    if (camera_bounds) AssetBuilder_AddAsset(builder, "kCameraBounds", ASSET_TYPE_UINT8, camera_bounds, 64);
-    if (scroll_speeds) AssetBuilder_AddAsset(builder, "kScrollSpeeds", ASSET_TYPE_UINT8, scroll_speeds, 16);
-    if (zoom_levels) AssetBuilder_AddAsset(builder, "kZoomLevels", ASSET_TYPE_UINT8, zoom_levels, 8);
-    printf("    Added camera behavior tables (3 tables)\n");
-
-    // Extract and compile HUD and display data
-    printf("  Extracting HUD and display...\n");
-    uint8_t *hud_positions = Rom_ReadPtr(rom, 0x00FDC4, 32);        // ROM $FDC4 → SNES $00FDC4 (HUD element positions)
-    uint8_t *item_box_layout = Rom_ReadPtr(rom, 0x00FDE4, 16);      // ROM $FDE4 → SNES $00FDE4 (item menu layout)
-
-    if (hud_positions) AssetBuilder_AddAsset(builder, "kHUDPositions", ASSET_TYPE_UINT8, hud_positions, 32);
-    if (item_box_layout) AssetBuilder_AddAsset(builder, "kItemBoxLayout", ASSET_TYPE_UINT8, item_box_layout, 16);
-    printf("    Added HUD and display tables (2 tables)\n");
-
-    // Extract and compile final miscellaneous tables
-    printf("  Extracting final miscellaneous data...\n");
-    // Remaining small lookup tables and constants
-    uint8_t *randomizer_seed = Rom_ReadPtr(rom, 0x00FDF4, 16);      // ROM $FDF4 → SNES $00FDF4 (RNG seed table)
-    uint8_t *debug_modes = Rom_ReadPtr(rom, 0x00FE04, 8);           // ROM $FE04 → SNES $00FE04 (debug mode flags)
-    uint8_t *version_data = Rom_ReadPtr(rom, 0x00FE0C, 8);          // ROM $FE0C → SNES $00FE0C (version identifiers)
-
-    if (randomizer_seed) AssetBuilder_AddAsset(builder, "kRandomizerSeed", ASSET_TYPE_UINT8, randomizer_seed, 16);
-    if (debug_modes) AssetBuilder_AddAsset(builder, "kDebugModes", ASSET_TYPE_UINT8, debug_modes, 8);
-    if (version_data) AssetBuilder_AddAsset(builder, "kVersionData", ASSET_TYPE_UINT8, version_data, 8);
-    printf("    Added final miscellaneous tables (3 tables)\n");
-
-    // Extract and compile starting point data (game spawn positions for each save slot)
-    printf("  Extracting starting point data...\n");
-    // These define the initial spawn location for each save file
-    uint8_t *start_blockset = Rom_ReadPtr(rom, 0x02D8E3, 7);        // ROM $158E3 → SNES $02D8E3
-    uint8_t *start_floor = Rom_ReadPtr(rom, 0x02D8EA, 7);           // ROM $158EA → SNES $02D8EA
-    uint8_t *start_palace = Rom_ReadPtr(rom, 0x02D8F1, 7);          // ROM $158F1 → SNES $02D8F1
-    uint8_t *start_door_orient = Rom_ReadPtr(rom, 0x02D8F8, 7);     // ROM $158F8 → SNES $02D8F8
-    uint8_t *start_bg = Rom_ReadPtr(rom, 0x02D8FF, 7);              // ROM $158FF → SNES $02D8FF
-    uint8_t *start_quad1 = Rom_ReadPtr(rom, 0x02D906, 7);           // ROM $15906 → SNES $02D906
-    uint8_t *start_quad2 = Rom_ReadPtr(rom, 0x02D90D, 7);           // ROM $1590D → SNES $02D90D
-    uint8_t *start_entrance = Rom_ReadPtr(rom, 0x02D914, 7);        // ROM $15914 → SNES $02D914
-    uint8_t *start_music = Rom_ReadPtr(rom, 0x02D91B, 7);           // ROM $1591B → SNES $02D91B
-
-    if (start_blockset) AssetBuilder_AddAsset(builder, "kStartingPoint_blockset", ASSET_TYPE_UINT8, start_blockset, 7);
-    if (start_floor) AssetBuilder_AddAsset(builder, "kStartingPoint_floor", ASSET_TYPE_UINT8, start_floor, 7);
-    if (start_palace) AssetBuilder_AddAsset(builder, "kStartingPoint_palace", ASSET_TYPE_UINT8, start_palace, 7);
-    if (start_door_orient) AssetBuilder_AddAsset(builder, "kStartingPoint_doorwayOrientation", ASSET_TYPE_UINT8, start_door_orient, 7);
-    if (start_bg) AssetBuilder_AddAsset(builder, "kStartingPoint_startingBg", ASSET_TYPE_UINT8, start_bg, 7);
-    if (start_quad1) AssetBuilder_AddAsset(builder, "kStartingPoint_quadrant1", ASSET_TYPE_UINT8, start_quad1, 7);
-    if (start_quad2) AssetBuilder_AddAsset(builder, "kStartingPoint_quadrant2", ASSET_TYPE_UINT8, start_quad2, 7);
-    if (start_entrance) AssetBuilder_AddAsset(builder, "kStartingPoint_entrance", ASSET_TYPE_UINT8, start_entrance, 7);
-    if (start_music) AssetBuilder_AddAsset(builder, "kStartingPoint_musicTrack", ASSET_TYPE_UINT8, start_music, 7);
-    printf("    Added starting point data (9 tables × 7 bytes)\n");
-
-    printf("\n");
-    printf("=================================================================\n");
-    printf("  Asset Extraction Complete\n");
-    printf("  Total simple data tables extracted and compiled successfully\n");
-    printf("  Remaining assets require complex parsing (dungeon rooms,\n");
-    printf("  music sequences, parsed text strings)\n");
-    printf("=================================================================\n");
-    */ // End of commented out wrong extractions
-
-    // TODO: Add remaining Python-compatible assets (sound banks, dungeons, dialogue, etc.)
 
     // Write to file (use output_dir if specified)
     char output_path[512];

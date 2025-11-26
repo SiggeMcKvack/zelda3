@@ -103,15 +103,4 @@ void ExtractMap32toMap16(AssetBuilder *builder);
 // Extract sound banks using pure C music compiler
 bool ExtractSoundBanks(AssetBuilder *builder);
 
-// ============================================================================
-// Testing Functions (only in debug builds)
-// ============================================================================
-
-#ifndef NDEBUG
-void TestYAMLLoading(void);
-void TestMap32ToMap16(void);
-void TestLinkGraphics(void);
-void TestDungeonSprites(void);
-#endif
-
 #endif // RESTOOL_EXTRACT_H

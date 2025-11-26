@@ -62,6 +62,12 @@ void AssetBuilder_AddAsset(AssetBuilder *builder, const char *name, AssetType ty
   // Store asset
   Asset *asset = &builder->assets[builder->asset_count++];
   asset->name = strdup(name);
+  if (!asset->name) {
+    LogError("Failed to allocate asset name");
+    free(data_copy);
+    builder->asset_count--;
+    return;
+  }
   asset->type = type;
   asset->data = data_copy;
   asset->size = size;

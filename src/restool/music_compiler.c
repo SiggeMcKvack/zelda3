@@ -352,7 +352,12 @@ static Symbol* SymbolTable_Get(SymbolTable *st, const char *name, SymbolType typ
 
     // Create new
     Symbol *s = calloc(1, sizeof(Symbol));
+    if (!s) return NULL;
     s->name = strdup(name);
+    if (!s->name) {
+        free(s);
+        return NULL;
+    }
     s->type = type;
     s->defined = is_create;
     s->ea = 0;
@@ -386,12 +391,16 @@ static void EntityList_Free(EntityList *el) {
     free(el->items);
 }
 
-static void EntityList_Add(EntityList *el, Symbol *sym) {
+static bool EntityList_Add(EntityList *el, Symbol *sym) {
     if (el->count >= el->capacity) {
-        el->capacity = el->capacity ? el->capacity * 2 : 64;
-        el->items = realloc(el->items, el->capacity * sizeof(Symbol*));
+        size_t new_capacity = el->capacity ? el->capacity * 2 : 64;
+        Symbol **new_items = realloc(el->items, new_capacity * sizeof(Symbol*));
+        if (!new_items) return false;
+        el->items = new_items;
+        el->capacity = new_capacity;
     }
     el->items[el->count++] = sym;
+    return true;
 }
 
 // Compare function for sorting by address
@@ -821,7 +830,12 @@ static bool parse_sfx_pattern(const char *name, char **lines, int line_count, Sy
     if (!sym) return false;
 
     SfxPattern *sfx = calloc(1, sizeof(SfxPattern));
+    if (!sfx) return false;
     sfx->lines = calloc(line_count, sizeof(char*));
+    if (!sfx->lines) {
+        free(sfx);
+        return false;
+    }
     sfx->line_count = line_count;
 
     for (int i = 0; i < line_count; i++) {
@@ -903,6 +917,25 @@ static bool parse_song_list(const char *name, char **lines, int line_count, Symb
 }
 
 // Parse a text file from memory buffer
+// Dispatch section to appropriate parser based on name prefix
+static bool dispatch_section(const char *section_name, char **lines, int line_count,
+                             SymbolTable *st, EntityList *el) {
+    if (strncmp(section_name, "Song_", 5) == 0) {
+        return parse_song(section_name, lines, line_count, st, el);
+    } else if (strncmp(section_name, "Phrase_", 7) == 0) {
+        return parse_phrase(section_name, lines, line_count, st, el);
+    } else if (strncmp(section_name, "Pattern_", 8) == 0) {
+        return parse_pattern(section_name, lines, line_count, st, el);
+    } else if (strncmp(section_name, "Sfx_", 4) == 0) {
+        return parse_sfx_pattern(section_name, lines, line_count, st, el);
+    } else if (strncmp(section_name, "SfxPort", 7) == 0) {
+        return parse_sfx_list(section_name, lines, line_count, st, el);
+    } else if (strncmp(section_name, "SongList_", 9) == 0) {
+        return parse_song_list(section_name, lines, line_count, st, el);
+    }
+    return true; // Unknown section type - skip silently
+}
+
 static bool parse_text_data(const char *data, size_t size, SymbolTable *st, EntityList *el) {
     char section_name[256] = "";
     char **section_lines = NULL;
@@ -937,20 +970,7 @@ static bool parse_text_data(const char *data, size_t size, SymbolTable *st, Enti
         if (*p == '[') {
             // Process previous section
             if (section_name[0]) {
-                bool ok = true;
-                if (strncmp(section_name, "Song_", 5) == 0) {
-                    ok = parse_song(section_name, section_lines, section_line_count, st, el);
-                } else if (strncmp(section_name, "Phrase_", 7) == 0) {
-                    ok = parse_phrase(section_name, section_lines, section_line_count, st, el);
-                } else if (strncmp(section_name, "Pattern_", 8) == 0) {
-                    ok = parse_pattern(section_name, section_lines, section_line_count, st, el);
-                } else if (strncmp(section_name, "Sfx_", 4) == 0) {
-                    ok = parse_sfx_pattern(section_name, section_lines, section_line_count, st, el);
-                } else if (strncmp(section_name, "SfxPort", 7) == 0) {
-                    ok = parse_sfx_list(section_name, section_lines, section_line_count, st, el);
-                } else if (strncmp(section_name, "SongList_", 9) == 0) {
-                    ok = parse_song_list(section_name, section_lines, section_line_count, st, el);
-                }
+                bool ok = dispatch_section(section_name, section_lines, section_line_count, st, el);
 
                 // Free section lines
                 for (int i = 0; i < section_line_count; i++)
@@ -976,8 +996,14 @@ static bool parse_text_data(const char *data, size_t size, SymbolTable *st, Enti
         } else {
             // Add line to current section
             if (section_line_count >= section_line_capacity) {
-                section_line_capacity = section_line_capacity ? section_line_capacity * 2 : 32;
-                section_lines = realloc(section_lines, section_line_capacity * sizeof(char*));
+                size_t new_capacity = section_line_capacity ? section_line_capacity * 2 : 32;
+                char **new_lines = realloc(section_lines, new_capacity * sizeof(char*));
+                if (!new_lines) {
+                    LogError("Failed to allocate section lines");
+                    continue;
+                }
+                section_lines = new_lines;
+                section_line_capacity = new_capacity;
             }
             section_lines[section_line_count++] = strdup(p);
         }
@@ -985,20 +1011,7 @@ static bool parse_text_data(const char *data, size_t size, SymbolTable *st, Enti
 
     // Process final section
     if (section_name[0]) {
-        bool ok = true;
-        if (strncmp(section_name, "Song_", 5) == 0) {
-            ok = parse_song(section_name, section_lines, section_line_count, st, el);
-        } else if (strncmp(section_name, "Phrase_", 7) == 0) {
-            ok = parse_phrase(section_name, section_lines, section_line_count, st, el);
-        } else if (strncmp(section_name, "Pattern_", 8) == 0) {
-            ok = parse_pattern(section_name, section_lines, section_line_count, st, el);
-        } else if (strncmp(section_name, "Sfx_", 4) == 0) {
-            ok = parse_sfx_pattern(section_name, section_lines, section_line_count, st, el);
-        } else if (strncmp(section_name, "SfxPort", 7) == 0) {
-            ok = parse_sfx_list(section_name, section_lines, section_line_count, st, el);
-        } else if (strncmp(section_name, "SongList_", 9) == 0) {
-            ok = parse_song_list(section_name, section_lines, section_line_count, st, el);
-        }
+        bool ok = dispatch_section(section_name, section_lines, section_line_count, st, el);
 
         for (int i = 0; i < section_line_count; i++)
             free(section_lines[i]);

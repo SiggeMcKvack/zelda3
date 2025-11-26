@@ -45,7 +45,10 @@ typedef union {
 
 static void SHA1_Transform(uint32_t state[5], const uint8_t buffer[64]) {
   uint32_t a, b, c, d, e;
-  SHA1_WORKSPACE_BLOCK *block = (SHA1_WORKSPACE_BLOCK *)buffer;
+  // Use local workspace to avoid modifying input buffer
+  SHA1_WORKSPACE_BLOCK workspace;
+  memcpy(&workspace, buffer, 64);
+  SHA1_WORKSPACE_BLOCK *block = &workspace;
 
   a = state[0];
   b = state[1];
@@ -197,20 +200,8 @@ Rom* Rom_Load(const char *path) {
     rom->has_smc_header = false;
   }
 
-  // Calculate SHA-1
-  // NOTE: CalculateSHA1 modifies the input buffer due to byte-swapping,
-  // so we need to hash a copy to avoid corrupting the ROM data
-  uint8_t *rom_copy = malloc(rom->size);
-  if (rom_copy) {
-    memcpy(rom_copy, rom->data, rom->size);
-    CalculateSHA1(rom_copy, rom->size, rom->sha1);
-    free(rom_copy);
-  } else {
-    LogError("Failed to allocate buffer for SHA-1 calculation");
-    free(rom->data);
-    free(rom);
-    return NULL;
-  }
+  // Calculate SHA-1 (no longer needs buffer copy since SHA1_Transform uses local workspace)
+  CalculateSHA1(rom->data, rom->size, rom->sha1);
   LogInfo("ROM SHA-1: %s", rom->sha1);
 
   // Identify ROM language from SHA-1
