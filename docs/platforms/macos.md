@@ -6,12 +6,12 @@ This guide covers building Zelda3 on macOS for both Intel (x86_64) and Apple Sil
 
 ## Prerequisites
 
-- **Python 3.x** with pip (required for asset extraction; being replaced with C implementation)
 - **SDL2** development libraries
 - **Opus** audio codec library
-- **libyaml** development library (required for building restool)
+- **libyaml** development library (required for building C restool)
 - **CMake 3.10+**
 - **Xcode Command Line Tools**
+- **Python 3.x** with pip (optional - only needed for Python restool)
 
 ## Installing Xcode Command Line Tools
 
@@ -43,16 +43,32 @@ Before building, you must extract game assets from a USA region ROM.
 - Region: USA
 - SHA256: `66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb`
 
-**Extract assets:**
+### Method 1: C Restool (Recommended)
+
 ```bash
-# Place zelda3.sfc in project root, then:
+# Build restool (built automatically with CMake)
+mkdir build && cd build
+cmake ..
+cmake --build . -j$(sysctl -n hw.ncpu)
+
+# Extract and compile assets
+./src/restool/zelda3_restool --extract-from-rom ../zelda3.sfc --compile
+```
+
+### Method 2: Python Restool (Alternative)
+
+```bash
+# Install Python requirements first
+python3 -m pip install -r requirements.txt
+
+# Extract assets
 python3 assets/restool.py --extract-from-rom
 
 # Or specify ROM path:
 python3 assets/restool.py --extract-from-rom -r /path/to/zelda3.sfc
 ```
 
-This creates `zelda3_assets.dat` (~2MB) containing all game graphics, text, and maps.
+This creates `zelda3_assets.dat` (~680KB) containing all game graphics, text, and maps.
 
 ## Building with CMake
 

@@ -6,10 +6,10 @@ This guide covers building Zelda3 on Windows using Visual Studio and vcpkg.
 
 ## Prerequisites
 
-- **Python 3.x** with pip (required for asset extraction; being replaced with C implementation)
 - **Visual Studio 2019 or later** (Community Edition is free)
 - **CMake 3.10+**
 - **vcpkg** (for dependency management)
+- **Python 3.x** with pip (optional - only needed for Python restool)
 
 ## Installing Visual Studio
 
@@ -71,16 +71,33 @@ Before building, you must extract game assets from a USA region ROM.
 - Region: USA
 - SHA256: `66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb`
 
-**Extract assets:**
+### Method 1: C Restool (Recommended)
+
 ```cmd
-REM Place zelda3.sfc in project root, then:
+REM Build restool (built automatically with CMake)
+mkdir build
+cd build
+cmake .. -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
+cmake --build . --config Release
+
+REM Extract and compile assets
+Release\zelda3_restool.exe --extract-from-rom ..\zelda3.sfc --compile
+```
+
+### Method 2: Python Restool (Alternative)
+
+```cmd
+REM Install Python requirements first
+python -m pip install -r requirements.txt
+
+REM Extract assets
 python assets\restool.py --extract-from-rom
 
 REM Or specify ROM path:
 python assets\restool.py --extract-from-rom -r C:\path\to\zelda3.sfc
 ```
 
-This creates `zelda3_assets.dat` (~2MB) containing all game graphics, text, and maps.
+This creates `zelda3_assets.dat` (~680KB) containing all game graphics, text, and maps.
 
 ## Building with CMake
 

@@ -21,12 +21,12 @@ Complete build instructions for Zelda3 on all supported platforms.
 
 ### Desktop Platforms (Linux, macOS, Windows)
 
-- **Python 3.x** with pip (required for asset extraction; being replaced with C implementation)
 - **SDL2** development libraries
 - **Opus** audio codec library
-- **libyaml** development library (required for building restool)
+- **libyaml** development library (required for building C restool)
 - **CMake 3.10+**
 - **C Compiler** (GCC, Clang, or MSVC)
+- **Python 3.x** with pip (optional - only needed for Python restool)
 
 ### Platform-Specific Dependencies
 
@@ -47,10 +47,29 @@ Before building or running Zelda3, you must extract game assets from your ROM.
 - **Region:** USA
 - **SHA256:** `66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb`
 
-### Extract Assets
+### Method 1: C Restool (Recommended)
+
+The C-based restool is faster and requires no Python dependencies:
 
 ```bash
-# Place zelda3.sfc in project root
+# Build restool (built automatically with CMake)
+mkdir build && cd build
+cmake ..
+cmake --build . -j$(nproc)
+
+# Extract and compile assets
+./src/restool/zelda3_restool --extract-from-rom ../zelda3.sfc --compile
+```
+
+This creates `zelda3_assets.dat` (~680KB) in the parent directory.
+
+See [C Restool Guide](RESTOOL_C.md) for detailed options and multi-language support.
+
+### Method 2: Python Restool (Alternative)
+
+For advanced use cases or if C restool has issues:
+
+```bash
 python3 -m pip install -r requirements.txt
 python3 assets/restool.py --extract-from-rom
 
@@ -58,7 +77,19 @@ python3 assets/restool.py --extract-from-rom
 python3 assets/restool.py --extract-from-rom -r /path/to/zelda3.sfc
 ```
 
-This creates `zelda3_assets.dat` (~2MB) containing all game resources.
+See [Python Restool Guide](RESTOOL_PYTHON.md) for details.
+
+### Method 3: Launcher GUI
+
+The GTK3 launcher can create assets directly:
+
+1. Build the project (includes launcher)
+2. Run `./zelda3-launcher`
+3. Go to **General** tab
+4. Click **Browse** to select your ROM file
+5. Click **Create Asset File**
+
+This creates `zelda3_assets.dat` automatically.
 
 **Important:** Keep `zelda3_assets.dat` in the same directory as the executable when running the game.
 

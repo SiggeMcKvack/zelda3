@@ -40,19 +40,22 @@ Zelda3 is a reverse-engineered C reimplementation of The Legend of Zelda: A Link
 
 ### Building
 ```bash
-# Extract assets first (requires USA ROM)
-python3 assets/restool.py --extract-from-rom
-
-# Build with CMake
+# Build with CMake (includes C restool)
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Debug
 cmake --build . -j$(nproc)
+
+# Extract assets using C restool (recommended - faster, no Python required)
+./src/restool/zelda3_restool --extract-from-rom ../zelda3.sfc --compile
+
+# Alternative: Python restool
+python3 assets/restool.py --extract-from-rom
 ```
 
 See [docs/installation.md](docs/installation.md) for full details and platform-specific guides in [docs/platforms/](docs/platforms/).
 
 ### Asset File
-`zelda3_assets.dat` must exist before building. Extract from ROM (see above). File must be co-located with executable when running.
+`zelda3_assets.dat` must exist before running the game. Extract from ROM using C restool (recommended) or Python restool. File must be co-located with executable when running.
 
 ## Critical Architecture Concepts
 
@@ -110,6 +113,21 @@ Flags stored at unused RAM offsets (0x648+). Must be toggleable via `zelda3.ini`
 - Main entry point: `SDL_main` (macro defined by SDL)
 - Asset loading: SDL external storage path
 - Renderer: OpenGL ES or Vulkan 1.0
+
+**Launcher UI:**
+- `src/launcher/launcher_main.c` - Entry point, GTK init, config loading
+- `src/launcher/launcher_ui.c` - 6-tab UI (General, Graphics, Sound, Features, Keyboard, Gamepad)
+- `src/launcher/launcher_gamepad.c` - SDL2 gamepad detection and binding
+- `src/launcher/config_reader.c` - INI file parsing
+- `src/launcher/config_writer.c` - INI file generation
+- `src/launcher/dat_reader.c` - Asset file reading for language detection
+
+**Asset Tools (C Restool):**
+- `src/restool/main.c` - CLI entry point
+- `src/restool/asset_compiler.c` - Binary asset compilation
+- `src/restool/text.c` - Dialogue extraction (11 languages)
+- `src/restool/graphics.c` - Sprite/tileset extraction
+- `src/restool/music_compiler.c` - SPC music compilation
 
 See [docs/architecture.md](docs/architecture.md) for complete breakdown and [docs/technical/](docs/technical/) for deep dives.
 
@@ -214,6 +232,7 @@ Platform-specific files go in `src/platform/<name>/`
 **When adding files:**
 - Game logic: `src/`
 - Launcher UI: `src/launcher/`
+- Asset tools: `src/restool/`
 - SNES emulation: `snes/`
 - Platform code: `src/platform/<name>/`
 - Android code: `android/app/jni/` or `android/app/src/`
@@ -327,6 +346,19 @@ adb logcat | grep Zelda3       # View Android logs
 - Error messages guide users to correct capitalization
 
 ## Recent Changes
+
+**C Restool completion (November 2025):**
+- **Full C reimplementation:** Asset extraction tool rewritten in C for speed and portability
+- **Multi-language support:** 11 ROM versions supported (US, DE, FR, FR-C, EN, ES, PL, PT, NL, SV, Redux)
+- **Embedded assets:** Standalone binary with embedded YAML/asset data
+- **Launcher integration:** General tab allows asset creation from ROM directly
+- **Documentation:** See [docs/RESTOOL_C.md](docs/RESTOOL_C.md) for usage
+
+**Launcher enhancements (November 2025):**
+- **General tab:** Asset file management, language selection, ROM extraction
+- **Path browsers:** File/folder selection for MSU audio and shader paths
+- **Gamepad UI:** Complete 4-subtab gamepad configuration interface
+- **Clear buttons:** All keyboard/gamepad bindings can be cleared
 
 **Default configuration updates (November 2025):**
 - **Aspect ratio:** Changed default from 4:3 to `extend_y, 16:9` for widescreen experience

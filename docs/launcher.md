@@ -8,6 +8,7 @@ The Zelda3 GTK3 Launcher provides a graphical interface for configuring game set
 - [Building the Launcher](#building-the-launcher)
 - [Using the Launcher](#using-the-launcher)
 - [Settings Tabs](#settings-tabs)
+  - [General](#general)
   - [Graphics](#graphics)
   - [Sound](#sound)
   - [Features](#features)
@@ -89,6 +90,38 @@ The launcher looks for `zelda3.ini` in the current directory. If no configuratio
 The launcher operates on `./zelda3.ini` in the current working directory. This is the same file the game uses, so any changes made in the launcher will be reflected when you run the game.
 
 ## Settings Tabs
+
+### General
+
+The General tab manages game assets and language settings:
+
+**Asset File Status:**
+- Shows current status of `zelda3_assets.dat`
+- Green indicator: Asset file found and valid
+- Red indicator: Asset file missing or invalid
+
+**Language Selection:**
+- Dropdown populated from available languages in asset file
+- Options depend on which dialogue files were extracted
+- Default: US English
+
+**Create Asset File:**
+
+If you don't have `zelda3_assets.dat`, you can create it directly from the launcher:
+
+1. **ROM Path** - Click "Browse..." to select your ROM file
+   - Supports .sfc and .smc formats
+   - Only USA ROMs fully supported for all features
+
+2. **Create Asset File** - Click to run extraction
+   - Shows progress in status area
+   - Displays success message or error details
+   - Automatically refreshes language dropdown on success
+
+**Error Messages:**
+- "Detected German ROM" - Non-USA ROM detected, extraction limited
+- "ROM not found" - Invalid path or missing file
+- "Unknown ROM" - ROM doesn't match any known version (check SHA1)
 
 ### Graphics
 

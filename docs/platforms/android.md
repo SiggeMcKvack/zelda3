@@ -11,8 +11,8 @@ This guide covers building and deploying Zelda3 on Android devices using Gradle 
 - **Android SDK** (API level 26+)
 - **Android NDK** (r21e or later)
 - **Java 17+** (for Gradle 8.x)
-- **Python 3.x** with pip (for asset extraction)
 - `ANDROID_HOME` environment variable set
+- **Python 3.x** with pip (optional - only needed for Python restool)
 
 ## Installing Android Studio
 
@@ -56,23 +56,47 @@ $ANDROID_HOME/cmdline-tools/bin/sdkmanager --sdk_root=$ANDROID_HOME \
 
 ## Asset Extraction
 
-Before building, extract game assets from a USA region ROM.
+Before building, extract game assets from a USA region ROM on your desktop, then transfer to the Android device.
 
 **Required ROM:**
 - Filename: `zelda3.sfc`
 - Region: USA
 - SHA256: `66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb`
 
-**Extract assets:**
+### Method 1: Desktop C Restool (Recommended)
+
+Extract on your desktop computer, then transfer to device:
+
 ```bash
-# Place zelda3.sfc in project root, then:
+# On desktop, build C restool
+mkdir build && cd build
+cmake ..
+cmake --build . -j$(nproc)
+
+# Extract and compile assets
+./src/restool/zelda3_restool --extract-from-rom ../zelda3.sfc --compile
+
+# Transfer to Android device
+adb push ../zelda3_assets.dat /sdcard/Android/data/com.dishii.zelda3/files/
+```
+
+### Method 2: Python Restool (Alternative)
+
+```bash
+# Install Python requirements first
+python3 -m pip install -r requirements.txt
+
+# Extract assets
 python3 assets/restool.py --extract-from-rom
 
 # Or specify ROM path:
 python3 assets/restool.py --extract-from-rom -r /path/to/zelda3.sfc
+
+# Transfer to Android device
+adb push zelda3_assets.dat /sdcard/Android/data/com.dishii.zelda3/files/
 ```
 
-This creates `zelda3_assets.dat` (~2MB) containing all game graphics, text, and maps.
+This creates `zelda3_assets.dat` (~680KB) containing all game graphics, text, and maps.
 
 ## Building APK with Gradle
 

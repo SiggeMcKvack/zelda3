@@ -4,6 +4,40 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## Recent Updates (November 2025)
 
+### C Restool Completion
+
+**Major Change:** Complete C reimplementation of asset extraction tool
+
+The Python-based asset extraction has been fully reimplemented in C, providing:
+
+**Features:**
+- **Speed:** Faster than Python implementation
+- **Portability:** No Python dependency required
+- **Multi-language:** Supports all 11 ROM versions (US, DE, FR, FR-C, EN, ES, PL, PT, NL, SV, Redux)
+- **Embedded assets:** YAML templates embedded in binary for standalone operation
+- **Launcher integration:** General tab creates assets via GUI
+
+**Files Added:**
+- `src/restool/` - Complete C restool implementation (14 source files)
+- `docs/RESTOOL_C.md` - Comprehensive usage documentation
+
+**Usage:**
+```bash
+./zelda3_restool --extract-from-rom zelda3.sfc --compile
+```
+
+See [C Restool Guide](docs/RESTOOL_C.md) for complete documentation.
+
+### Launcher General Tab
+
+**New Feature:** Asset file management directly in GTK3 launcher
+
+- **Asset status indicator:** Shows if zelda3_assets.dat exists and is valid
+- **Language dropdown:** Select from available languages extracted from ROM
+- **ROM file browser:** Native GTK file chooser for ROM selection
+- **Create Asset File:** Run C restool extraction directly from launcher
+- **Error reporting:** Clear messages for ROM detection issues
+
 ### Vulkan Renderer Integration
 
 **Major Changes:** Cross-platform Vulkan 1.0 renderer ported from zelda3-android fork
@@ -402,10 +436,10 @@ For changes before this major update, see:
 ## Future Considerations
 
 **Potential Additions:**
-- Vulkan renderer for desktop (requires shader file loading)
 - More platform abstractions (networking, threading)
 - Additional feature flags from Android port
 - Enhanced debugging tools
+- iOS port
 
 **Maintenance:**
 - Keep CMake and documentation in sync

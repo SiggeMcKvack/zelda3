@@ -8,8 +8,8 @@ This guide covers building and deploying Zelda3 on Nintendo Switch using DevKitP
 
 - **Nintendo Switch** with custom firmware (Atmosphere)
 - **DevKitPro** toolchain with Switch support
-- **Python 3.x** with pip (for asset extraction)
 - **SD card** for file transfer
+- **Python 3.x** with pip (optional - only needed for Python restool)
 
 ## Important Legal Notice
 
@@ -89,23 +89,47 @@ Atmosphere is custom firmware that enables homebrew on Switch.
 
 ## Asset Extraction
 
-Before building, extract game assets from a USA region ROM.
+Before building, extract game assets from a USA region ROM on your desktop, then copy to the Switch SD card.
 
 **Required ROM:**
 - Filename: `zelda3.sfc`
 - Region: USA
 - SHA256: `66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb`
 
-**Extract assets:**
+### Method 1: Desktop C Restool (Recommended)
+
+Extract on your desktop computer:
+
 ```bash
-# Place zelda3.sfc in project root, then:
+# Build C restool on desktop
+mkdir build && cd build
+cmake ..
+cmake --build . -j$(nproc)
+
+# Extract and compile assets
+./src/restool/zelda3_restool --extract-from-rom ../zelda3.sfc --compile
+
+# Copy to SD card
+cp ../zelda3_assets.dat /path/to/sdcard/switch/zelda3/
+```
+
+### Method 2: Python Restool (Alternative)
+
+```bash
+# Install Python requirements first
+python3 -m pip install -r requirements.txt
+
+# Extract assets
 python3 assets/restool.py --extract-from-rom
 
 # Or specify ROM path:
 python3 assets/restool.py --extract-from-rom -r /path/to/zelda3.sfc
+
+# Copy to SD card
+cp zelda3_assets.dat /path/to/sdcard/switch/zelda3/
 ```
 
-This creates `zelda3_assets.dat` (~2MB) containing all game graphics, text, and maps.
+This creates `zelda3_assets.dat` (~680KB) containing all game graphics, text, and maps.
 
 ## Building with Make
 

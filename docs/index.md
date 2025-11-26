@@ -20,6 +20,12 @@ Welcome to the Zelda3 documentation! This is a reverse-engineered C reimplementa
 - **[Nintendo Switch Build](platforms/switch.md)** - Switch homebrew build guide
 - **[Troubleshooting](troubleshooting.md)** - Common build issues and solutions
 
+## Asset Tools
+
+- **[C Restool Guide](RESTOOL_C.md)** - C-based asset extraction (recommended)
+- **[Python Restool Guide](RESTOOL_PYTHON.md)** - Python-based extraction (legacy)
+- **[Restool Feature Comparison](RESTOOL_REMAINING.md)** - Python-only features
+
 ## Development
 
 - **[Architecture Overview](architecture.md)** - High-level system architecture
