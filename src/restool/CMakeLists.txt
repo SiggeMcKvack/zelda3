@@ -15,6 +15,51 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+# ============================================================================
+# Embedded Assets Generation
+# ============================================================================
+
+# Find Python for asset embedding script
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+# Output paths for generated files
+set(EMBEDDED_ASSETS_C "${CMAKE_CURRENT_BINARY_DIR}/embedded_assets.c")
+set(EMBEDDED_ASSETS_H "${CMAKE_CURRENT_BINARY_DIR}/embedded_assets.h")
+
+# Collect all asset files (for dependency tracking)
+file(GLOB_RECURSE ASSET_FILES
+  "${CMAKE_SOURCE_DIR}/assets/dungeon/*.yaml"
+  "${CMAKE_SOURCE_DIR}/assets/overworld/*.yaml"
+  "${CMAKE_SOURCE_DIR}/assets/sound/*.brr"
+  "${CMAKE_SOURCE_DIR}/assets/*.txt"
+  "${CMAKE_SOURCE_DIR}/assets/*.yaml"
+  "${CMAKE_SOURCE_DIR}/assets/*.png"
+)
+
+# Custom command to generate embedded assets
+add_custom_command(
+  OUTPUT ${EMBEDDED_ASSETS_C} ${EMBEDDED_ASSETS_H}
+  COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/generate_embedded_assets.py
+    ${CMAKE_SOURCE_DIR}/assets
+    ${EMBEDDED_ASSETS_C}
+    ${EMBEDDED_ASSETS_H}
+  DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/generate_embedded_assets.py
+    ${ASSET_FILES}
+  COMMENT "Generating embedded assets..."
+  VERBATIM
+)
+
+# Custom target to ensure assets are generated
+add_custom_target(generate_embedded_assets
+  DEPENDS ${EMBEDDED_ASSETS_C} ${EMBEDDED_ASSETS_H}
+)
+
+# ============================================================================
+# Source Files
+# ============================================================================
+
 # Source files (in this directory)
 set(RESTOOL_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/main.c
@@ -26,10 +71,9 @@ set(RESTOOL_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/text_decode.c
   ${CMAKE_CURRENT_SOURCE_DIR}/yaml_util.c
   ${CMAKE_CURRENT_SOURCE_DIR}/tables.c
-  # Add more as we create them:
-  # ${CMAKE_CURRENT_SOURCE_DIR}/dungeon.c
-  # ${CMAKE_CURRENT_SOURCE_DIR}/sprites.c
-  # ${CMAKE_CURRENT_SOURCE_DIR}/music.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/music_compiler.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/asset_reader.c
+  ${EMBEDDED_ASSETS_C}
 )
 
 # Third-party vendored sources
@@ -47,9 +91,15 @@ set(SHARED_SOURCES
 # Create executable
 add_executable(zelda3_restool ${RESTOOL_SOURCES} ${THIRD_PARTY_SOURCES} ${SHARED_SOURCES})
 
+# Output to main build directory (same as zelda3 and zelda3-launcher)
+set_target_properties(zelda3_restool PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+
 # Include directories
 target_include_directories(zelda3_restool PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}              # For restool headers
+  ${CMAKE_CURRENT_BINARY_DIR}              # For generated embedded_assets.h
   ${CMAKE_SOURCE_DIR}/third_party/stb      # For stb_image.h, stb_image_write.h
   ${CMAKE_SOURCE_DIR}/third_party/sha256   # For sha256.h
   ${CMAKE_SOURCE_DIR}/third_party/lodepng  # For lodepng.h

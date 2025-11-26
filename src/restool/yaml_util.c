@@ -88,6 +88,43 @@ YamlDoc* Yaml_LoadFile(const char *path) {
   return doc;
 }
 
+YamlDoc* Yaml_LoadString(const uint8_t *data, size_t size) {
+  if (!data || size == 0) {
+    SetError("NULL or empty data provided");
+    return NULL;
+  }
+
+  YamlDoc *doc = calloc(1, sizeof(YamlDoc));
+  if (!doc) {
+    SetError("Failed to allocate YamlDoc");
+    return NULL;
+  }
+
+  doc->file = NULL;  // No file for string-based loading
+
+  // Initialize parser
+  if (!yaml_parser_initialize(&doc->parser)) {
+    SetError("Failed to initialize YAML parser");
+    free(doc);
+    return NULL;
+  }
+
+  // Set input from string buffer
+  yaml_parser_set_input_string(&doc->parser, data, size);
+
+  // Load document
+  if (!yaml_parser_load(&doc->parser, &doc->document)) {
+    SetError("Failed to parse YAML data (line %zu): %s",
+             doc->parser.problem_mark.line, doc->parser.problem);
+    yaml_parser_delete(&doc->parser);
+    free(doc);
+    return NULL;
+  }
+
+  g_yaml_error[0] = '\0';  // Clear error on success
+  return doc;
+}
+
 void Yaml_Free(YamlDoc *doc) {
   if (!doc) return;
 

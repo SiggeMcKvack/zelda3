@@ -18,6 +18,10 @@ typedef struct YamlNode YamlNode;
 // Returns NULL on error (file not found, parse error, etc.)
 YamlDoc* Yaml_LoadFile(const char *path);
 
+// Load YAML document from memory buffer
+// Returns NULL on error (parse error, etc.)
+YamlDoc* Yaml_LoadString(const uint8_t *data, size_t size);
+
 // Free YAML document and all associated memory
 void Yaml_Free(YamlDoc *doc);
 

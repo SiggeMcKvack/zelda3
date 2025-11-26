@@ -20,6 +20,8 @@
 #include "text_decode.h"
 #include "yaml_util.h"
 #include "tables.h"
+#include "music_compiler.h"
+#include "asset_reader.h"
 
 // Third-party
 #include "sha256.h"
@@ -27,12 +29,6 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-
-// Windows compatibility for POSIX functions
-#ifdef _WIN32
-  #define popen _popen
-  #define pclose _pclose
-#endif
 
 #define RESTOOL_VERSION "0.1.0"
 
@@ -92,6 +88,31 @@ static const uint32_t kCompBgPtrs[115] = {
   0x14ffbd,0x14ffc4,0x14ffcb,0x14ffd2,0x14ffd9,0x14ffe0,0x14ffe7,0x14ffee,
   0x14fff5,0x18b520,0x18b953,
 };
+
+// ============================================================================
+// Asset Loading Helpers (uses embedded assets with filesystem fallback)
+// ============================================================================
+
+// Load YAML from embedded assets or filesystem
+static YamlDoc* LoadAssetYaml(const char *path) {
+  size_t size;
+  const uint8_t *embedded = AssetReader_GetEmbedded(path, &size);
+  if (embedded) {
+    return Yaml_LoadString(embedded, size);
+  }
+  // Fall back to filesystem
+  return LoadAssetYaml(path);
+}
+
+// Load binary/text data from embedded assets or filesystem
+// Returns allocated buffer that caller must free with AssetReader_Free()
+static uint8_t* LoadAssetData(const char *path, size_t *out_size) {
+  return AssetReader_Load(path, out_size);
+}
+
+// ============================================================================
+// Graphics Extraction
+// ============================================================================
 
 // Extract kSprGfx (108 sprite tilesets) - Python-compatible
 static void ExtractSpriteGraphics(Rom *rom, AssetBuilder *builder) {
@@ -510,9 +531,10 @@ static inline void PackMap32Quad(const uint16_t *a, uint8_t *res) {
 static void ExtractMap32toMap16(AssetBuilder *builder) {
   printf("  Extracting kMap32ToMap16 (4 assets from text file)...\n");
 
-  // Open input file
-  FILE *f = fopen("assets/map32_to_map16.txt", "r");
-  if (!f) {
+  // Load file from embedded assets or filesystem
+  size_t file_size;
+  char *file_data = (char *)LoadAssetData("assets/map32_to_map16.txt", &file_size);
+  if (!file_data) {
     LogError("Failed to open assets/map32_to_map16.txt");
     return;
   }
@@ -521,8 +543,26 @@ static void ExtractMap32toMap16(AssetBuilder *builder) {
   uint16_t tab[8872][4];  // 8872 lines, 4 values per line
   int line_count = 0;
 
+  const char *ptr = file_data;
+  const char *end = file_data + file_size;
   char line_buf[256];
-  while (fgets(line_buf, sizeof(line_buf), f) && line_count < 8872) {
+
+  while (ptr < end && line_count < 8872) {
+    // Read one line
+    const char *line_end = ptr;
+    while (line_end < end && *line_end != '\n' && *line_end != '\r')
+      line_end++;
+
+    size_t line_len = line_end - ptr;
+    if (line_len >= sizeof(line_buf)) line_len = sizeof(line_buf) - 1;
+    memcpy(line_buf, ptr, line_len);
+    line_buf[line_len] = 0;
+
+    // Skip newlines
+    ptr = line_end;
+    while (ptr < end && (*ptr == '\n' || *ptr == '\r'))
+      ptr++;
+
     // Parse: "INDEX: v0, v1, v2, v3"
     int index;
     int v0, v1, v2, v3;
@@ -536,7 +576,7 @@ static void ExtractMap32toMap16(AssetBuilder *builder) {
       }
     }
   }
-  fclose(f);
+  AssetReader_Free((uint8_t *)file_data);
 
   if (line_count != 8872) {
     LogError("Expected 8872 lines in map32_to_map16.txt, got %d", line_count);
@@ -586,9 +626,10 @@ static void ExtractMap32toMap16(AssetBuilder *builder) {
 static void TestMap32ToMap16(void) {
   printf("Testing Map32ToMap16 extraction...\n");
 
-  // Extract the assets (duplicate logic for testing)
-  FILE *f = fopen("assets/map32_to_map16.txt", "r");
-  if (!f) {
+  // Load file from embedded assets or filesystem
+  size_t file_size;
+  char *file_data = (char *)LoadAssetData("assets/map32_to_map16.txt", &file_size);
+  if (!file_data) {
     LogError("Failed to open assets/map32_to_map16.txt");
     return;
   }
@@ -596,8 +637,24 @@ static void TestMap32ToMap16(void) {
   uint16_t tab[8872][4];
   int line_count = 0;
 
+  const char *ptr = file_data;
+  const char *end = file_data + file_size;
   char line_buf[256];
-  while (fgets(line_buf, sizeof(line_buf), f) && line_count < 8872) {
+
+  while (ptr < end && line_count < 8872) {
+    const char *line_end = ptr;
+    while (line_end < end && *line_end != '\n' && *line_end != '\r')
+      line_end++;
+
+    size_t line_len = line_end - ptr;
+    if (line_len >= sizeof(line_buf)) line_len = sizeof(line_buf) - 1;
+    memcpy(line_buf, ptr, line_len);
+    line_buf[line_len] = 0;
+
+    ptr = line_end;
+    while (ptr < end && (*ptr == '\n' || *ptr == '\r'))
+      ptr++;
+
     int index, v0, v1, v2, v3;
     if (sscanf(line_buf, "%d: %d, %d, %d, %d", &index, &v0, &v1, &v2, &v3) == 5) {
       if (index >= 0 && index < 8872) {
@@ -609,7 +666,7 @@ static void TestMap32ToMap16(void) {
       }
     }
   }
-  fclose(f);
+  AssetReader_Free((uint8_t *)file_data);
 
   if (line_count != 8872) {
     LogError("Expected 8872 lines, got %d", line_count);
@@ -716,9 +773,9 @@ static void Encode2bppSprite(const uint8_t *data, int offset, int pitch, uint8_t
 static void ExtractLinkGraphics(AssetBuilder *builder) {
   printf("  Extracting kLinkGraphics from linksprite.png...\n");
 
-  // Load PNG file into memory
+  // Load PNG file from embedded assets or filesystem
   size_t png_size;
-  unsigned char *png_data = Platform_ReadWholeFile("assets/linksprite.png", &png_size);
+  unsigned char *png_data = LoadAssetData("assets/linksprite.png", &png_size);
   if (!png_data) {
     LogError("Failed to read assets/linksprite.png");
     return;
@@ -851,12 +908,12 @@ static bool ExtractDialogueFontFromPNG(const char *lang, uint8_t **out_font_data
     return false;
   }
 
-  // Load PNG file
+  // Load PNG file from embedded assets or filesystem
   char path[256];
   snprintf(path, sizeof(path), "assets/%s", font_filename);
 
   size_t png_size;
-  unsigned char *png_data = Platform_ReadWholeFile(path, &png_size);
+  unsigned char *png_data = LoadAssetData(path, &png_size);
   if (!png_data) {
     LogError("Failed to read %s", path);
     return false;
@@ -1380,7 +1437,7 @@ static void ExtractDialogueAssets(AssetBuilder *builder) {
 
   // 4. Load and compress dialogue strings
   size_t dialogue_size;
-  char *dialogue_file_data = (char *)Platform_ReadWholeFile("assets/dialogue.txt", &dialogue_size);
+  char *dialogue_file_data = (char *)LoadAssetData("assets/dialogue.txt", &dialogue_size);
   if (!dialogue_file_data) {
     LogError("Failed to read assets/dialogue.txt");
     free(dict_packed);
@@ -1577,9 +1634,9 @@ static void ExtractDialogueAssets(AssetBuilder *builder) {
 static void TestLinkGraphics(void) {
   printf("Testing Link graphics extraction...\n");
 
-  // Load PNG file into memory
+  // Load PNG file from embedded assets or filesystem
   size_t png_size;
-  unsigned char *png_data = Platform_ReadWholeFile("assets/linksprite.png", &png_size);
+  unsigned char *png_data = LoadAssetData("assets/linksprite.png", &png_size);
   if (!png_data) {
     LogError("Failed to read assets/linksprite.png");
     return;
@@ -1672,7 +1729,7 @@ static void TestDungeonSprites(void) {
     char filename[64];
     snprintf(filename, sizeof(filename), "assets/dungeon/dungeon-%d.yaml", room);
 
-    YamlDoc *doc = Yaml_LoadFile(filename);
+    YamlDoc *doc = LoadAssetYaml(filename);
     if (!doc) {
       continue;
     }
@@ -1824,7 +1881,7 @@ static void ExtractDungeonSprites(AssetBuilder *builder) {
     char filename[64];
     snprintf(filename, sizeof(filename), "assets/dungeon/dungeon-%d.yaml", room);
 
-    YamlDoc *doc = Yaml_LoadFile(filename);
+    YamlDoc *doc = LoadAssetYaml(filename);
     if (!doc) {
       LogError("Failed to load %s: %s", filename, Yaml_GetLastError());
       free(offsets);
@@ -2066,7 +2123,7 @@ static void ExtractDungeonSecrets(AssetBuilder *builder) {
     char filename[64];
     snprintf(filename, sizeof(filename), "assets/dungeon/dungeon-%d.yaml", i);
 
-    YamlDoc *doc = Yaml_LoadFile(filename);
+    YamlDoc *doc = LoadAssetYaml(filename);
     if (!doc) {
       continue;
     }
@@ -2223,7 +2280,7 @@ static void ExtractDungeonRoomHeaders(AssetBuilder *builder) {
     char filename[64];
     snprintf(filename, sizeof(filename), "assets/dungeon/dungeon-%d.yaml", i);
 
-    YamlDoc *doc = Yaml_LoadFile(filename);
+    YamlDoc *doc = LoadAssetYaml(filename);
     if (!doc) {
       continue;
     }
@@ -2350,7 +2407,7 @@ static void ExtractDungeonRoomSimple(AssetBuilder *builder) {
     char filename[64];
     snprintf(filename, sizeof(filename), "assets/dungeon/dungeon-%d.yaml", i);
 
-    YamlDoc *doc = Yaml_LoadFile(filename);
+    YamlDoc *doc = LoadAssetYaml(filename);
     if (!doc) {
       continue;
     }
@@ -2564,7 +2621,7 @@ static void ExtractDungeonRoomData(AssetBuilder *builder) {
     char filename[64];
     snprintf(filename, sizeof(filename), "assets/dungeon/dungeon-%d.yaml", i);
 
-    YamlDoc *doc = Yaml_LoadFile(filename);
+    YamlDoc *doc = LoadAssetYaml(filename);
     if (!doc) {
       fprintf(stderr, "Warning: Could not load %s\n", filename);
       continue;
@@ -2644,7 +2701,7 @@ static void ExtractDefaultOverlayRooms(AssetBuilder *builder) {
   printf("  Extracting default and overlay rooms...\n");
 
   // Default rooms: 8 variants from default_rooms.yaml
-  YamlDoc *default_doc = Yaml_LoadFile("assets/dungeon/default_rooms.yaml");
+  YamlDoc *default_doc = LoadAssetYaml("assets/dungeon/default_rooms.yaml");
   if (!default_doc) {
     LogError("Failed to load default_rooms.yaml: %s", Yaml_GetLastError());
     return;
@@ -2685,7 +2742,7 @@ static void ExtractDefaultOverlayRooms(AssetBuilder *builder) {
   free(default_offsets);
 
   // Overlay rooms: 19 variants from overlay_rooms.yaml
-  YamlDoc *overlay_doc = Yaml_LoadFile("assets/dungeon/overlay_rooms.yaml");
+  YamlDoc *overlay_doc = LoadAssetYaml("assets/dungeon/overlay_rooms.yaml");
   if (!overlay_doc) {
     LogError("Failed to load overlay_rooms.yaml: %s", Yaml_GetLastError());
     return;
@@ -2748,7 +2805,7 @@ static void ExtractEntrancesAndStartingPoints(AssetBuilder *builder) {
     char path[256];
     snprintf(path, sizeof(path), "assets/dungeon/dungeon-%d.yaml", room);
 
-    YamlDoc *doc = Yaml_LoadFile(path);
+    YamlDoc *doc = LoadAssetYaml(path);
     if (!doc) continue;
 
     YamlNode *root = Yaml_GetRoot(doc);
@@ -3099,7 +3156,7 @@ static void Overworld_ProcessSpriteStage(Rom *rom, uint8_t *map_is_small,
 
     char path[256];
     snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
-    YamlDoc *doc = Yaml_LoadFile(path);
+    YamlDoc *doc = LoadAssetYaml(path);
     if (!doc) continue;
 
     YamlNode *root = Yaml_GetRoot(doc);
@@ -3186,7 +3243,7 @@ static void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
     char path[256];
     snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
 
-    YamlDoc *doc = Yaml_LoadFile(path);
+    YamlDoc *doc = LoadAssetYaml(path);
     if (!doc) continue;
 
     YamlNode *root = Yaml_GetRoot(doc);
@@ -3269,7 +3326,7 @@ static void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
 
     char path[256];
     snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
-    YamlDoc *doc = Yaml_LoadFile(path);
+    YamlDoc *doc = LoadAssetYaml(path);
     if (!doc) continue;
 
     YamlNode *root = Yaml_GetRoot(doc);
@@ -3364,7 +3421,7 @@ static void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
 
     char path[256];
     snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
-    YamlDoc *doc = Yaml_LoadFile(path);
+    YamlDoc *doc = LoadAssetYaml(path);
     if (!doc) continue;
 
     YamlNode *root = Yaml_GetRoot(doc);
@@ -3413,7 +3470,7 @@ static void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
 
     char path[256];
     snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
-    YamlDoc *doc = Yaml_LoadFile(path);
+    YamlDoc *doc = LoadAssetYaml(path);
     if (!doc) continue;
 
     YamlNode *root = Yaml_GetRoot(doc);
@@ -3511,7 +3568,7 @@ static void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
 
     char path[256];
     snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
-    YamlDoc *doc = Yaml_LoadFile(path);
+    YamlDoc *doc = LoadAssetYaml(path);
     if (!doc) continue;
 
     YamlNode *root = Yaml_GetRoot(doc);
@@ -3669,7 +3726,7 @@ static void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
 
     char path[256];
     snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
-    YamlDoc *doc = Yaml_LoadFile(path);
+    YamlDoc *doc = LoadAssetYaml(path);
     if (!doc) {
       // Leave as 0 (will be set to default_offset later)
       continue;
@@ -3804,7 +3861,7 @@ static void TestYAMLLoading(void) {
   printf("Testing YAML loading...\n");
 
   const char *test_file = "assets/dungeon/dungeon-0.yaml";
-  YamlDoc *doc = Yaml_LoadFile(test_file);
+  YamlDoc *doc = LoadAssetYaml(test_file);
 
   if (!doc) {
     LogError("Failed to load %s: %s", test_file, Yaml_GetLastError());
@@ -3999,7 +4056,7 @@ static bool ParseArgs(int argc, char **argv, RestoolArgs *args) {
   return true;
 }
 
-// Extract sound banks by calling Python compile_music.py
+// Extract sound banks using pure C music compiler
 // Returns true on success, false on error
 static bool ExtractSoundBanks(AssetBuilder *builder) {
   printf("  Extracting sound banks (intro, indoor, ending)...\n");
@@ -4009,64 +4066,14 @@ static bool ExtractSoundBanks(AssetBuilder *builder) {
   for (int i = 0; i < 3; i++) {
     const char *song = songs[i];
 
-    // Call Python to generate sound bank - output raw bytes
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd),
-             "cd assets && python3 -c \"import compile_music; "
-             "name, data = compile_music.print_song('%s'); "
-             "import sys; sys.stdout.buffer.write(bytes(data))\"",
-             song);
-
-    FILE *fp = popen(cmd, "r");
-    if (!fp) {
-      LogError("Failed to execute Python for sound bank %s", song);
-      return false;
-    }
-
-    // Read all data into memory (don't know size ahead of time)
-    size_t capacity = 65536;  // Start with 64KB
+    uint8_t *data = NULL;
     size_t size = 0;
-    uint8_t *data = malloc(capacity);
-    if (!data) {
-      LogError("Failed to allocate memory for sound bank %s", song);
-      pclose(fp);
+
+    // Use pure C music compiler (no Python dependency)
+    if (!MusicCompiler_CompileSoundBank(song, "assets", &data, &size)) {
+      LogError("Failed to compile sound bank %s", song);
       return false;
     }
-
-    while (1) {
-      size_t space = capacity - size;
-      if (space < 4096) {
-        // Need more space
-        capacity *= 2;
-        uint8_t *new_data = realloc(data, capacity);
-        if (!new_data) {
-          LogError("Failed to reallocate memory for sound bank %s", song);
-          free(data);
-          pclose(fp);
-          return false;
-        }
-        data = new_data;
-        space = capacity - size;
-      }
-
-      size_t read = fread(data + size, 1, space, fp);
-      if (read == 0) break;  // EOF or error
-      size += read;
-    }
-
-    int status = pclose(fp);
-    if (status != 0) {
-      LogError("Python script failed for sound bank %s (exit %d)", song, status);
-      free(data);
-      return false;
-    }
-
-    // Debug: Check first bytes
-    fprintf(stderr, "DEBUG: %s size=%zu, first bytes: ", song, size);
-    for (int j = 0; j < 16 && j < size; j++) {
-      fprintf(stderr, "%02x ", data[j]);
-    }
-    fprintf(stderr, "\n");
 
     // Add asset
     char asset_name[64];
@@ -4077,7 +4084,7 @@ static bool ExtractSoundBanks(AssetBuilder *builder) {
     printf("    Added %s (%zu bytes)\n", asset_name, size);
   }
 
-  printf("  ✅ Sound banks complete: 3 assets\n");
+  printf("  Sound banks complete: 3 assets\n");
   return true;
 }
 
@@ -5228,8 +5235,14 @@ int main(int argc, char **argv) {
 
     // TODO: Add remaining Python-compatible assets (sound banks, dungeons, dialogue, etc.)
 
-    // Write to file
-    const char *output_path = "zelda3_assets.dat";
+    // Write to file (use output_dir if specified)
+    char output_path[512];
+    if (args.output_dir && args.output_dir[0]) {
+      snprintf(output_path, sizeof(output_path), "%s/zelda3_assets.dat", args.output_dir);
+    } else {
+      snprintf(output_path, sizeof(output_path), "zelda3_assets.dat");
+    }
+
     if (!AssetBuilder_WriteToFile(builder, output_path)) {
       LogError("Failed to write assets file");
       AssetBuilder_Free(builder);
