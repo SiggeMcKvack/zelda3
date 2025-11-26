@@ -30,9 +30,16 @@ bool DatReader_Exists(const char *dir) {
     return false;
 }
 
-// Find indexed element within a packed array (replicates FindIndexInMemblk)
-// Format: [offsets...] [data0] [data1] ... [count (uint16)]
-// Returns pointer to element and sets *out_size, or returns NULL
+// Find indexed element within a packed array (replicates FindIndexInMemblk from assets.c)
+//
+// Binary format for packed arrays:
+// - If count < 8192: [uint16 offsets * count] [data0] [data1] ... [uint16 count at end]
+// - If count >= 8192: [uint32 offsets * count] [data0] [data1] ... [uint16 (count + 8192) at end]
+//
+// The offsets are relative to the end of the offset table. The count at the end
+// uses 8192 as a flag to indicate uint32 offsets instead of uint16.
+//
+// Returns pointer to element and sets *out_size, or returns NULL if invalid.
 static const uint8_t* find_index_in_memblk(const uint8_t *data, size_t data_size,
                                            size_t idx, size_t *out_size) {
     if (data_size < 2) return NULL;
@@ -117,6 +124,12 @@ int DatReader_GetLanguages(const char *dir, char languages[][8], int max_languag
     // Skip to asset 96 by summing sizes of assets 0-95
     for (int i = 0; i < DAT_DIALOGUE_MAP_ASSET; i++) {
         data_offset = (data_offset + 3) & ~3;  // 4-byte align
+        // Overflow check: ensure adding size won't wrap around
+        if (data_offset > UINT32_MAX - sizes[i]) {
+            free(sizes);
+            fclose(f);
+            return 0;
+        }
         data_offset += sizes[i];
     }
     data_offset = (data_offset + 3) & ~3;  // Align for asset 96
@@ -157,6 +170,8 @@ int DatReader_GetLanguages(const char *dir, char languages[][8], int max_languag
         const uint8_t *name = find_index_in_memblk(entry, entry_size, 0, &name_size);
         if (!name || name_size == 0 || name_size >= 8) continue;
 
+        // Bounds check before writing to output array
+        if (count >= max_languages) break;
         memcpy(languages[count], name, name_size);
         languages[count][name_size] = '\0';
         count++;

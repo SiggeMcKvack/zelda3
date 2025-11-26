@@ -41,6 +41,12 @@ static char* parse_string(const char *value) {
     return strdup(value);
 }
 
+// Helper to update a string variable (free old, set new)
+static void update_string(char **dest, const char *value) {
+    if (*dest) free(*dest);
+    *dest = (value && *value) ? strdup(value) : NULL;
+}
+
 static int parse_aspect_ratio(const char *value) {
     // Map aspect ratio strings to enum values
     if (strstr(value, "16:9")) return 1;
@@ -218,74 +224,23 @@ bool ConfigReader_Read(const char *path, Config *config) {
             else if (strcmp(key, "Replay") == 0) {
                 LauncherUI_ParseControlString(value, g_kbd_replay);
             }
-            else if (strcmp(key, "CheatLife") == 0) {
-                if (g_kbd_cheat_life) free(g_kbd_cheat_life);
-                g_kbd_cheat_life = strdup(value);
-            }
-            else if (strcmp(key, "CheatKeys") == 0) {
-                if (g_kbd_cheat_keys) free(g_kbd_cheat_keys);
-                g_kbd_cheat_keys = strdup(value);
-            }
-            else if (strcmp(key, "CheatWalkThroughWalls") == 0) {
-                if (g_kbd_cheat_walkthrough) free(g_kbd_cheat_walkthrough);
-                g_kbd_cheat_walkthrough = strdup(value);
-            }
-            else if (strcmp(key, "ClearKeyLog") == 0) {
-                if (g_kbd_clear_keylog) free(g_kbd_clear_keylog);
-                g_kbd_clear_keylog = strdup(value);
-            }
-            else if (strcmp(key, "StopReplay") == 0) {
-                if (g_kbd_stop_replay) free(g_kbd_stop_replay);
-                g_kbd_stop_replay = strdup(value);
-            }
-            else if (strcmp(key, "Fullscreen") == 0) {
-                if (g_kbd_fullscreen) free(g_kbd_fullscreen);
-                g_kbd_fullscreen = strdup(value);
-            }
-            else if (strcmp(key, "Reset") == 0) {
-                if (g_kbd_reset) free(g_kbd_reset);
-                g_kbd_reset = strdup(value);
-            }
-            else if (strcmp(key, "PauseDimmed") == 0) {
-                if (g_kbd_pause_dimmed) free(g_kbd_pause_dimmed);
-                g_kbd_pause_dimmed = strdup(value);
-            }
-            else if (strcmp(key, "Pause") == 0) {
-                if (g_kbd_pause) free(g_kbd_pause);
-                g_kbd_pause = strdup(value);
-            }
-            else if (strcmp(key, "Turbo") == 0) {
-                if (g_kbd_turbo) free(g_kbd_turbo);
-                g_kbd_turbo = strdup(value);
-            }
-            else if (strcmp(key, "ReplayTurbo") == 0) {
-                if (g_kbd_replay_turbo) free(g_kbd_replay_turbo);
-                g_kbd_replay_turbo = strdup(value);
-            }
-            else if (strcmp(key, "WindowBigger") == 0) {
-                if (g_kbd_window_bigger) free(g_kbd_window_bigger);
-                g_kbd_window_bigger = strdup(value);
-            }
-            else if (strcmp(key, "WindowSmaller") == 0) {
-                if (g_kbd_window_smaller) free(g_kbd_window_smaller);
-                g_kbd_window_smaller = strdup(value);
-            }
-            else if (strcmp(key, "VolumeUp") == 0) {
-                if (g_kbd_volume_up) free(g_kbd_volume_up);
-                g_kbd_volume_up = strdup(value);
-            }
-            else if (strcmp(key, "VolumeDown") == 0) {
-                if (g_kbd_volume_down) free(g_kbd_volume_down);
-                g_kbd_volume_down = strdup(value);
-            }
-            else if (strcmp(key, "DisplayPerf") == 0) {
-                if (g_kbd_display_perf) free(g_kbd_display_perf);
-                g_kbd_display_perf = strdup(value);
-            }
-            else if (strcmp(key, "ToggleRenderer") == 0) {
-                if (g_kbd_toggle_renderer) free(g_kbd_toggle_renderer);
-                g_kbd_toggle_renderer = strdup(value);
-            }
+            else if (strcmp(key, "CheatLife") == 0) update_string(&g_kbd_cheat_life, value);
+            else if (strcmp(key, "CheatKeys") == 0) update_string(&g_kbd_cheat_keys, value);
+            else if (strcmp(key, "CheatWalkThroughWalls") == 0) update_string(&g_kbd_cheat_walkthrough, value);
+            else if (strcmp(key, "ClearKeyLog") == 0) update_string(&g_kbd_clear_keylog, value);
+            else if (strcmp(key, "StopReplay") == 0) update_string(&g_kbd_stop_replay, value);
+            else if (strcmp(key, "Fullscreen") == 0) update_string(&g_kbd_fullscreen, value);
+            else if (strcmp(key, "Reset") == 0) update_string(&g_kbd_reset, value);
+            else if (strcmp(key, "PauseDimmed") == 0) update_string(&g_kbd_pause_dimmed, value);
+            else if (strcmp(key, "Pause") == 0) update_string(&g_kbd_pause, value);
+            else if (strcmp(key, "Turbo") == 0) update_string(&g_kbd_turbo, value);
+            else if (strcmp(key, "ReplayTurbo") == 0) update_string(&g_kbd_replay_turbo, value);
+            else if (strcmp(key, "WindowBigger") == 0) update_string(&g_kbd_window_bigger, value);
+            else if (strcmp(key, "WindowSmaller") == 0) update_string(&g_kbd_window_smaller, value);
+            else if (strcmp(key, "VolumeUp") == 0) update_string(&g_kbd_volume_up, value);
+            else if (strcmp(key, "VolumeDown") == 0) update_string(&g_kbd_volume_down, value);
+            else if (strcmp(key, "DisplayPerf") == 0) update_string(&g_kbd_display_perf, value);
+            else if (strcmp(key, "ToggleRenderer") == 0) update_string(&g_kbd_toggle_renderer, value);
         }
         else if (strcmp(current_section, "GamepadMap") == 0) {
             if (strcmp(key, "Controls") == 0) {
@@ -300,74 +255,24 @@ bool ConfigReader_Read(const char *path, Config *config) {
             else if (strcmp(key, "Replay") == 0) {
                 LauncherUI_ParseGamepadControlString(value, g_gamepad_replay);
             }
-            else if (strcmp(key, "CheatLife") == 0) {
-                if (g_gamepad_cheat_life) free(g_gamepad_cheat_life);
-                g_gamepad_cheat_life = strdup(value);
-            }
-            else if (strcmp(key, "CheatKeys") == 0) {
-                if (g_gamepad_cheat_keys) free(g_gamepad_cheat_keys);
-                g_gamepad_cheat_keys = strdup(value);
-            }
-            else if (strcmp(key, "CheatEquipment") == 0 || strcmp(key, "CheatWalkThroughWalls") == 0) {
-                if (g_gamepad_cheat_walkthrough) free(g_gamepad_cheat_walkthrough);
-                g_gamepad_cheat_walkthrough = strdup(value);
-            }
-            else if (strcmp(key, "ClearKeyLog") == 0) {
-                if (g_gamepad_clear_keylog) free(g_gamepad_clear_keylog);
-                g_gamepad_clear_keylog = strdup(value);
-            }
-            else if (strcmp(key, "StopReplay") == 0) {
-                if (g_gamepad_stop_replay) free(g_gamepad_stop_replay);
-                g_gamepad_stop_replay = strdup(value);
-            }
-            else if (strcmp(key, "Fullscreen") == 0) {
-                if (g_gamepad_fullscreen) free(g_gamepad_fullscreen);
-                g_gamepad_fullscreen = strdup(value);
-            }
-            else if (strcmp(key, "Reset") == 0) {
-                if (g_gamepad_reset) free(g_gamepad_reset);
-                g_gamepad_reset = strdup(value);
-            }
-            else if (strcmp(key, "PauseDimmed") == 0) {
-                if (g_gamepad_pause_dimmed) free(g_gamepad_pause_dimmed);
-                g_gamepad_pause_dimmed = strdup(value);
-            }
-            else if (strcmp(key, "Pause") == 0) {
-                if (g_gamepad_pause) free(g_gamepad_pause);
-                g_gamepad_pause = strdup(value);
-            }
-            else if (strcmp(key, "Turbo") == 0) {
-                if (g_gamepad_turbo) free(g_gamepad_turbo);
-                g_gamepad_turbo = strdup(value);
-            }
-            else if (strcmp(key, "ReplayTurbo") == 0) {
-                if (g_gamepad_replay_turbo) free(g_gamepad_replay_turbo);
-                g_gamepad_replay_turbo = strdup(value);
-            }
-            else if (strcmp(key, "WindowBigger") == 0) {
-                if (g_gamepad_window_bigger) free(g_gamepad_window_bigger);
-                g_gamepad_window_bigger = strdup(value);
-            }
-            else if (strcmp(key, "WindowSmaller") == 0) {
-                if (g_gamepad_window_smaller) free(g_gamepad_window_smaller);
-                g_gamepad_window_smaller = strdup(value);
-            }
-            else if (strcmp(key, "VolumeUp") == 0) {
-                if (g_gamepad_volume_up) free(g_gamepad_volume_up);
-                g_gamepad_volume_up = strdup(value);
-            }
-            else if (strcmp(key, "VolumeDown") == 0) {
-                if (g_gamepad_volume_down) free(g_gamepad_volume_down);
-                g_gamepad_volume_down = strdup(value);
-            }
-            else if (strcmp(key, "DisplayPerf") == 0) {
-                if (g_gamepad_display_perf) free(g_gamepad_display_perf);
-                g_gamepad_display_perf = strdup(value);
-            }
-            else if (strcmp(key, "ToggleRenderer") == 0) {
-                if (g_gamepad_toggle_renderer) free(g_gamepad_toggle_renderer);
-                g_gamepad_toggle_renderer = strdup(value);
-            }
+            else if (strcmp(key, "CheatLife") == 0) update_string(&g_gamepad_cheat_life, value);
+            else if (strcmp(key, "CheatKeys") == 0) update_string(&g_gamepad_cheat_keys, value);
+            else if (strcmp(key, "CheatEquipment") == 0 || strcmp(key, "CheatWalkThroughWalls") == 0)
+                update_string(&g_gamepad_cheat_walkthrough, value);
+            else if (strcmp(key, "ClearKeyLog") == 0) update_string(&g_gamepad_clear_keylog, value);
+            else if (strcmp(key, "StopReplay") == 0) update_string(&g_gamepad_stop_replay, value);
+            else if (strcmp(key, "Fullscreen") == 0) update_string(&g_gamepad_fullscreen, value);
+            else if (strcmp(key, "Reset") == 0) update_string(&g_gamepad_reset, value);
+            else if (strcmp(key, "PauseDimmed") == 0) update_string(&g_gamepad_pause_dimmed, value);
+            else if (strcmp(key, "Pause") == 0) update_string(&g_gamepad_pause, value);
+            else if (strcmp(key, "Turbo") == 0) update_string(&g_gamepad_turbo, value);
+            else if (strcmp(key, "ReplayTurbo") == 0) update_string(&g_gamepad_replay_turbo, value);
+            else if (strcmp(key, "WindowBigger") == 0) update_string(&g_gamepad_window_bigger, value);
+            else if (strcmp(key, "WindowSmaller") == 0) update_string(&g_gamepad_window_smaller, value);
+            else if (strcmp(key, "VolumeUp") == 0) update_string(&g_gamepad_volume_up, value);
+            else if (strcmp(key, "VolumeDown") == 0) update_string(&g_gamepad_volume_down, value);
+            else if (strcmp(key, "DisplayPerf") == 0) update_string(&g_gamepad_display_perf, value);
+            else if (strcmp(key, "ToggleRenderer") == 0) update_string(&g_gamepad_toggle_renderer, value);
         }
 
         line = next_line;

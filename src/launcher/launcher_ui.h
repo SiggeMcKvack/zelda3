@@ -3,6 +3,10 @@
 #include <gtk/gtk.h>
 #include "../config.h"
 
+// Array size constants
+#define NUM_SNES_BUTTONS        12
+#define NUM_SAVE_SLOTS          10
+
 // Control mapping storage (12 SNES controls: Up, Down, Left, Right, Select, Start, A, B, X, Y, L, R)
 // These are stored separately from Config since they're just pass-through strings to INI
 extern char *g_kbd_controls[12];
@@ -63,7 +67,7 @@ extern char *g_gamepad_toggle_renderer;
 // Parse/format control strings for INI
 void LauncherUI_ParseControlString(const char *str, char **controls);
 void LauncherUI_ParseGamepadControlString(const char *str, char **controls);
-char* LauncherUI_FormatControlString(char **controls);
+char* LauncherUI_FormatControlString(char **controls, int count);
 
 // Get directory containing the launcher executable
 void LauncherUI_GetExecutableDir(char *buf, size_t buf_size);

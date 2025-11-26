@@ -135,7 +135,7 @@ static void get_executable_dir(char *buf, size_t buf_size) {
             char *last_slash = strrchr(buf, '/');
             if (last_slash) *last_slash = '\0';
         } else {
-            strcpy(buf, ".");
+            snprintf(buf, buf_size, ".");
         }
     #elif defined(__linux__)
         ssize_t len = readlink("/proc/self/exe", buf, buf_size - 1);
@@ -144,10 +144,10 @@ static void get_executable_dir(char *buf, size_t buf_size) {
             char *last_slash = strrchr(buf, '/');
             if (last_slash) *last_slash = '\0';
         } else {
-            strcpy(buf, ".");
+            snprintf(buf, buf_size, ".");
         }
     #else
-        strcpy(buf, ".");
+        snprintf(buf, buf_size, ".");
     #endif
 }
 

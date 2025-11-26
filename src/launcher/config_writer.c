@@ -476,7 +476,7 @@ static bool WriteKeyMapSection(FILE *f, const Config *config) {
   if (!WriteLine(f, "# Order: Up, Down, Left, Right, Select, Start, A, B, X, Y, L, R\n")) return false;
   if (!WriteLine(f, "#\n")) return false;
   if (!WriteLine(f, "# Default for QWERTY keyboards:\n")) return false;
-  char *controls_str = LauncherUI_FormatControlString(g_kbd_controls);
+  char *controls_str = LauncherUI_FormatControlString(g_kbd_controls, NUM_SNES_BUTTONS);
   if (!WriteLine(f, "Controls = %s\n\n", controls_str)) { free(controls_str); return false; }
   free(controls_str);
 
@@ -494,17 +494,17 @@ static bool WriteKeyMapSection(FILE *f, const Config *config) {
 
   // Save states
   if (!WriteLine(f, "# Load save state (F1-F10)\n")) return false;
-  char *load_str = LauncherUI_FormatControlString(g_kbd_load);
+  char *load_str = LauncherUI_FormatControlString(g_kbd_load, NUM_SAVE_SLOTS);
   if (!WriteLine(f, "Load =      %s\n\n", load_str)) { free(load_str); return false; }
   free(load_str);
 
   if (!WriteLine(f, "# Save state (Shift+F1 through Shift+F10)\n")) return false;
-  char *save_str = LauncherUI_FormatControlString(g_kbd_save);
+  char *save_str = LauncherUI_FormatControlString(g_kbd_save, NUM_SAVE_SLOTS);
   if (!WriteLine(f, "Save = %s\n\n", save_str)) { free(save_str); return false; }
   free(save_str);
 
   if (!WriteLine(f, "# Replay state (Ctrl+F1 through Ctrl+F10)\n")) return false;
-  char *replay_str = LauncherUI_FormatControlString(g_kbd_replay);
+  char *replay_str = LauncherUI_FormatControlString(g_kbd_replay, NUM_SAVE_SLOTS);
   if (!WriteLine(f, "Replay= %s\n\n", replay_str)) { free(replay_str); return false; }
   free(replay_str);
 
@@ -634,7 +634,7 @@ static bool WriteGamepadMapSection(FILE *f, const Config *config) {
   if (!WriteLine(f, "# SNES controller button mapping for gamepad\n")) return false;
   if (!WriteLine(f, "# Order: Up, Down, Left, Right, Select, Start, A, B, X, Y, L, R\n")) return false;
   // Format the controls string
-  char *controls_str = LauncherUI_FormatControlString(g_gamepad_controls);
+  char *controls_str = LauncherUI_FormatControlString(g_gamepad_controls, NUM_SNES_BUTTONS);
   bool result = WriteLine(f, "Controls = %s\n\n", controls_str);
   free(controls_str);
 
@@ -647,7 +647,7 @@ static bool WriteGamepadMapSection(FILE *f, const Config *config) {
   // Load save states
   if (!WriteLine(f, "# Load save states (10 slots)\n")) return false;
   if (!WriteLine(f, "# Quick load slot 1 = L2+L3 (default), rest unset\n")) return false;
-  char *load_str = LauncherUI_FormatControlString(g_gamepad_load);
+  char *load_str = LauncherUI_FormatControlString(g_gamepad_load, NUM_SAVE_SLOTS);
   result = WriteLine(f, "Load = %s\n\n", load_str);
   free(load_str);
   if (!result) return false;
@@ -655,14 +655,14 @@ static bool WriteGamepadMapSection(FILE *f, const Config *config) {
   // Save states
   if (!WriteLine(f, "# Save states (10 slots)\n")) return false;
   if (!WriteLine(f, "# Quick save slot 1 = L2+R3 (default), rest unset\n")) return false;
-  char *save_str = LauncherUI_FormatControlString(g_gamepad_save);
+  char *save_str = LauncherUI_FormatControlString(g_gamepad_save, NUM_SAVE_SLOTS);
   result = WriteLine(f, "Save = %s\n\n", save_str);
   free(save_str);
   if (!result) return false;
 
   // Replay states
   if (!WriteLine(f, "# Replay states (10 slots)\n")) return false;
-  char *replay_str = LauncherUI_FormatControlString(g_gamepad_replay);
+  char *replay_str = LauncherUI_FormatControlString(g_gamepad_replay, NUM_SAVE_SLOTS);
   result = WriteLine(f, "Replay = %s\n\n", replay_str);
   free(replay_str);
   if (!result) return false;
