@@ -65,6 +65,9 @@ void LauncherUI_ParseControlString(const char *str, char **controls);
 void LauncherUI_ParseGamepadControlString(const char *str, char **controls);
 char* LauncherUI_FormatControlString(char **controls);
 
+// Get directory containing the launcher executable
+void LauncherUI_GetExecutableDir(char *buf, size_t buf_size);
+
 // Create the main launcher window with all tabs
 // Returns: GtkWidget* for the main window
 // config: Current configuration to display

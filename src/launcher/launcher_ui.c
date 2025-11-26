@@ -1,4 +1,5 @@
 #include "launcher_ui.h"
+#include "dat_reader.h"
 #include "../config.h"
 #include "../features.h"
 #include "launcher_gamepad.h"
@@ -9,6 +10,12 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+#ifdef __linux__
+#include <unistd.h>
+#endif
 
 // Control mappings (12 SNES controls)
 char *g_kbd_controls[12] = {NULL};
@@ -71,8 +78,38 @@ static const char *kControlNames[12] = {
     "Up", "Down", "Left", "Right", "Select", "Start", "A", "B", "X", "Y", "L", "R"
 };
 
+// Get directory containing the launcher executable
+void LauncherUI_GetExecutableDir(char *buf, size_t buf_size) {
+#ifdef __APPLE__
+    uint32_t size = buf_size;
+    if (_NSGetExecutablePath(buf, &size) == 0) {
+        char *last_slash = strrchr(buf, '/');
+        if (last_slash) *last_slash = '\0';
+    } else {
+        strcpy(buf, ".");
+    }
+#elif defined(__linux__)
+    ssize_t len = readlink("/proc/self/exe", buf, buf_size - 1);
+    if (len != -1) {
+        buf[len] = '\0';
+        char *last_slash = strrchr(buf, '/');
+        if (last_slash) *last_slash = '\0';
+    } else {
+        strcpy(buf, ".");
+    }
+#else
+    strcpy(buf, ".");
+#endif
+}
+
 // Widget references for updating config
 static struct {
+    // General tab
+    GtkWidget *dat_status_label;
+    GtkWidget *language_combo;
+    GtkWidget *rom_path_entry;
+    GtkWidget *make_dat_status;
+
     // Graphics tab
     GtkWidget *output_method;
     GtkWidget *window_size_mode;
@@ -431,6 +468,322 @@ static void on_msu_path_browse_clicked(GtkButton *button, gpointer user_data) {
     }
 
     gtk_widget_destroy(dialog);
+}
+
+// Forward declarations
+static void refresh_language_dropdown(const char *current_lang);
+static void update_dat_status(void);
+
+// Helper to get display name for a language code
+static const char* get_language_display_name(const char *code) {
+    static const struct { const char *code; const char *name; } kLangMap[] = {
+        {"us", "English (US)"},
+        {"de", "German"},
+        {"fr", "French"},
+        {"fr_c", "French (Canada)"},
+        {"en", "English (EU)"},
+        {"es", "Spanish"},
+        {"pl", "Polish"},
+        {"pt", "Portuguese"},
+        {"nl", "Dutch"},
+        {"sv", "Swedish"},
+    };
+    for (int i = 0; i < 10; i++) {
+        if (strcmp(code, kLangMap[i].code) == 0)
+            return kLangMap[i].name;
+    }
+    return code;  // Return code if unknown
+}
+
+// Update DAT status label and language dropdown
+static void update_dat_status(void) {
+    char exe_dir[512];
+    LauncherUI_GetExecutableDir(exe_dir, sizeof(exe_dir));
+
+    if (DatReader_Exists(exe_dir)) {
+        gtk_label_set_markup(GTK_LABEL(g_widgets.dat_status_label),
+            "<span foreground='green'>zelda3_assets.dat found</span>");
+    } else {
+        gtk_label_set_markup(GTK_LABEL(g_widgets.dat_status_label),
+            "<span foreground='red'>zelda3_assets.dat not found - create from ROM below</span>");
+    }
+}
+
+// Signal handler for ROM path browse button
+static void on_rom_browse_clicked(GtkButton *button, gpointer user_data) {
+    (void)button;
+    (void)user_data;
+
+    GtkWidget *dialog = gtk_file_chooser_dialog_new(
+        "Select ROM File",
+        NULL,
+        GTK_FILE_CHOOSER_ACTION_OPEN,
+        "Cancel", GTK_RESPONSE_CANCEL,
+        "Open", GTK_RESPONSE_ACCEPT,
+        NULL);
+
+    // Add file filter for ROM files
+    GtkFileFilter *filter = gtk_file_filter_new();
+    gtk_file_filter_set_name(filter, "SNES ROM files (*.sfc, *.smc)");
+    gtk_file_filter_add_pattern(filter, "*.sfc");
+    gtk_file_filter_add_pattern(filter, "*.smc");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+
+    // Add "All files" filter
+    GtkFileFilter *filter_all = gtk_file_filter_new();
+    gtk_file_filter_set_name(filter_all, "All files");
+    gtk_file_filter_add_pattern(filter_all, "*");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter_all);
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+        gtk_entry_set_text(GTK_ENTRY(g_widgets.rom_path_entry), filename);
+        g_free(filename);
+    }
+
+    gtk_widget_destroy(dialog);
+}
+
+// Signal handler for Create DAT button
+static void on_make_dat_clicked(GtkButton *button, gpointer user_data) {
+    (void)user_data;
+
+    const char *rom_path = gtk_entry_get_text(GTK_ENTRY(g_widgets.rom_path_entry));
+    if (!rom_path || !*rom_path) {
+        gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status), "Error: No ROM file selected");
+        return;
+    }
+
+    gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status), "Extracting assets...");
+    gtk_widget_set_sensitive(GTK_WIDGET(button), FALSE);
+
+    // Force redraw before blocking operation
+    while (gtk_events_pending())
+        gtk_main_iteration();
+
+    // Get directory where launcher (and restool) live
+    char exe_dir[512];
+    LauncherUI_GetExecutableDir(exe_dir, sizeof(exe_dir));
+
+    // Build command to run restool with output to exe directory
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+        "\"%s/zelda3_restool\" --extract-from-rom \"%s\" --output \"%s\" --compile 2>&1",
+        exe_dir, rom_path, exe_dir);
+
+    // Use popen to capture restool output for better error messages
+    FILE *pipe = popen(cmd, "r");
+    if (!pipe) {
+        gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status),
+            "Error: Failed to run restool");
+        gtk_widget_set_sensitive(GTK_WIDGET(button), TRUE);
+        return;
+    }
+
+    char output[4096] = {0};
+    size_t total = 0;
+    char buf[256];
+    while (fgets(buf, sizeof(buf), pipe) && total < sizeof(output) - 1) {
+        size_t len = strlen(buf);
+        memcpy(output + total, buf, len);
+        total += len;
+    }
+    int result = pclose(pipe);
+
+    if (result == 0) {
+        gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status),
+            "Success! Created zelda3_assets.dat");
+        // Refresh DAT status and language dropdown
+        update_dat_status();
+        refresh_language_dropdown(NULL);  // Refresh with new languages from DAT
+    } else {
+        // Parse output for specific error patterns
+        char error_msg[256] = "Error: Extraction failed.";
+
+        // Check for known ROM detection (e.g., "Detected ROM: de - ...")
+        char *detected = strstr(output, "Detected ROM:");
+        if (detected) {
+            // Extract the language/region code
+            char *dash = strchr(detected + 13, '-');
+            if (dash) {
+                // Skip to the ROM name after " - "
+                char *name_start = dash + 2;
+                char *name_end = strchr(name_start, '"');
+                if (!name_end) name_end = strchr(name_start, '\n');
+                if (!name_end) name_end = name_start + strlen(name_start);
+
+                // Extract region code (2-3 chars before the dash)
+                char region[8] = {0};
+                char *region_start = detected + 13;
+                while (*region_start == ' ') region_start++;
+                int i = 0;
+                while (region_start < dash && *region_start != ' ' && i < 7) {
+                    region[i++] = *region_start++;
+                }
+                region[i] = '\0';
+
+                // Create user-friendly message
+                if (strcmp(region, "de") == 0) {
+                    snprintf(error_msg, sizeof(error_msg),
+                        "Error: Detected German ROM. Only USA ROM is supported.");
+                } else if (strcmp(region, "fr") == 0 || strcmp(region, "fr_c") == 0) {
+                    snprintf(error_msg, sizeof(error_msg),
+                        "Error: Detected French ROM. Only USA ROM is supported.");
+                } else if (strcmp(region, "en") == 0) {
+                    snprintf(error_msg, sizeof(error_msg),
+                        "Error: Detected European ROM. Only USA ROM is supported.");
+                } else if (strcmp(region, "es") == 0) {
+                    snprintf(error_msg, sizeof(error_msg),
+                        "Error: Detected Spanish ROM. Only USA ROM is supported.");
+                } else if (region[0]) {
+                    snprintf(error_msg, sizeof(error_msg),
+                        "Error: Detected %s ROM. Only USA ROM is supported.", region);
+                }
+            }
+        } else if (strstr(output, "not supported")) {
+            snprintf(error_msg, sizeof(error_msg),
+                "Error: Unrecognized ROM (SHA1 mismatch). Only USA ROM is supported.");
+        } else if (strstr(output, "Failed to read") || strstr(output, "Cannot open")) {
+            snprintf(error_msg, sizeof(error_msg),
+                "Error: Failed to read ROM file.");
+        }
+
+        gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status), error_msg);
+    }
+
+    gtk_widget_set_sensitive(GTK_WIDGET(button), TRUE);
+}
+
+// Populate language dropdown with languages available in DAT file
+static void refresh_language_dropdown(const char *current_lang) {
+    // Get available languages from DAT file
+    char exe_dir[512];
+    LauncherUI_GetExecutableDir(exe_dir, sizeof(exe_dir));
+
+    char available_langs[16][8];
+    int num_langs = DatReader_GetLanguages(exe_dir, available_langs, 16);
+
+    // Create list store: display name, code
+    GtkListStore *store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_STRING);
+
+    int active_idx = 0;
+
+    if (num_langs > 0) {
+        // Populate with languages found in DAT
+        for (int i = 0; i < num_langs; i++) {
+            GtkTreeIter iter;
+            gtk_list_store_append(store, &iter);
+            gtk_list_store_set(store, &iter,
+                0, get_language_display_name(available_langs[i]),  // Display name
+                1, available_langs[i],  // Code
+                -1);
+
+            // Check if this is the currently selected language
+            if (current_lang && strcmp(available_langs[i], current_lang) == 0) {
+                active_idx = i;
+            }
+        }
+    } else {
+        // No DAT file or no languages - show placeholder
+        GtkTreeIter iter;
+        gtk_list_store_append(store, &iter);
+        gtk_list_store_set(store, &iter,
+            0, "(No asset file)",
+            1, "",
+            -1);
+    }
+
+    gtk_combo_box_set_model(GTK_COMBO_BOX(g_widgets.language_combo), GTK_TREE_MODEL(store));
+    g_object_unref(store);
+
+    // Set up cell renderer
+    GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
+    gtk_cell_layout_clear(GTK_CELL_LAYOUT(g_widgets.language_combo));
+    gtk_cell_layout_pack_start(GTK_CELL_LAYOUT(g_widgets.language_combo), renderer, TRUE);
+    gtk_cell_layout_set_attributes(GTK_CELL_LAYOUT(g_widgets.language_combo), renderer,
+        "text", 0,
+        NULL);
+
+    gtk_combo_box_set_active(GTK_COMBO_BOX(g_widgets.language_combo), active_idx);
+}
+
+// Create General tab
+static GtkWidget* create_general_tab(const Config *config) {
+    GtkWidget *grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid), 5);
+    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
+    gtk_container_set_border_width(GTK_CONTAINER(grid), 10);
+
+    int row = 0;
+
+    // === Asset File Section ===
+    GtkWidget *asset_label = gtk_label_new(NULL);
+    gtk_label_set_markup(GTK_LABEL(asset_label), "<b>Asset File</b>");
+    gtk_widget_set_halign(asset_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), asset_label, 0, row++, 2, 1);
+
+    // DAT file status label
+    GtkWidget *status_label = gtk_label_new("Status:");
+    gtk_widget_set_halign(status_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), status_label, 0, row, 1, 1);
+
+    g_widgets.dat_status_label = gtk_label_new("");
+    gtk_widget_set_halign(g_widgets.dat_status_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), g_widgets.dat_status_label, 1, row++, 1, 1);
+
+    // Update the status immediately
+    update_dat_status();
+
+    // === Language Section ===
+    GtkWidget *lang_section_label = gtk_label_new(NULL);
+    gtk_label_set_markup(GTK_LABEL(lang_section_label), "<b>Language</b>");
+    gtk_widget_set_halign(lang_section_label, GTK_ALIGN_START);
+    gtk_widget_set_margin_top(lang_section_label, 10);
+    gtk_grid_attach(GTK_GRID(grid), lang_section_label, 0, row++, 2, 1);
+
+    GtkWidget *lang_label = gtk_label_new("Language:");
+    gtk_widget_set_halign(lang_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), lang_label, 0, row, 1, 1);
+
+    g_widgets.language_combo = gtk_combo_box_new();
+    gtk_grid_attach(GTK_GRID(grid), g_widgets.language_combo, 1, row++, 1, 1);
+
+    // Populate the language dropdown (reads from DAT file)
+    refresh_language_dropdown(config->language);
+
+    // === Create Asset File Section ===
+    GtkWidget *create_section_label = gtk_label_new(NULL);
+    gtk_label_set_markup(GTK_LABEL(create_section_label), "<b>Create Asset File from ROM</b>");
+    gtk_widget_set_halign(create_section_label, GTK_ALIGN_START);
+    gtk_widget_set_margin_top(create_section_label, 10);
+    gtk_grid_attach(GTK_GRID(grid), create_section_label, 0, row++, 2, 1);
+
+    // ROM file path + browse button
+    GtkWidget *rom_label = gtk_label_new("ROM File:");
+    gtk_widget_set_halign(rom_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), rom_label, 0, row, 1, 1);
+
+    GtkWidget *rom_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    g_widgets.rom_path_entry = gtk_entry_new();
+    gtk_box_pack_start(GTK_BOX(rom_hbox), g_widgets.rom_path_entry, TRUE, TRUE, 0);
+
+    GtkWidget *rom_browse_btn = gtk_button_new_with_label("Browse...");
+    g_signal_connect(rom_browse_btn, "clicked", G_CALLBACK(on_rom_browse_clicked), NULL);
+    gtk_box_pack_start(GTK_BOX(rom_hbox), rom_browse_btn, FALSE, FALSE, 0);
+
+    gtk_grid_attach(GTK_GRID(grid), rom_hbox, 1, row++, 1, 1);
+
+    // Create DAT button
+    GtkWidget *make_dat_btn = gtk_button_new_with_label("Create Asset File");
+    g_signal_connect(make_dat_btn, "clicked", G_CALLBACK(on_make_dat_clicked), NULL);
+    gtk_grid_attach(GTK_GRID(grid), make_dat_btn, 1, row++, 1, 1);
+
+    // Status label
+    g_widgets.make_dat_status = gtk_label_new("Ready");
+    gtk_widget_set_halign(g_widgets.make_dat_status, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), g_widgets.make_dat_status, 1, row++, 1, 1);
+
+    return grid;
 }
 
 // Create Graphics tab
@@ -1518,12 +1871,14 @@ GtkWidget* LauncherUI_CreateWindow(Config *config) {
     gtk_box_pack_start(GTK_BOX(vbox), notebook, TRUE, TRUE, 0);
 
     // Add tabs
+    GtkWidget *general_tab = create_general_tab(config);
     GtkWidget *graphics_tab = create_graphics_tab(config);
     GtkWidget *sound_tab = create_sound_tab(config);
     GtkWidget *features_tab = create_features_tab(config);
     GtkWidget *keymap_tab = create_keymap_tab(config);
     GtkWidget *gamepad_tab = create_gamepadmap_tab(config);
 
+    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), general_tab, gtk_label_new("General"));
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), graphics_tab, gtk_label_new("Graphics"));
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), sound_tab, gtk_label_new("Sound"));
     gtk_notebook_append_page(GTK_NOTEBOOK(notebook), features_tab, gtk_label_new("Features"));
@@ -1535,6 +1890,17 @@ GtkWidget* LauncherUI_CreateWindow(Config *config) {
 
 // Update config from UI widgets
 void LauncherUI_UpdateConfigFromUI(Config *config) {
+    // General - Language
+    GtkTreeIter iter;
+    if (gtk_combo_box_get_active_iter(GTK_COMBO_BOX(g_widgets.language_combo), &iter)) {
+        GtkTreeModel *model = gtk_combo_box_get_model(GTK_COMBO_BOX(g_widgets.language_combo));
+        gchar *lang_code;
+        gtk_tree_model_get(model, &iter, 1, &lang_code, -1);
+        if (config->language) free((void*)config->language);
+        config->language = (lang_code && *lang_code) ? strdup(lang_code) : NULL;
+        g_free(lang_code);
+    }
+
     // Graphics
     config->output_method = gtk_combo_box_get_active(GTK_COMBO_BOX(g_widgets.output_method));
 

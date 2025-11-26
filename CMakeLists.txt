@@ -226,6 +226,7 @@ if(HAVE_GTK3)
         src/launcher/launcher_gamepad.c
         src/launcher/config_writer.c
         src/launcher/config_reader.c
+        src/launcher/dat_reader.c
         src/platform.c
         src/logging.c
     )
