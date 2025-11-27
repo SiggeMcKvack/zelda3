@@ -233,6 +233,7 @@ if(HAVE_GTK3)
         src/launcher/dat_reader.c
         src/platform.c
         src/logging.c
+        src/rom_sha1.c
     )
 
     # Add macOS-specific source

@@ -72,10 +72,7 @@ void Snes_FreeCompressed(CompressedData *data);
 // Utility Functions
 // ============================================================================
 
-// Calculate SHA-1 hash of data
-void CalculateSHA1(const uint8_t *data, size_t len, char *out_hex);
-
-// Convert SHA-1 hash to hex string
-void SHA1ToHex(const uint8_t hash[20], char *out_hex);
+// SHA-1 functions are now provided by shared rom_sha1.h
+// Use RomSha1_Calculate() instead of CalculateSHA1()
 
 #endif // RESTOOL_UTIL_H

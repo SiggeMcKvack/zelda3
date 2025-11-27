@@ -48,6 +48,13 @@ uint8_t* AssetReader_Load(const char *path, size_t *out_size) {
         if (data) return data;
     }
 
+    // Try stripping "assets/" prefix if present (for files written directly to output dir)
+    if (strncmp(path, "assets/", 7) == 0) {
+        const char *stripped = path + 7;
+        data = Platform_ReadWholeFile(stripped, out_size);
+        if (data) return data;
+    }
+
     return NULL;
 }
 
@@ -74,6 +81,16 @@ bool AssetReader_Exists(const char *path) {
         char full_path[512];
         snprintf(full_path, sizeof(full_path), "assets/%s", path);
         f = fopen(full_path, "rb");
+        if (f) {
+            fclose(f);
+            return true;
+        }
+    }
+
+    // Try stripping "assets/" prefix if present
+    if (strncmp(path, "assets/", 7) == 0) {
+        const char *stripped = path + 7;
+        f = fopen(stripped, "rb");
         if (f) {
             fclose(f);
             return true;

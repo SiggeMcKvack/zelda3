@@ -91,6 +91,7 @@ set(THIRD_PARTY_SOURCES
 set(SHARED_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/../platform.c
   ${CMAKE_CURRENT_SOURCE_DIR}/../logging.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/../rom_sha1.c
 )
 
 # Create executable

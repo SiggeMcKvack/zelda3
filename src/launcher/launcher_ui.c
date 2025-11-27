@@ -4,12 +4,26 @@
 #include "../features.h"
 #include "launcher_gamepad.h"
 #include "../logging.h"
+#include "../rom_sha1.h"
 #include <gtk/gtk.h>
 #include <SDL.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+
+// Language ROM entry for multi-language support
+typedef struct {
+    char path[512];
+    char sha1[41];
+    char lang_code[16];
+    char lang_name[64];
+    bool valid;
+} LanguageRomEntry;
+
+#define MAX_LANGUAGE_ROMS 12
+static LanguageRomEntry g_lang_roms[MAX_LANGUAGE_ROMS];
+static int g_lang_rom_count = 0;
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
@@ -121,6 +135,10 @@ static struct {
     GtkWidget *language_combo;
     GtkWidget *rom_path_entry;
     GtkWidget *make_dat_status;
+    GtkWidget *lang_roms_listbox;
+    GtkWidget *lang_roms_browse_btn;
+    GtkWidget *lang_roms_clear_all_btn;
+    GtkWidget *make_dat_btn;
 
     // Graphics tab
     GtkWidget *output_method;
@@ -489,14 +507,14 @@ static const char* get_language_display_name(const char *code) {
         {"us", "English (US)"},
         {"de", "German"},
         {"fr", "French"},
-        {"fr_c", "French (Canada)"},
+        {"fr-c", "French (Canada)"},
         {"en", "English (EU)"},
         {"es", "Spanish"},
         {"pl", "Polish"},
         {"pt", "Portuguese"},
         {"nl", "Dutch"},
         {"sv", "Swedish"},
-        {"redux", "English Redux"},
+        {"redux", "English (Redux)"},
         {"retrans-kal", "English (Kaleidoscope)"},
     };
     for (size_t i = 0; i < sizeof(kLangMap) / sizeof(kLangMap[0]); i++) {
@@ -518,6 +536,239 @@ static void update_dat_status(void) {
         gtk_label_set_markup(GTK_LABEL(g_widgets.dat_status_label),
             "<span foreground='red'>zelda3_assets.dat not found - create from ROM below</span>");
     }
+}
+
+// ============================================================================
+// Language ROM Management
+// ============================================================================
+
+// Forward declaration
+static void refresh_lang_roms_list(void);
+
+// Add a language ROM after validation
+static void add_language_rom(const char *path) {
+    if (g_lang_rom_count >= MAX_LANGUAGE_ROMS) {
+        LogWarn("Maximum number of language ROMs reached (%d)", MAX_LANGUAGE_ROMS);
+        return;
+    }
+
+    // Validate ROM
+    RomIdentification id;
+    if (!RomSha1_ValidateFile(path, &id)) {
+        LogWarn("Failed to read ROM: %s", path);
+        return;
+    }
+
+    // Check for US ROM (should use base ROM field instead)
+    if (id.valid && strcmp(id.lang_code, "us") == 0) {
+        GtkWidget *dialog = gtk_message_dialog_new(NULL,
+            GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_OK,
+            "US ROM detected.\n\nPlease use the 'ROM File' field above for the base USA ROM.");
+        gtk_dialog_run(GTK_DIALOG(dialog));
+        gtk_widget_destroy(dialog);
+        return;
+    }
+
+    // Check for duplicate language (replace if found)
+    for (int i = 0; i < g_lang_rom_count; i++) {
+        if (strcmp(g_lang_roms[i].lang_code, id.lang_code) == 0) {
+            // Replace existing entry
+            strncpy(g_lang_roms[i].path, path, sizeof(g_lang_roms[i].path) - 1);
+            strncpy(g_lang_roms[i].sha1, id.sha1, sizeof(g_lang_roms[i].sha1) - 1);
+            strncpy(g_lang_roms[i].lang_code, id.lang_code, sizeof(g_lang_roms[i].lang_code) - 1);
+            strncpy(g_lang_roms[i].lang_name, id.lang_name, sizeof(g_lang_roms[i].lang_name) - 1);
+            g_lang_roms[i].valid = id.valid;
+            refresh_lang_roms_list();
+            return;
+        }
+    }
+
+    // Add new entry
+    LanguageRomEntry *entry = &g_lang_roms[g_lang_rom_count++];
+    strncpy(entry->path, path, sizeof(entry->path) - 1);
+    strncpy(entry->sha1, id.sha1, sizeof(entry->sha1) - 1);
+    strncpy(entry->lang_code, id.lang_code, sizeof(entry->lang_code) - 1);
+    strncpy(entry->lang_name, id.lang_name, sizeof(entry->lang_name) - 1);
+    entry->valid = id.valid;
+
+    refresh_lang_roms_list();
+}
+
+// Clear a single language ROM entry
+static void on_lang_rom_clear_clicked(GtkButton *button, gpointer user_data) {
+    (void)button;
+    int index = GPOINTER_TO_INT(user_data);
+
+    if (index < 0 || index >= g_lang_rom_count) return;
+
+    // Remove entry by shifting remaining entries
+    for (int i = index; i < g_lang_rom_count - 1; i++) {
+        g_lang_roms[i] = g_lang_roms[i + 1];
+    }
+    g_lang_rom_count--;
+
+    refresh_lang_roms_list();
+}
+
+// Clear all language ROM entries
+static void on_lang_roms_clear_all_clicked(GtkButton *button, gpointer user_data) {
+    (void)button;
+    (void)user_data;
+
+    g_lang_rom_count = 0;
+    refresh_lang_roms_list();
+}
+
+// Browse for multiple language ROM files
+static void on_lang_roms_browse_clicked(GtkButton *button, gpointer user_data) {
+    (void)button;
+    (void)user_data;
+
+    GtkWidget *dialog = gtk_file_chooser_dialog_new(
+        "Select Language ROM Files",
+        NULL,
+        GTK_FILE_CHOOSER_ACTION_OPEN,
+        "Cancel", GTK_RESPONSE_CANCEL,
+        "Open", GTK_RESPONSE_ACCEPT,
+        NULL);
+
+    // Enable multi-file selection
+    gtk_file_chooser_set_select_multiple(GTK_FILE_CHOOSER(dialog), TRUE);
+
+    // Add file filter for ROM files
+    GtkFileFilter *filter = gtk_file_filter_new();
+    gtk_file_filter_set_name(filter, "SNES ROM files (*.sfc, *.smc)");
+    gtk_file_filter_add_pattern(filter, "*.sfc");
+    gtk_file_filter_add_pattern(filter, "*.smc");
+    gtk_file_filter_add_pattern(filter, "*.SFC");
+    gtk_file_filter_add_pattern(filter, "*.SMC");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+
+    // Add "All files" filter
+    GtkFileFilter *filter_all = gtk_file_filter_new();
+    gtk_file_filter_set_name(filter_all, "All files");
+    gtk_file_filter_add_pattern(filter_all, "*");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter_all);
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        GSList *filenames = gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER(dialog));
+        for (GSList *iter = filenames; iter != NULL; iter = iter->next) {
+            add_language_rom((const char *)iter->data);
+            g_free(iter->data);
+        }
+        g_slist_free(filenames);
+    }
+
+    gtk_widget_destroy(dialog);
+}
+
+// Drag-and-drop data received handler
+static void on_lang_roms_drag_received(GtkWidget *widget,
+                                        GdkDragContext *context,
+                                        gint x, gint y,
+                                        GtkSelectionData *data,
+                                        guint info,
+                                        guint time,
+                                        gpointer user_data) {
+    (void)widget; (void)x; (void)y; (void)info; (void)user_data;
+
+    if (gtk_selection_data_get_length(data) < 0) {
+        gtk_drag_finish(context, FALSE, FALSE, time);
+        return;
+    }
+
+    gchar **uris = gtk_selection_data_get_uris(data);
+    if (!uris) {
+        gtk_drag_finish(context, FALSE, FALSE, time);
+        return;
+    }
+
+    for (int i = 0; uris[i] != NULL; i++) {
+        gchar *filename = g_filename_from_uri(uris[i], NULL, NULL);
+        if (filename) {
+            // Filter for ROM file extensions
+            const char *ext = strrchr(filename, '.');
+            if (ext && (strcasecmp(ext, ".sfc") == 0 || strcasecmp(ext, ".smc") == 0)) {
+                add_language_rom(filename);
+            }
+            g_free(filename);
+        }
+    }
+    g_strfreev(uris);
+
+    gtk_drag_finish(context, TRUE, FALSE, time);
+}
+
+// Refresh the language ROM list UI
+static void refresh_lang_roms_list(void) {
+    if (!g_widgets.lang_roms_listbox) return;
+
+    // Clear existing rows
+    GList *children = gtk_container_get_children(GTK_CONTAINER(g_widgets.lang_roms_listbox));
+    for (GList *iter = children; iter != NULL; iter = iter->next) {
+        gtk_widget_destroy(GTK_WIDGET(iter->data));
+    }
+    g_list_free(children);
+
+    // Create CSS provider for compact rows (applied once)
+    static GtkCssProvider *row_css = NULL;
+    if (!row_css) {
+        row_css = gtk_css_provider_new();
+        gtk_css_provider_load_from_data(row_css,
+            "row { padding: 4px 6px; min-height: 0; }"
+            "row button { padding: 0 4px; min-height: 0; min-width: 0; }", -1, NULL);
+    }
+
+    // Add rows for each language ROM
+    for (int i = 0; i < g_lang_rom_count; i++) {
+        GtkWidget *row = gtk_list_box_row_new();
+        gtk_style_context_add_provider(gtk_widget_get_style_context(row),
+            GTK_STYLE_PROVIDER(row_css), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+        GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+        gtk_widget_set_margin_top(hbox, 0);
+        gtk_widget_set_margin_bottom(hbox, 0);
+
+        // Status label with color coding
+        GtkWidget *label = gtk_label_new(NULL);
+        char markup[256];
+        if (g_lang_roms[i].valid) {
+            snprintf(markup, sizeof(markup),
+                "<span foreground='#006400'>%s - %s</span>",
+                g_lang_roms[i].lang_code, g_lang_roms[i].lang_name);
+        } else {
+            snprintf(markup, sizeof(markup),
+                "<span foreground='red'>%s - %s (invalid SHA1)</span>",
+                g_lang_roms[i].lang_code, g_lang_roms[i].lang_name);
+        }
+        gtk_label_set_markup(GTK_LABEL(label), markup);
+        gtk_widget_set_halign(label, GTK_ALIGN_START);
+        gtk_box_pack_start(GTK_BOX(hbox), label, TRUE, TRUE, 0);
+
+        // Compact clear button for this row
+        GtkWidget *clear_btn = gtk_button_new_with_label("×");
+        gtk_widget_set_tooltip_text(clear_btn, "Remove");
+        gtk_style_context_add_provider(gtk_widget_get_style_context(clear_btn),
+            GTK_STYLE_PROVIDER(row_css), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+        g_signal_connect(clear_btn, "clicked", G_CALLBACK(on_lang_rom_clear_clicked),
+                         GINT_TO_POINTER(i));
+        gtk_box_pack_end(GTK_BOX(hbox), clear_btn, FALSE, FALSE, 0);
+
+        gtk_container_add(GTK_CONTAINER(row), hbox);
+        gtk_container_add(GTK_CONTAINER(g_widgets.lang_roms_listbox), row);
+    }
+
+    // Show placeholder if empty
+    if (g_lang_rom_count == 0) {
+        GtkWidget *row = gtk_list_box_row_new();
+        GtkWidget *label = gtk_label_new("Drag ROMs here or use Browse...");
+        gtk_widget_set_margin_top(label, 10);
+        gtk_widget_set_margin_bottom(label, 10);
+        gtk_container_add(GTK_CONTAINER(row), label);
+        gtk_container_add(GTK_CONTAINER(g_widgets.lang_roms_listbox), row);
+    }
+
+    gtk_widget_show_all(g_widgets.lang_roms_listbox);
 }
 
 // Signal handler for ROM path browse button
@@ -555,75 +806,209 @@ static void on_rom_browse_clicked(GtkButton *button, gpointer user_data) {
     gtk_widget_destroy(dialog);
 }
 
+// Cleanup temporary dialogue files after asset creation
+static void cleanup_dialogue_files(const char *exe_dir) {
+    for (int i = 0; i < g_lang_rom_count; i++) {
+        if (!g_lang_roms[i].valid) continue;
+        if (strcmp(g_lang_roms[i].lang_code, "us") == 0) continue;
+
+        char path[512];
+        snprintf(path, sizeof(path), "%s/dialogue_%s.txt",
+                 exe_dir, g_lang_roms[i].lang_code);
+        remove(path);
+    }
+}
+
 // Signal handler for Create DAT button
 static void on_make_dat_clicked(GtkButton *button, gpointer user_data) {
     (void)user_data;
 
     const char *rom_path = gtk_entry_get_text(GTK_ENTRY(g_widgets.rom_path_entry));
+    LogInfo("MakeDat: Starting DAT creation");
+    LogInfo("MakeDat: Base ROM path: %s", rom_path ? rom_path : "(null)");
+
     if (!rom_path || !*rom_path) {
+        LogWarn("MakeDat: No ROM file selected");
         gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status), "Error: No ROM file selected");
         return;
     }
 
-    gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status), "Extracting assets...");
     gtk_widget_set_sensitive(GTK_WIDGET(button), FALSE);
-
-    // Force redraw before blocking operation
-    while (gtk_events_pending())
-        gtk_main_iteration();
 
     // Get directory where launcher (and restool) live
     char exe_dir[512];
     LauncherUI_GetExecutableDir(exe_dir, sizeof(exe_dir));
+    LogInfo("MakeDat: Executable directory: %s", exe_dir);
+    LogInfo("MakeDat: Restool path: %s/zelda3_restool", exe_dir);
+    LogInfo("MakeDat: Language ROMs count: %d", g_lang_rom_count);
+    for (int i = 0; i < g_lang_rom_count; i++) {
+        LogInfo("MakeDat: Lang ROM %d: %s (%s) valid=%d path=%s",
+                i, g_lang_roms[i].lang_code, g_lang_roms[i].lang_name,
+                g_lang_roms[i].valid, g_lang_roms[i].path);
+    }
 
-    // Build command to run restool with output to exe directory
     char cmd[2048];
-    snprintf(cmd, sizeof(cmd),
-        "\"%s/zelda3_restool\" --extract-from-rom \"%s\" --output \"%s\" --compile 2>&1",
-        exe_dir, rom_path, exe_dir);
+    char output[4096];
+    char buf[256];
+    FILE *pipe;
+    size_t total;
+    int result;
+    bool extraction_failed = false;
 
-    // Use popen to capture restool output for better error messages
-    FILE *pipe = popen(cmd, "r");
-    if (!pipe) {
-        gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status),
-            "Error: Failed to run restool");
+    // Step 1: Extract dialogue from each valid language ROM
+    for (int i = 0; i < g_lang_rom_count && !extraction_failed; i++) {
+        if (!g_lang_roms[i].valid) continue;
+        if (strcmp(g_lang_roms[i].lang_code, "us") == 0) continue;
+
+        // Update status
+        char status[256];
+        snprintf(status, sizeof(status), "Extracting dialogue: %s...",
+                 g_lang_roms[i].lang_name);
+        gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status), status);
+        while (gtk_events_pending()) gtk_main_iteration();
+
+        // Run dialogue extraction
+        snprintf(cmd, sizeof(cmd),
+            "\"%s/zelda3_restool\" --extract-from-rom \"%s\" --extract-dialogue --output \"%s\" 2>&1",
+            exe_dir, g_lang_roms[i].path, exe_dir);
+
+        LogInfo("MakeDat: Running dialogue extraction command: %s", cmd);
+
+        pipe = popen(cmd, "r");
+        if (!pipe) {
+            LogError("MakeDat: Failed to run popen for dialogue extraction");
+            gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status),
+                "Error: Failed to run restool");
+            gtk_widget_set_sensitive(GTK_WIDGET(button), TRUE);
+            return;
+        }
+
+        output[0] = '\0';
+        total = 0;
+        while (fgets(buf, sizeof(buf), pipe) && total < sizeof(output) - 1) {
+            size_t len = strlen(buf);
+            memcpy(output + total, buf, len);
+            total += len;
+        }
+        output[total] = '\0';
+        result = pclose(pipe);
+
+        LogInfo("MakeDat: Dialogue extraction result: %d", result);
+        if (total > 0) {
+            LogInfo("MakeDat: Dialogue extraction output:\n%s", output);
+        }
+
+        if (result != 0) {
+            LogError("MakeDat: Dialogue extraction failed for %s (result=%d)",
+                     g_lang_roms[i].lang_name, result);
+            char error[256];
+            snprintf(error, sizeof(error), "Error extracting %s dialogue",
+                     g_lang_roms[i].lang_name);
+            gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status), error);
+            extraction_failed = true;
+        }
+    }
+
+    if (extraction_failed) {
+        cleanup_dialogue_files(exe_dir);
         gtk_widget_set_sensitive(GTK_WIDGET(button), TRUE);
         return;
     }
 
-    char output[4096] = {0};
-    size_t total = 0;
-    char buf[256];
+    // Step 2: Build language list for --languages argument
+    char languages[256] = "";
+    for (int i = 0; i < g_lang_rom_count; i++) {
+        if (!g_lang_roms[i].valid) continue;
+        if (strcmp(g_lang_roms[i].lang_code, "us") == 0) continue;
+
+        if (languages[0] != '\0') strcat(languages, ",");
+        strcat(languages, g_lang_roms[i].lang_code);
+    }
+
+    // Step 3: Final compilation with all languages
+    LogInfo("MakeDat: Languages argument: '%s'", languages[0] ? languages : "(empty - US only)");
+    gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status), "Compiling assets...");
+    while (gtk_events_pending()) gtk_main_iteration();
+
+    if (languages[0] != '\0') {
+        snprintf(cmd, sizeof(cmd),
+            "\"%s/zelda3_restool\" --extract-from-rom \"%s\" --languages %s --output \"%s\" --compile 2>&1",
+            exe_dir, rom_path, languages, exe_dir);
+    } else {
+        snprintf(cmd, sizeof(cmd),
+            "\"%s/zelda3_restool\" --extract-from-rom \"%s\" --output \"%s\" --compile 2>&1",
+            exe_dir, rom_path, exe_dir);
+    }
+
+    LogInfo("MakeDat: Running compile command: %s", cmd);
+
+    pipe = popen(cmd, "r");
+    if (!pipe) {
+        LogError("MakeDat: Failed to run popen for compilation");
+        gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status),
+            "Error: Failed to run restool");
+        cleanup_dialogue_files(exe_dir);
+        gtk_widget_set_sensitive(GTK_WIDGET(button), TRUE);
+        return;
+    }
+
+    output[0] = '\0';
+    total = 0;
     while (fgets(buf, sizeof(buf), pipe) && total < sizeof(output) - 1) {
         size_t len = strlen(buf);
         memcpy(output + total, buf, len);
         total += len;
     }
-    int result = pclose(pipe);
+    output[total] = '\0';
+    result = pclose(pipe);
+
+    LogInfo("MakeDat: Compile result: %d", result);
+    if (total > 0) {
+        LogInfo("MakeDat: Compile output:\n%s", output);
+    }
+
+    // Step 4: Cleanup temporary dialogue files
+    cleanup_dialogue_files(exe_dir);
 
     if (result == 0) {
-        gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status),
-            "Success! Created zelda3_assets.dat");
+        // Verify created DAT file
+        char dat_path[600];
+        snprintf(dat_path, sizeof(dat_path), "%s/zelda3_assets.dat", exe_dir);
+        FILE *dat_check = fopen(dat_path, "rb");
+        if (dat_check) {
+            fseek(dat_check, 0, SEEK_END);
+            long dat_size = ftell(dat_check);
+            fseek(dat_check, 80, SEEK_SET);
+            uint32_t num_assets = 0;
+            fread(&num_assets, 4, 1, dat_check);
+            fclose(dat_check);
+            LogInfo("MakeDat: Created DAT file: %s (size=%ld, assets=%u)",
+                    dat_path, dat_size, num_assets);
+        } else {
+            LogWarn("MakeDat: Could not verify created DAT file at %s", dat_path);
+        }
+
+        if (languages[0] != '\0') {
+            gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status),
+                "Success! Created multi-language zelda3_assets.dat");
+        } else {
+            gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status),
+                "Success! Created zelda3_assets.dat");
+        }
         // Refresh DAT status and language dropdown
         update_dat_status();
-        refresh_language_dropdown(NULL);  // Refresh with new languages from DAT
+        refresh_language_dropdown(NULL);
+        LogInfo("MakeDat: DAT creation successful, refreshing UI");
     } else {
+        LogError("MakeDat: DAT creation failed (result=%d)", result);
         // Parse output for specific error patterns
         char error_msg[256] = "Error: Extraction failed.";
 
         // Check for known ROM detection (e.g., "Detected ROM: de - ...")
         char *detected = strstr(output, "Detected ROM:");
         if (detected) {
-            // Extract the language/region code
             char *dash = strchr(detected + 13, '-');
             if (dash) {
-                // Skip to the ROM name after " - "
-                char *name_start = dash + 2;
-                char *name_end = strchr(name_start, '"');
-                if (!name_end) name_end = strchr(name_start, '\n');
-                if (!name_end) name_end = name_start + strlen(name_start);
-
-                // Extract region code (2-3 chars before the dash)
                 char region[8] = {0};
                 char *region_start = detected + 13;
                 while (*region_start == ' ') region_start++;
@@ -633,27 +1018,26 @@ static void on_make_dat_clicked(GtkButton *button, gpointer user_data) {
                 }
                 region[i] = '\0';
 
-                // Create user-friendly message
                 if (strcmp(region, "de") == 0) {
                     snprintf(error_msg, sizeof(error_msg),
-                        "Error: Detected German ROM. Only USA ROM is supported.");
+                        "Error: Detected German ROM. Only USA ROM is supported for base ROM.");
                 } else if (strcmp(region, "fr") == 0 || strcmp(region, "fr_c") == 0) {
                     snprintf(error_msg, sizeof(error_msg),
-                        "Error: Detected French ROM. Only USA ROM is supported.");
+                        "Error: Detected French ROM. Only USA ROM is supported for base ROM.");
                 } else if (strcmp(region, "en") == 0) {
                     snprintf(error_msg, sizeof(error_msg),
-                        "Error: Detected European ROM. Only USA ROM is supported.");
+                        "Error: Detected European ROM. Only USA ROM is supported for base ROM.");
                 } else if (strcmp(region, "es") == 0) {
                     snprintf(error_msg, sizeof(error_msg),
-                        "Error: Detected Spanish ROM. Only USA ROM is supported.");
+                        "Error: Detected Spanish ROM. Only USA ROM is supported for base ROM.");
                 } else if (region[0]) {
                     snprintf(error_msg, sizeof(error_msg),
-                        "Error: Detected %s ROM. Only USA ROM is supported.", region);
+                        "Error: Detected %s ROM. Only USA ROM is supported for base ROM.", region);
                 }
             }
         } else if (strstr(output, "not supported")) {
             snprintf(error_msg, sizeof(error_msg),
-                "Error: Unrecognized ROM (SHA1 mismatch). Only USA ROM is supported.");
+                "Error: Unrecognized ROM (SHA1 mismatch). Only USA ROM is supported for base ROM.");
         } else if (strstr(output, "Failed to read") || strstr(output, "Cannot open")) {
             snprintf(error_msg, sizeof(error_msg),
                 "Error: Failed to read ROM file.");
@@ -667,12 +1051,21 @@ static void on_make_dat_clicked(GtkButton *button, gpointer user_data) {
 
 // Populate language dropdown with languages available in DAT file
 static void refresh_language_dropdown(const char *current_lang) {
+    LogInfo("RefreshLang: Refreshing language dropdown (current=%s)",
+            current_lang ? current_lang : "(null)");
+
     // Get available languages from DAT file
     char exe_dir[512];
     LauncherUI_GetExecutableDir(exe_dir, sizeof(exe_dir));
+    LogInfo("RefreshLang: Reading languages from %s", exe_dir);
 
     char available_langs[16][16];
     int num_langs = DatReader_GetLanguages(exe_dir, available_langs, 16);
+    LogInfo("RefreshLang: DatReader returned %d languages", num_langs);
+
+    for (int i = 0; i < num_langs; i++) {
+        LogInfo("RefreshLang: Language %d: '%s'", i, available_langs[i]);
+    }
 
     // Create list store: display name, code
     GtkListStore *store = gtk_list_store_new(2, G_TYPE_STRING, G_TYPE_STRING);
@@ -775,19 +1168,80 @@ static GtkWidget* create_general_tab(const Config *config) {
     gtk_grid_attach(GTK_GRID(grid), rom_label, 0, row, 1, 1);
 
     GtkWidget *rom_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_widget_set_hexpand(rom_hbox, TRUE);
     g_widgets.rom_path_entry = gtk_entry_new();
     gtk_box_pack_start(GTK_BOX(rom_hbox), g_widgets.rom_path_entry, TRUE, TRUE, 0);
 
     GtkWidget *rom_browse_btn = gtk_button_new_with_label("Browse...");
+    gtk_widget_set_size_request(rom_browse_btn, 75, -1);  // Fixed width for alignment
     g_signal_connect(rom_browse_btn, "clicked", G_CALLBACK(on_rom_browse_clicked), NULL);
     gtk_box_pack_start(GTK_BOX(rom_hbox), rom_browse_btn, FALSE, FALSE, 0);
 
     gtk_grid_attach(GTK_GRID(grid), rom_hbox, 1, row++, 1, 1);
 
-    // Create DAT button
-    GtkWidget *make_dat_btn = gtk_button_new_with_label("Create Asset File");
-    g_signal_connect(make_dat_btn, "clicked", G_CALLBACK(on_make_dat_clicked), NULL);
-    gtk_grid_attach(GTK_GRID(grid), make_dat_btn, 1, row++, 1, 1);
+    // === Language ROMs Section (optional, for multi-language) ===
+    GtkWidget *lang_roms_label = gtk_label_new("Language ROMs:");
+    gtk_widget_set_halign(lang_roms_label, GTK_ALIGN_START);
+    gtk_widget_set_valign(lang_roms_label, GTK_ALIGN_START);  // Top-align label
+    gtk_grid_attach(GTK_GRID(grid), lang_roms_label, 0, row, 1, 1);
+
+    // Horizontal box: scrolled listbox on left, buttons on right
+    GtkWidget *lang_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    gtk_widget_set_hexpand(lang_hbox, TRUE);
+
+    // Create scrolled window with listbox for language ROMs
+    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_widget_set_size_request(scrolled, -1, 150);  // Taller box
+    gtk_scrolled_window_set_shadow_type(GTK_SCROLLED_WINDOW(scrolled), GTK_SHADOW_IN);
+
+    g_widgets.lang_roms_listbox = gtk_list_box_new();
+    gtk_list_box_set_selection_mode(GTK_LIST_BOX(g_widgets.lang_roms_listbox),
+                                    GTK_SELECTION_NONE);
+    gtk_container_add(GTK_CONTAINER(scrolled), g_widgets.lang_roms_listbox);
+
+    // Enable drag-drop for file URIs
+    static GtkTargetEntry target_entries[] = {
+        { "text/uri-list", 0, 0 }
+    };
+    gtk_drag_dest_set(g_widgets.lang_roms_listbox,
+                      GTK_DEST_DEFAULT_ALL,
+                      target_entries, 1,
+                      GDK_ACTION_COPY);
+    g_signal_connect(g_widgets.lang_roms_listbox, "drag-data-received",
+                     G_CALLBACK(on_lang_roms_drag_received), NULL);
+
+    gtk_box_pack_start(GTK_BOX(lang_hbox), scrolled, TRUE, TRUE, 0);
+
+    // Vertical button box on the right side (fixed width for alignment)
+    GtkWidget *lang_btn_vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 2);
+    gtk_widget_set_valign(lang_btn_vbox, GTK_ALIGN_START);  // Top-align buttons
+    gtk_widget_set_size_request(lang_btn_vbox, 75, -1);  // Fixed width for alignment
+
+    g_widgets.lang_roms_browse_btn = gtk_button_new_with_label("Browse...");
+    g_signal_connect(g_widgets.lang_roms_browse_btn, "clicked",
+                     G_CALLBACK(on_lang_roms_browse_clicked), NULL);
+    gtk_box_pack_start(GTK_BOX(lang_btn_vbox), g_widgets.lang_roms_browse_btn, FALSE, FALSE, 0);
+
+    g_widgets.lang_roms_clear_all_btn = gtk_button_new_with_label("Clear");
+    g_signal_connect(g_widgets.lang_roms_clear_all_btn, "clicked",
+                     G_CALLBACK(on_lang_roms_clear_all_clicked), NULL);
+    gtk_box_pack_start(GTK_BOX(lang_btn_vbox), g_widgets.lang_roms_clear_all_btn, FALSE, FALSE, 0);
+
+    gtk_box_pack_start(GTK_BOX(lang_hbox), lang_btn_vbox, FALSE, FALSE, 0);
+
+    gtk_grid_attach(GTK_GRID(grid), lang_hbox, 1, row++, 1, 1);
+
+    // Initialize the language ROM list display
+    refresh_lang_roms_list();
+
+    // Create DAT button - left-aligned, natural width
+    g_widgets.make_dat_btn = gtk_button_new_with_label("Create Asset File");
+    g_signal_connect(g_widgets.make_dat_btn, "clicked", G_CALLBACK(on_make_dat_clicked), NULL);
+    gtk_widget_set_halign(g_widgets.make_dat_btn, GTK_ALIGN_START);
+
+    gtk_grid_attach(GTK_GRID(grid), g_widgets.make_dat_btn, 1, row++, 1, 1);
 
     // Status label
     g_widgets.make_dat_status = gtk_label_new("Ready");
