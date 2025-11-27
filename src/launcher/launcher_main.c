@@ -355,13 +355,21 @@ static GtkWidget* create_launcher_window(void) {
     gtk_box_set_spacing(GTK_BOX(right_box), 5);
     gtk_box_pack_end(GTK_BOX(button_container), right_box, TRUE, TRUE, 0);
 
+    // CSS for narrower buttons (40% less padding)
+    GtkCssProvider *btn_css = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(btn_css, "button { padding-left: 6px; padding-right: 6px; }", -1, NULL);
+
     // Close button
     GtkWidget *cancel_btn = gtk_button_new_with_label("Close");
+    gtk_style_context_add_provider(gtk_widget_get_style_context(cancel_btn),
+        GTK_STYLE_PROVIDER(btn_css), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
     g_signal_connect(cancel_btn, "clicked", G_CALLBACK(on_cancel_clicked), NULL);
     gtk_container_add(GTK_CONTAINER(right_box), cancel_btn);
 
     // Apply button (saves without closing)
     GtkWidget *save_btn = gtk_button_new_with_label("Apply");
+    gtk_style_context_add_provider(gtk_widget_get_style_context(save_btn),
+        GTK_STYLE_PROVIDER(btn_css), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
     g_signal_connect(save_btn, "clicked", G_CALLBACK(on_save_clicked), NULL);
     gtk_container_add(GTK_CONTAINER(right_box), save_btn);
 
@@ -369,6 +377,8 @@ static GtkWidget* create_launcher_window(void) {
     GtkWidget *launch_btn = gtk_button_new_with_label("Apply & Launch");
     g_signal_connect(launch_btn, "clicked", G_CALLBACK(on_save_and_launch_clicked), NULL);
     gtk_container_add(GTK_CONTAINER(right_box), launch_btn);
+
+    g_object_unref(btn_css);
 
     return window;
 }
@@ -395,11 +405,6 @@ int main(int argc, char *argv[]) {
     snprintf(kConfigPath, sizeof(kConfigPath), "%s/zelda3.ini", exe_dir);
     LogInfo("Config path: %s", kConfigPath);
 
-    // Suppress GTK icon warnings on macOS
-    #ifdef __APPLE__
-        g_log_set_handler("Gtk", G_LOG_LEVEL_WARNING,
-                         (GLogFunc)gtk_false, NULL);
-    #endif
 
     // Initialize GTK
     if (!gtk_init_check(&argc, &argv)) {

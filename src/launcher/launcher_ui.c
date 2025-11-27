@@ -157,6 +157,10 @@ static struct {
     GtkWidget *new_renderer;
     GtkWidget *enhanced_mode7;
     GtkWidget *no_sprite_limits;
+    GtkWidget *display_perf_title;
+    GtkWidget *disable_frame_delay;
+    GtkWidget *dim_flashes;
+    GtkWidget *link_graphics_entry;
 
     // Sound tab
     GtkWidget *enable_audio;
@@ -168,6 +172,7 @@ static struct {
     GtkWidget *msu_volume_spin;
 
     // Features tab
+    GtkWidget *feat_autosave;
     GtkWidget *feat_switch_lr;
     GtkWidget *feat_switch_lr_limit;
     GtkWidget *feat_turn_dash;
@@ -459,6 +464,47 @@ static void on_shader_path_browse_clicked(GtkButton *button, gpointer user_data)
     gtk_widget_destroy(dialog);
 }
 
+// Signal handler for Link graphics browse button
+static void on_link_graphics_browse_clicked(GtkButton *button, gpointer user_data) {
+    (void)button;
+    (void)user_data;
+
+    GtkWidget *dialog = gtk_file_chooser_dialog_new(
+        "Select Link Sprite File",
+        NULL,
+        GTK_FILE_CHOOSER_ACTION_OPEN,
+        "Cancel", GTK_RESPONSE_CANCEL,
+        "Open", GTK_RESPONSE_ACCEPT,
+        NULL);
+
+    // Add file filter for ZSPR files
+    GtkFileFilter *filter = gtk_file_filter_new();
+    gtk_file_filter_set_name(filter, "ZSPR Sprite Files (*.zspr)");
+    gtk_file_filter_add_pattern(filter, "*.zspr");
+    gtk_file_filter_add_pattern(filter, "*.ZSPR");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+
+    // Add "All files" filter
+    GtkFileFilter *filter_all = gtk_file_filter_new();
+    gtk_file_filter_set_name(filter_all, "All files");
+    gtk_file_filter_add_pattern(filter_all, "*");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter_all);
+
+    // Set current file if one is already set
+    const char *current_path = gtk_entry_get_text(GTK_ENTRY(g_widgets.link_graphics_entry));
+    if (current_path && *current_path) {
+        gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), current_path);
+    }
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+        gtk_entry_set_text(GTK_ENTRY(g_widgets.link_graphics_entry), filename);
+        g_free(filename);
+    }
+
+    gtk_widget_destroy(dialog);
+}
+
 // Signal handler for MSU path browse button
 static void on_msu_path_browse_clicked(GtkButton *button, gpointer user_data) {
     (void)button;
@@ -662,7 +708,43 @@ static void on_lang_roms_browse_clicked(GtkButton *button, gpointer user_data) {
     gtk_widget_destroy(dialog);
 }
 
-// Drag-and-drop data received handler
+// Drag-drop handler for ROM path entry
+static void on_rom_path_drag_received(GtkWidget *widget,
+                                       GdkDragContext *context,
+                                       gint x, gint y,
+                                       GtkSelectionData *data,
+                                       guint info,
+                                       guint time,
+                                       gpointer user_data) {
+    (void)widget; (void)x; (void)y; (void)info; (void)user_data;
+
+    if (gtk_selection_data_get_length(data) < 0) {
+        gtk_drag_finish(context, FALSE, FALSE, time);
+        return;
+    }
+
+    gchar **uris = gtk_selection_data_get_uris(data);
+    if (!uris) {
+        gtk_drag_finish(context, FALSE, FALSE, time);
+        return;
+    }
+
+    // Only use the first file
+    if (uris[0]) {
+        gchar *filename = g_filename_from_uri(uris[0], NULL, NULL);
+        if (filename) {
+            const char *ext = strrchr(filename, '.');
+            if (ext && (strcasecmp(ext, ".sfc") == 0 || strcasecmp(ext, ".smc") == 0)) {
+                gtk_entry_set_text(GTK_ENTRY(g_widgets.rom_path_entry), filename);
+            }
+            g_free(filename);
+        }
+    }
+
+    g_strfreev(uris);
+    gtk_drag_finish(context, TRUE, FALSE, time);
+}
+
 static void on_lang_roms_drag_received(GtkWidget *widget,
                                         GdkDragContext *context,
                                         gint x, gint y,
@@ -696,6 +778,47 @@ static void on_lang_roms_drag_received(GtkWidget *widget,
     }
     g_strfreev(uris);
 
+    gtk_drag_finish(context, TRUE, FALSE, time);
+}
+
+// Shader file drag handler
+static void on_shader_drag_received(GtkWidget *widget, GdkDragContext *context,
+                                    gint x, gint y, GtkSelectionData *data,
+                                    guint info, guint time, gpointer user_data) {
+    (void)x; (void)y; (void)info; (void)user_data;
+    gchar **uris = gtk_selection_data_get_uris(data);
+    if (uris && uris[0]) {
+        gchar *path = g_filename_from_uri(uris[0], NULL, NULL);
+        if (path) {
+            // Filter for .glsl/.glslp files
+            if (g_str_has_suffix(path, ".glsl") || g_str_has_suffix(path, ".glslp") ||
+                g_str_has_suffix(path, ".GLSL") || g_str_has_suffix(path, ".GLSLP")) {
+                gtk_entry_set_text(GTK_ENTRY(widget), path);
+            }
+            g_free(path);
+        }
+        g_strfreev(uris);
+    }
+    gtk_drag_finish(context, TRUE, FALSE, time);
+}
+
+// Link sprite drag handler
+static void on_link_graphics_drag_received(GtkWidget *widget, GdkDragContext *context,
+                                           gint x, gint y, GtkSelectionData *data,
+                                           guint info, guint time, gpointer user_data) {
+    (void)x; (void)y; (void)info; (void)user_data;
+    gchar **uris = gtk_selection_data_get_uris(data);
+    if (uris && uris[0]) {
+        gchar *path = g_filename_from_uri(uris[0], NULL, NULL);
+        if (path) {
+            // Filter for .zspr files
+            if (g_str_has_suffix(path, ".zspr") || g_str_has_suffix(path, ".ZSPR")) {
+                gtk_entry_set_text(GTK_ENTRY(widget), path);
+            }
+            g_free(path);
+        }
+        g_strfreev(uris);
+    }
     gtk_drag_finish(context, TRUE, FALSE, time);
 }
 
@@ -1170,6 +1293,16 @@ static GtkWidget* create_general_tab(const Config *config) {
     GtkWidget *rom_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
     gtk_widget_set_hexpand(rom_hbox, TRUE);
     g_widgets.rom_path_entry = gtk_entry_new();
+    // Enable drag-drop for ROM file
+    static GtkTargetEntry rom_target_entries[] = {
+        { "text/uri-list", 0, 0 }
+    };
+    gtk_drag_dest_set(g_widgets.rom_path_entry,
+                      GTK_DEST_DEFAULT_ALL,
+                      rom_target_entries, 1,
+                      GDK_ACTION_COPY);
+    g_signal_connect(g_widgets.rom_path_entry, "drag-data-received",
+                     G_CALLBACK(on_rom_path_drag_received), NULL);
     gtk_box_pack_start(GTK_BOX(rom_hbox), g_widgets.rom_path_entry, TRUE, TRUE, 0);
 
     GtkWidget *rom_browse_btn = gtk_button_new_with_label("Browse...");
@@ -1370,6 +1503,15 @@ static GtkWidget* create_graphics_tab(const Config *config) {
     g_widgets.no_sprite_limits = create_checkbox(grid, row++, "Disable SNES sprite limit (8 sprites per scanline)");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.no_sprite_limits), config->no_sprite_limits);
 
+    g_widgets.display_perf_title = create_checkbox(grid, row++, "Show FPS in window title");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.display_perf_title), config->display_perf_title);
+
+    g_widgets.disable_frame_delay = create_checkbox(grid, row++, "Disable frame delay (for 60Hz displays only)");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.disable_frame_delay), config->disable_frame_delay);
+
+    g_widgets.dim_flashes = create_checkbox(grid, row++, "Dim flashes (accessibility - lessens flashing effects)");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.dim_flashes), config->features0 & kFeatures0_DimFlashes);
+
     // Shader file path
     GtkWidget *shader_label = gtk_label_new("Shader File:");
     gtk_widget_set_halign(shader_label, GTK_ALIGN_START);
@@ -1379,6 +1521,12 @@ static GtkWidget* create_graphics_tab(const Config *config) {
     g_widgets.shader_path_entry = gtk_entry_new();
     gtk_entry_set_text(GTK_ENTRY(g_widgets.shader_path_entry),
                        config->shader ? config->shader : "");
+    gtk_drag_dest_set(g_widgets.shader_path_entry,
+                      GTK_DEST_DEFAULT_ALL,
+                      NULL, 0, GDK_ACTION_COPY);
+    gtk_drag_dest_add_uri_targets(g_widgets.shader_path_entry);
+    g_signal_connect(g_widgets.shader_path_entry, "drag-data-received",
+                     G_CALLBACK(on_shader_drag_received), NULL);
     gtk_box_pack_start(GTK_BOX(shader_hbox), g_widgets.shader_path_entry, TRUE, TRUE, 0);
 
     GtkWidget *shader_browse_btn = gtk_button_new_with_label("Browse...");
@@ -1387,6 +1535,31 @@ static GtkWidget* create_graphics_tab(const Config *config) {
     gtk_box_pack_start(GTK_BOX(shader_hbox), shader_browse_btn, FALSE, FALSE, 0);
 
     gtk_grid_attach(GTK_GRID(grid), shader_hbox, 1, row, 1, 1);
+    row++;
+
+    // Link sprite file path
+    GtkWidget *link_gfx_label = gtk_label_new("Link Sprite File:");
+    gtk_widget_set_halign(link_gfx_label, GTK_ALIGN_START);
+    gtk_grid_attach(GTK_GRID(grid), link_gfx_label, 0, row, 1, 1);
+
+    GtkWidget *link_gfx_hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    g_widgets.link_graphics_entry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(g_widgets.link_graphics_entry),
+                       config->link_graphics ? config->link_graphics : "");
+    gtk_drag_dest_set(g_widgets.link_graphics_entry,
+                      GTK_DEST_DEFAULT_ALL,
+                      NULL, 0, GDK_ACTION_COPY);
+    gtk_drag_dest_add_uri_targets(g_widgets.link_graphics_entry);
+    g_signal_connect(g_widgets.link_graphics_entry, "drag-data-received",
+                     G_CALLBACK(on_link_graphics_drag_received), NULL);
+    gtk_box_pack_start(GTK_BOX(link_gfx_hbox), g_widgets.link_graphics_entry, TRUE, TRUE, 0);
+
+    GtkWidget *link_gfx_browse_btn = gtk_button_new_with_label("Browse...");
+    g_signal_connect(link_gfx_browse_btn, "clicked",
+                     G_CALLBACK(on_link_graphics_browse_clicked), NULL);
+    gtk_box_pack_start(GTK_BOX(link_gfx_hbox), link_gfx_browse_btn, FALSE, FALSE, 0);
+
+    gtk_grid_attach(GTK_GRID(grid), link_gfx_hbox, 1, row, 1, 1);
     row++;
 
     return grid;
@@ -1498,6 +1671,9 @@ static GtkWidget* create_features_tab(const Config *config) {
 
     int row = 0;
     uint32 features = config->features0;
+
+    g_widgets.feat_autosave = create_checkbox(grid, row++, "Autosave on quit and reload on start");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_autosave), config->autosave);
 
     g_widgets.feat_switch_lr = create_checkbox(grid, row++, "Item switching with L/R shoulder buttons");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_switch_lr),
@@ -2372,6 +2548,12 @@ GtkWidget* LauncherUI_CreateWindow(Config *config) {
     return window;
 }
 
+// Helper to convert button label to storable value (NULL if "(not set)")
+static char* label_to_value(const char *label) {
+    if (!label || strcmp(label, "(not set)") == 0) return NULL;
+    return strdup(label);
+}
+
 // Update config from UI widgets
 void LauncherUI_UpdateConfigFromUI(Config *config) {
     // General - Language
@@ -2419,11 +2601,18 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
     config->new_renderer = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.new_renderer));
     config->enhanced_mode7 = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.enhanced_mode7));
     config->no_sprite_limits = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.no_sprite_limits));
+    config->display_perf_title = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.display_perf_title));
+    config->disable_frame_delay = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.disable_frame_delay));
 
     // Shader path
     const char *shader_text = gtk_entry_get_text(GTK_ENTRY(g_widgets.shader_path_entry));
     if (config->shader) free((void*)config->shader);
     config->shader = (shader_text && *shader_text) ? strdup(shader_text) : NULL;
+
+    // Link graphics path
+    const char *link_gfx_text = gtk_entry_get_text(GTK_ENTRY(g_widgets.link_graphics_entry));
+    if (config->link_graphics) free((void*)config->link_graphics);
+    config->link_graphics = (link_gfx_text && *link_gfx_text) ? strdup(link_gfx_text) : NULL;
 
     // Sound
     config->enable_audio = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.enable_audio));
@@ -2461,6 +2650,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
     config->msu_path = (msu_path_text && *msu_path_text) ? strdup(msu_path_text) : NULL;
 
     // Features
+    config->autosave = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_autosave));
     config->features0 = 0;
     if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_switch_lr)))
         config->features0 |= kFeatures0_SwitchLR;
@@ -2494,6 +2684,8 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         config->features0 |= kFeatures0_Pokemode;
     if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_zelda_helps)))
         config->features0 |= kFeatures0_PrincessZeldaHelps;
+    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.dim_flashes)))
+        config->features0 |= kFeatures0_DimFlashes;
 
     // Read keyboard save state bindings (30 buttons)
     char **state_arrays[] = {g_kbd_load, g_kbd_save, g_kbd_replay};
@@ -2504,7 +2696,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
             GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.kbd_states_grid), key);
             if (button) {
                 if (state_arrays[type][i]) free(state_arrays[type][i]);
-                state_arrays[type][i] = strdup(gtk_button_get_label(GTK_BUTTON(button)));
+                state_arrays[type][i] = label_to_value(gtk_button_get_label(GTK_BUTTON(button)));
             }
         }
     }
@@ -2517,7 +2709,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.kbd_cheats_grid), key);
         if (button) {
             if (*cheat_ptrs[i]) free(*cheat_ptrs[i]);
-            *cheat_ptrs[i] = strdup(gtk_button_get_label(GTK_BUTTON(button)));
+            *cheat_ptrs[i] = label_to_value(gtk_button_get_label(GTK_BUTTON(button)));
         }
     }
 
@@ -2544,7 +2736,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.kbd_system_grid), key);
         if (button) {
             if (*system_ptrs[i]) free(*system_ptrs[i]);
-            *system_ptrs[i] = strdup(gtk_button_get_label(GTK_BUTTON(button)));
+            *system_ptrs[i] = label_to_value(gtk_button_get_label(GTK_BUTTON(button)));
         }
     }
 
@@ -2557,7 +2749,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
             GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.gamepad_states_grid), key);
             if (button) {
                 if (gamepad_state_arrays[type][i]) free(gamepad_state_arrays[type][i]);
-                gamepad_state_arrays[type][i] = strdup(gtk_button_get_label(GTK_BUTTON(button)));
+                gamepad_state_arrays[type][i] = label_to_value(gtk_button_get_label(GTK_BUTTON(button)));
             }
         }
     }
@@ -2570,7 +2762,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.gamepad_cheats_grid), key);
         if (button) {
             if (*gamepad_cheat_ptrs[i]) free(*gamepad_cheat_ptrs[i]);
-            *gamepad_cheat_ptrs[i] = strdup(gtk_button_get_label(GTK_BUTTON(button)));
+            *gamepad_cheat_ptrs[i] = label_to_value(gtk_button_get_label(GTK_BUTTON(button)));
         }
     }
 
@@ -2597,7 +2789,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.gamepad_system_grid), key);
         if (button) {
             if (*gamepad_system_ptrs[i]) free(*gamepad_system_ptrs[i]);
-            *gamepad_system_ptrs[i] = strdup(gtk_button_get_label(GTK_BUTTON(button)));
+            *gamepad_system_ptrs[i] = label_to_value(gtk_button_get_label(GTK_BUTTON(button)));
         }
     }
 }
