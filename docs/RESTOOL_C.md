@@ -125,6 +125,34 @@ Extract a specific enemy sprite tileset.
 # Output: enemy_0.png (128×32 pixels)
 ```
 
+### `--sprites-from-png`
+
+Load sprite graphics from PNG files instead of ROM data during compilation.
+
+**Type:** Boolean flag
+**Default:** False
+
+This flag is useful for ROM hacking and sprite modifications. When enabled, the tool loads sprite tilesets 0-102 from PNG files in `assets/sprites/` instead of extracting them from the ROM.
+
+**PNG File Format:**
+- Files: `sprites_0.png` through `sprites_9.png`, `sprites_A.png` through `sprites_F.png`, `sprites_X.png`
+- Each PNG contains multiple sprite sheets with embedded metadata tags
+- Tags encode tileset ID, palette information, and checksums
+- Palette lookup from embedded color swatches in PNG headers
+
+```bash
+# Extract with PNG sprites (for custom sprite modifications)
+./zelda3_restool --extract-from-rom zelda3.sfc --sprites-from-png --compile
+
+# This produces identical output to Python's --sprites-from-png flag
+```
+
+**Use Cases:**
+- Custom sprite graphics for ROM hacks
+- Modified enemy appearances
+- Community sprite sheet projects
+- Testing sprite modifications before ROM injection
+
 ### `--extract-overworld`
 
 Extract overworld data only.

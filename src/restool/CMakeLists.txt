@@ -78,6 +78,7 @@ set(RESTOOL_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/music_compiler.c
   ${CMAKE_CURRENT_SOURCE_DIR}/asset_reader.c
   ${CMAKE_CURRENT_SOURCE_DIR}/extract_common.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/sprite_loader.c
   ${EMBEDDED_ASSETS_C}
 )
 

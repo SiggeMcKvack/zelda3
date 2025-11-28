@@ -1,6 +1,6 @@
 # Zelda3 C Restool - Remaining Work
 
-**Last Updated:** 2025-11-25
+**Last Updated:** 2025-11-27
 
 ---
 
@@ -58,13 +58,13 @@ The following features exist in the Python `restool.py` but are not present in t
 - Used for: ROM hacking, sprite modifications, custom graphics
 - Implementation: ~50 lines (uses PIL library)
 
-**C:** Not implemented
-
-**Implementation requirement:**
-- PNG → SNES planar format conversion (reverse of extraction)
-- Format validation (dimensions, bit depth, palette)
-- Error handling (corrupted PNG, wrong format)
-- **Estimated:** ~500 lines
+**C:** ✅ **Implemented** (November 2025)
+- Uses lodepng to parse sprite sheet PNGs (assets/sprites/sprites_*.png)
+- Decodes embedded metadata tags to identify tileset IDs and palette info
+- Converts 24-bit RGB pixels back to indexed format using embedded palette
+- Encodes to SNES 3bpp planar format (1536 bytes per tileset)
+- ~400 lines in `sprite_loader.c`
+- Byte-perfect match with Python output verified
 
 ### 2. `--print-strings` Debug Mode
 
@@ -143,12 +143,12 @@ python3 assets/restool.py --extract-from-rom
 | Feature | Python | C | Effort (lines) |
 |---------|--------|---|----------------|
 | Multi-language dialogue | 11 languages | 11 languages | Done |
-| `--sprites-from-png` | Yes | No | ~500 |
+| `--sprites-from-png` | Yes | ✅ Yes | Done (~400) |
 | `--print-strings` | Yes | Partial | ~50 |
 | `--print-assets-header` | Yes | No | ~100 |
 | Default auto-compile | Yes | No | ~50 |
 | Multiple languages/build | Yes | No | ~400 |
-| **TOTAL** | - | - | **~1,100 lines** |
+| **TOTAL** | - | - | **~600 lines remaining** |
 
 ---
 

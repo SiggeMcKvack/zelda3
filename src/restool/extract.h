@@ -23,7 +23,8 @@ uint8_t* LoadAssetData(const char *path, size_t *out_size);
 // ============================================================================
 
 // Extract kSprGfx (108 sprite tilesets)
-void ExtractSpriteGraphics(Rom *rom, AssetBuilder *builder);
+// If sprites_from_png is true, loads tilesets 0-102 from PNG files instead of ROM
+void ExtractSpriteGraphics(Rom *rom, AssetBuilder *builder, bool sprites_from_png);
 
 // Extract kBgGfx (115 background tilesets)
 void ExtractBackgroundGraphics(Rom *rom, AssetBuilder *builder);

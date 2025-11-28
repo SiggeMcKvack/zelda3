@@ -24,6 +24,7 @@
 #include "asset_reader.h"
 #include "rom_addresses.h"
 #include "extract.h"
+#include "sprite_loader.h"
 
 // Third-party
 #include "sha256.h"
@@ -46,6 +47,7 @@ typedef struct {
   int extract_enemy_sheet;  // -1 = none, 0-N = specific sheet
   const char *language;
   const char *languages;    // --languages comma-separated list for multi-lang build
+  bool sprites_from_png;    // --sprites-from-png: load sprites from PNG instead of ROM
   bool verbose;
   bool test_yaml;
   bool test_map32;
@@ -60,8 +62,10 @@ typedef struct {
 // ============================================================================
 
 // Extract kSprGfx (108 sprite tilesets) - Python-compatible
-void ExtractSpriteGraphics(Rom *rom, AssetBuilder *builder) {
-  printf("  Extracting kSprGfx (108 sprite tilesets)...\n");
+// If sprites_from_png is true, loads tilesets 0-102 from PNG files instead of ROM
+void ExtractSpriteGraphics(Rom *rom, AssetBuilder *builder, bool sprites_from_png) {
+  printf("  Extracting kSprGfx (108 sprite tilesets)%s...\n",
+         sprites_from_png ? " (from PNG)" : "");
 
   uint8_t **arrays = (uint8_t**)malloc(108 * sizeof(uint8_t*));
   uint32_t *sizes = (uint32_t*)malloc(108 * sizeof(uint32_t));
@@ -73,8 +77,28 @@ void ExtractSpriteGraphics(Rom *rom, AssetBuilder *builder) {
     return;
   }
 
+  // Load from PNG if requested
+  SpriteSheetLoader *sprite_loader = NULL;
+  if (sprites_from_png) {
+    sprite_loader = SpriteLoader_Load("assets/sprites");
+    if (!sprite_loader) {
+      LogError("Failed to load sprite sheets from PNG, falling back to ROM");
+      sprites_from_png = false;
+    }
+  }
+
   // Extract all 108 sprite tilesets
   for (uint32_t i = 0; i < 108; i++) {
+    // For tilesets 0-102, use PNG data if available
+    if (sprites_from_png && i < SPRITE_SHEET_COUNT) {
+      arrays[i] = SpriteLoader_EncodeSheet(sprite_loader, i, &sizes[i]);
+      if (arrays[i]) {
+        continue;  // Successfully loaded from PNG
+      }
+      // Fall through to ROM extraction if PNG failed
+      LogWarn("Tileset %u not in PNG, loading from ROM", i);
+    }
+
     uint32_t addr = kCompSpritePtrs[i];
 
     if (i < 12) {
@@ -126,6 +150,11 @@ void ExtractSpriteGraphics(Rom *rom, AssetBuilder *builder) {
         sizes[i] = 0;
       }
     }
+  }
+
+  // Free sprite loader
+  if (sprite_loader) {
+    SpriteLoader_Free(sprite_loader);
   }
 
   // Pack arrays and add to builder
@@ -3986,6 +4015,7 @@ static void PrintHelp(void) {
   printf("  --languages <L1,L2,...>     Include additional languages (comma-separated)\n");
   printf("  --compile                   Compile assets to zelda3_assets.dat\n");
   printf("  --no-compile                Skip compilation (extract only)\n");
+  printf("  --sprites-from-png          Load sprite graphics from PNG instead of ROM\n");
   printf("  --output <dir>              Output directory (default: current)\n");
   printf("  --verbose, -v               Verbose output\n");
   printf("  --help, -h                  Show this help\n");
@@ -4016,6 +4046,8 @@ static void PrintHelp(void) {
   printf("  zelda3_restool --extract-from-rom zelda3_de.sfc --extract-dialogue\n\n");
   printf("  # Compile assets from existing extracted files\n");
   printf("  zelda3_restool --compile\n\n");
+  printf("  # Use modified sprite graphics from PNG files\n");
+  printf("  zelda3_restool --extract-from-rom zelda3.sfc --sprites-from-png\n\n");
 }
 
 static void PrintVersion(void) {
@@ -4081,6 +4113,8 @@ static bool ParseArgs(int argc, char **argv, RestoolArgs *args) {
       args->test_dungeon = true;
     } else if (strcmp(argv[i], "--no-compile") == 0) {
       args->no_compile = true;
+    } else if (strcmp(argv[i], "--sprites-from-png") == 0) {
+      args->sprites_from_png = true;
     } else if (strcmp(argv[i], "--languages") == 0) {
       if (i + 1 >= argc) {
         LogError("--languages requires a comma-separated list of language codes");
@@ -4493,7 +4527,7 @@ int main(int argc, char **argv) {
     ExtractMap32toMap16(builder);
 
     // 7. print_images() - Sprite and background graphics
-    ExtractSpriteGraphics(rom, builder);
+    ExtractSpriteGraphics(rom, builder, args.sprites_from_png);
     ExtractBackgroundGraphics(rom, builder);
 
     // 8. print_misc() - Misc ROM assets (~28 assets)

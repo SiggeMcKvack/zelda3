@@ -4,6 +4,30 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## Recent Updates (November 2025)
 
+### PNG Sprite Loading (--sprites-from-png)
+
+**New Feature:** Load sprite graphics from PNG files instead of ROM
+
+The C restool now supports the `--sprites-from-png` flag, matching the Python implementation's feature for ROM hacking and sprite modifications.
+
+**Implementation:**
+- Uses lodepng library for PNG decoding
+- Loads sprite tilesets 0-102 from `assets/sprites/sprites_*.png` files
+- Decodes embedded metadata tags (tileset ID, palette info, checksums)
+- Converts 24-bit RGB back to indexed format using embedded palette swatches
+- Encodes to SNES 3bpp planar format (1536 bytes per tileset)
+- ~400 lines of C code in `sprite_loader.c`
+- Byte-perfect match with Python output verified
+
+**Files Added:**
+- `src/restool/sprite_loader.h` - Header with SpriteSheetLoader API
+- `src/restool/sprite_loader.c` - PNG loading and SNES encoding implementation
+
+**Usage:**
+```bash
+./zelda3_restool --extract-from-rom zelda3.sfc --sprites-from-png --compile
+```
+
 ### C Restool Completion
 
 **Major Change:** Complete C reimplementation of asset extraction tool
@@ -14,11 +38,12 @@ The Python-based asset extraction has been fully reimplemented in C, providing:
 - **Speed:** Faster than Python implementation
 - **Portability:** No Python dependency required
 - **Multi-language:** Supports all 11 ROM versions (US, DE, FR, FR-C, EN, ES, PL, PT, NL, SV, Redux)
+- **PNG sprite loading:** `--sprites-from-png` flag for ROM hacking workflows
 - **Embedded assets:** YAML templates embedded in binary for standalone operation
 - **Launcher integration:** General tab creates assets via GUI
 
 **Files Added:**
-- `src/restool/` - Complete C restool implementation (14 source files)
+- `src/restool/` - Complete C restool implementation (15 source files)
 - `docs/RESTOOL_C.md` - Comprehensive usage documentation
 
 **Usage:**

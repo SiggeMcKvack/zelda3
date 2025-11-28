@@ -127,6 +127,7 @@ Flags stored at unused RAM offsets (0x648+). Must be toggleable via `zelda3.ini`
 - `src/restool/asset_compiler.c` - Binary asset compilation
 - `src/restool/text.c` - Dialogue extraction (11 languages)
 - `src/restool/graphics.c` - Sprite/tileset extraction
+- `src/restool/sprite_loader.c` - PNG sprite sheet loading (--sprites-from-png)
 - `src/restool/music_compiler.c` - SPC music compilation
 
 See [docs/architecture.md](docs/architecture.md) for complete breakdown and [docs/technical/](docs/technical/) for deep dives.
@@ -350,6 +351,7 @@ adb logcat | grep Zelda3       # View Android logs
 **C Restool completion (November 2025):**
 - **Full C reimplementation:** Asset extraction tool rewritten in C for speed and portability
 - **Multi-language support:** 11 ROM versions supported (US, DE, FR, FR-C, EN, ES, PL, PT, NL, SV, Redux)
+- **PNG sprite loading:** `--sprites-from-png` flag loads sprites from PNG files instead of ROM (for ROM hacking)
 - **Embedded assets:** Standalone binary with embedded YAML/asset data
 - **Launcher integration:** General tab allows asset creation from ROM directly
 - **Documentation:** See [docs/RESTOOL_C.md](docs/RESTOOL_C.md) for usage
