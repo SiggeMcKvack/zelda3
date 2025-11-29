@@ -47,13 +47,29 @@ static void update_string(char **dest, const char *value) {
     *dest = (value && *value) ? strdup(value) : NULL;
 }
 
-static int parse_aspect_ratio(const char *value) {
+static int parse_aspect_ratio(const char *value, int *custom_w, int *custom_h) {
     // Map aspect ratio strings to enum values
-    if (strstr(value, "16:9")) return 1;
+    // Check for known presets first
+    if (strstr(value, "4:3")) return 0;
+    if (strstr(value, "16:9") && !strstr(value, "16:10")) return 1;
     if (strstr(value, "16:10")) return 2;
-    if (strstr(value, "4:3")) return 3;
+    if (strstr(value, "18:9")) return 3;
     if (strstr(value, "original")) return 0;
-    return 0;  // default to original
+
+    // Try to parse as custom W:H ratio
+    int w, h;
+    // Find a W:H pattern in the value string
+    const char *p = value;
+    while (*p) {
+        if (sscanf(p, "%d:%d", &w, &h) == 2 && h > 0) {
+            *custom_w = w;
+            *custom_h = h;
+            return 4;  // Custom
+        }
+        p++;
+    }
+
+    return 0;  // default to 4:3
 }
 
 static int parse_output_method(const char *value) {
@@ -125,7 +141,13 @@ bool ConfigReader_Read(const char *path, Config *config) {
             if (strcmp(key, "Autosave") == 0) config->autosave = parse_bool(value);
             else if (strcmp(key, "DisplayPerfInTitle") == 0) config->display_perf_title = parse_bool(value);
             else if (strcmp(key, "DisableFrameDelay") == 0) config->disable_frame_delay = parse_bool(value);
-            else if (strcmp(key, "ExtendedAspectRatio") == 0) config->extended_aspect_ratio = parse_aspect_ratio(value);
+            else if (strcmp(key, "ExtendedAspectRatio") == 0) {
+                int custom_w = 0, custom_h = 0;
+                config->extended_aspect_ratio = parse_aspect_ratio(value, &custom_w, &custom_h);
+                config->custom_aspect_w = custom_w;
+                config->custom_aspect_h = custom_h;
+                config->extend_y = strstr(value, "extend_y") != NULL;
+            }
             else if (strcmp(key, "Language") == 0) config->language = parse_string(value);
         }
         else if (strcmp(current_section, "Graphics") == 0) {

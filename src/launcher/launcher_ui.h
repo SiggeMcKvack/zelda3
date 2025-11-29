@@ -81,3 +81,7 @@ GtkWidget* LauncherUI_CreateWindow(Config *config);
 // Must be called before saving config
 // config: Config structure to update
 void LauncherUI_UpdateConfigFromUI(Config *config);
+
+// Set the launch button widget (created in launcher_main.c)
+// This allows launcher_ui.c to enable/disable it based on dat file status
+void LauncherUI_SetLaunchButton(GtkWidget *button);

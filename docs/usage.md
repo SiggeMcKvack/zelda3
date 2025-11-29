@@ -116,7 +116,7 @@ Zelda3 includes several enhancements not available in the original SNES game. **
 
 ### Aspect Ratio & Display
 
-- **Widescreen Support:** 16:9, 16:10, or 18:9 aspect ratios
+- **Widescreen Support:** Any aspect ratio (e.g., 16:9, 21:9, 32:9)
 - **Extended vertical display:** 240 lines instead of 224
 - **Higher Quality World Map:** Enhanced Mode 7 rendering
 - **No sprite limits:** Eliminates 8 sprites per scanline limit
@@ -276,7 +276,9 @@ DisplayPerfInTitle = 0
 DisableFrameDelay = 0
 
 # Extended aspect ratio (widescreen support)
-# Options: 4:3 (default), 16:9, 16:10, 18:9
+# Options: Any integer W:H ratio (e.g., 4:3, 16:9, 21:9, 32:9)
+# Note: Decimals like 2.35:1 not supported (use 235:100 instead)
+# Note: Ratios wider than ~18:9 render at max width with black bars
 # Modifiers (comma-separated):
 #   extend_y: Display 240 lines instead of 224
 #   unchanged_sprites: Preserve sprite spawn/die for replays

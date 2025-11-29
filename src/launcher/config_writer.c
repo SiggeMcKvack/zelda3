@@ -109,14 +109,19 @@ static bool WriteGeneralSection(FILE *f, const Config *config) {
   }
 
   // Map extended_aspect_ratio enum to string
-  const char *aspect_str = "16:9";  // default
-  switch (config->extended_aspect_ratio) {
-    case 0: aspect_str = "4:3"; break;
-    case 1: aspect_str = "16:9"; break;
-    case 2: aspect_str = "16:10"; break;
-    case 3: aspect_str = "18:9"; break;
+  if (config->extended_aspect_ratio == 4 && config->custom_aspect_w > 0 && config->custom_aspect_h > 0) {
+    // Custom aspect ratio
+    if (!WriteLine(f, "%d:%d\n\n", config->custom_aspect_w, config->custom_aspect_h)) return false;
+  } else {
+    const char *aspect_str = "16:9";  // default
+    switch (config->extended_aspect_ratio) {
+      case 0: aspect_str = "4:3"; break;
+      case 1: aspect_str = "16:9"; break;
+      case 2: aspect_str = "16:10"; break;
+      case 3: aspect_str = "18:9"; break;
+    }
+    if (!WriteLine(f, "%s\n\n", aspect_str)) return false;
   }
-  if (!WriteLine(f, "%s\n\n", aspect_str)) return false;
 
   if (!WriteLine(f, "# ------------------------------------------------------------------------------\n")) return false;
   if (!WriteLine(f, "# Language Settings\n")) return false;
@@ -896,9 +901,17 @@ bool ConfigWriter_Validate(const Config *config, char *error_buf, size_t error_b
   }
 
   // Validate extended aspect ratio
-  if (config->extended_aspect_ratio > 3) {
+  if (config->extended_aspect_ratio > 4) {
     snprintf(error_buf, error_buf_size, "Invalid extended aspect ratio: %d", config->extended_aspect_ratio);
     return false;
+  }
+
+  // Validate custom aspect ratio if selected
+  if (config->extended_aspect_ratio == 4) {
+    if (config->custom_aspect_w == 0 || config->custom_aspect_h == 0) {
+      snprintf(error_buf, error_buf_size, "Custom aspect ratio requires both width and height values");
+      return false;
+    }
   }
 
   // Validate MSU volume

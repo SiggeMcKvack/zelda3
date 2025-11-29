@@ -61,6 +61,8 @@ typedef struct Config {
   uint16 audio_samples;
   bool autosave;
   uint8 extended_aspect_ratio;
+  uint16 custom_aspect_w;  // Custom aspect ratio width (for launcher)
+  uint16 custom_aspect_h;  // Custom aspect ratio height (for launcher)
   bool extend_y;
   bool no_sprite_limits;
   bool display_perf_title;

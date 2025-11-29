@@ -130,6 +130,9 @@ void LauncherUI_GetExecutableDir(char *buf, size_t buf_size) {
 
 // Widget references for updating config
 static struct {
+    // Main window buttons (set from launcher_main.c)
+    GtkWidget *launch_button;
+
     // General tab
     GtkWidget *dat_status_label;
     GtkWidget *language_combo;
@@ -151,6 +154,9 @@ static struct {
     GtkWidget *window_scale_label;
     GtkWidget *fullscreen;
     GtkWidget *aspect_ratio;
+    GtkWidget *custom_aspect_box;
+    GtkWidget *custom_aspect_w;
+    GtkWidget *custom_aspect_h;
     GtkWidget *ignore_aspect_ratio;
     GtkWidget *extend_y;
     GtkWidget *linear_filtering;
@@ -423,6 +429,24 @@ static void on_window_size_mode_changed(GtkComboBox *combo, gpointer user_data) 
     }
 }
 
+// Signal handler for aspect ratio dropdown
+static void on_aspect_ratio_changed(GtkComboBox *combo, gpointer user_data) {
+    (void)user_data;
+    int mode = gtk_combo_box_get_active(combo);
+    bool is_custom = (mode == 4);  // 0=4:3, 1=16:9, 2=16:10, 3=18:9, 4=Custom
+
+    if (is_custom) {
+        // Show all children explicitly since no_show_all is set
+        gtk_widget_show(g_widgets.custom_aspect_box);
+        gtk_widget_show(g_widgets.custom_aspect_w);
+        gtk_widget_show(g_widgets.custom_aspect_h);
+        gtk_container_foreach(GTK_CONTAINER(g_widgets.custom_aspect_box),
+                              (GtkCallback)gtk_widget_show, NULL);
+    } else {
+        gtk_widget_hide(g_widgets.custom_aspect_box);
+    }
+}
+
 // Signal handler for Shader path browse button
 static void on_shader_path_browse_clicked(GtkButton *button, gpointer user_data) {
     (void)button;
@@ -575,13 +599,28 @@ static void update_dat_status(void) {
     char exe_dir[512];
     LauncherUI_GetExecutableDir(exe_dir, sizeof(exe_dir));
 
-    if (DatReader_Exists(exe_dir)) {
+    bool dat_exists = DatReader_Exists(exe_dir);
+
+    if (dat_exists) {
         gtk_label_set_markup(GTK_LABEL(g_widgets.dat_status_label),
             "<span foreground='green'>zelda3_assets.dat found</span>");
     } else {
         gtk_label_set_markup(GTK_LABEL(g_widgets.dat_status_label),
             "<span foreground='red'>zelda3_assets.dat not found - create from ROM below</span>");
     }
+
+    // Enable/disable launch button based on dat file existence
+    if (g_widgets.launch_button) {
+        gtk_widget_set_sensitive(g_widgets.launch_button, dat_exists);
+    }
+}
+
+void LauncherUI_SetLaunchButton(GtkWidget *button) {
+    g_widgets.launch_button = button;
+    // Update sensitivity immediately
+    char exe_dir[512];
+    LauncherUI_GetExecutableDir(exe_dir, sizeof(exe_dir));
+    gtk_widget_set_sensitive(button, DatReader_Exists(exe_dir));
 }
 
 // ============================================================================
@@ -1479,10 +1518,50 @@ static GtkWidget* create_graphics_tab(const Config *config) {
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_slist_nth_data(fs_group, 2 - fs_index)), TRUE);
 
     // Aspect ratio
-    const char *aspect_ratios[] = {"4:3", "16:9", "16:10", "18:9"};
+    const char *aspect_ratios[] = {"4:3", "16:9", "16:10", "18:9", "Custom"};
     g_widgets.aspect_ratio = create_combo_box_with_label(grid, row++,
-        "Aspect Ratio:", aspect_ratios, 4);
+        "Aspect Ratio:", aspect_ratios, 5);
     gtk_combo_box_set_active(GTK_COMBO_BOX(g_widgets.aspect_ratio), config->extended_aspect_ratio);
+
+    // Custom aspect ratio input fields (shown only when "Custom" is selected)
+    g_widgets.custom_aspect_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
+    g_widgets.custom_aspect_w = gtk_entry_new();
+    g_widgets.custom_aspect_h = gtk_entry_new();
+    gtk_entry_set_width_chars(GTK_ENTRY(g_widgets.custom_aspect_w), 5);
+    gtk_entry_set_width_chars(GTK_ENTRY(g_widgets.custom_aspect_h), 5);
+    gtk_entry_set_placeholder_text(GTK_ENTRY(g_widgets.custom_aspect_w), "W");
+    gtk_entry_set_placeholder_text(GTK_ENTRY(g_widgets.custom_aspect_h), "H");
+
+    // Set initial values if custom ratio was configured
+    if (config->custom_aspect_w > 0 && config->custom_aspect_h > 0) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%d", config->custom_aspect_w);
+        gtk_entry_set_text(GTK_ENTRY(g_widgets.custom_aspect_w), buf);
+        snprintf(buf, sizeof(buf), "%d", config->custom_aspect_h);
+        gtk_entry_set_text(GTK_ENTRY(g_widgets.custom_aspect_h), buf);
+    }
+
+    gtk_box_pack_start(GTK_BOX(g_widgets.custom_aspect_box), g_widgets.custom_aspect_w, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(g_widgets.custom_aspect_box), gtk_label_new(":"), FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(g_widgets.custom_aspect_box), g_widgets.custom_aspect_h, FALSE, FALSE, 0);
+    gtk_grid_attach(GTK_GRID(grid), g_widgets.custom_aspect_box, 1, row++, 1, 1);
+
+    // Connect signal handler and set initial visibility
+    g_signal_connect(g_widgets.aspect_ratio, "changed",
+                     G_CALLBACK(on_aspect_ratio_changed), NULL);
+
+    // Set no_show_all so parent's show_all doesn't override our visibility
+    gtk_widget_set_no_show_all(g_widgets.custom_aspect_box, TRUE);
+    gtk_widget_set_no_show_all(g_widgets.custom_aspect_w, TRUE);
+    gtk_widget_set_no_show_all(g_widgets.custom_aspect_h, TRUE);
+    if (config->extended_aspect_ratio == 4) {
+        // Show all children explicitly
+        gtk_widget_show(g_widgets.custom_aspect_box);
+        gtk_widget_show(g_widgets.custom_aspect_w);
+        gtk_widget_show(g_widgets.custom_aspect_h);
+        gtk_container_foreach(GTK_CONTAINER(g_widgets.custom_aspect_box),
+                              (GtkCallback)gtk_widget_show, NULL);
+    }
 
     // Checkboxes
     g_widgets.ignore_aspect_ratio = create_checkbox(grid, row++, "Stretch to fill window (ignore aspect ratio)");
@@ -2595,6 +2674,18 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
     }
 
     config->extended_aspect_ratio = gtk_combo_box_get_active(GTK_COMBO_BOX(g_widgets.aspect_ratio));
+
+    // Read custom aspect ratio values if "Custom" is selected
+    if (config->extended_aspect_ratio == 4) {
+        const char *w_text = gtk_entry_get_text(GTK_ENTRY(g_widgets.custom_aspect_w));
+        const char *h_text = gtk_entry_get_text(GTK_ENTRY(g_widgets.custom_aspect_h));
+        config->custom_aspect_w = (w_text && *w_text) ? atoi(w_text) : 0;
+        config->custom_aspect_h = (h_text && *h_text) ? atoi(h_text) : 0;
+    } else {
+        config->custom_aspect_w = 0;
+        config->custom_aspect_h = 0;
+    }
+
     config->ignore_aspect_ratio = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.ignore_aspect_ratio));
     config->extend_y = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.extend_y));
     config->linear_filtering = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.linear_filtering));

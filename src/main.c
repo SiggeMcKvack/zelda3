@@ -398,8 +398,9 @@ int main(int argc, char** argv) {
   LoadLinkGraphics();
 
   ZeldaInitialize();
-  g_zenv.ppu->extraLeftRight = UintMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight);
-  g_snes_width = (g_config.extended_aspect_ratio * 2 + 256);
+  int clamped_extra = UintMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight);
+  g_zenv.ppu->extraLeftRight = clamped_extra;
+  g_snes_width = (clamped_extra * 2 + 256);
   g_snes_height = (g_config.extend_y ? 240 : 224);
 
 

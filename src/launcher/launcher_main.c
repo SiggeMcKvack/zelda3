@@ -378,6 +378,9 @@ static GtkWidget* create_launcher_window(void) {
     g_signal_connect(launch_btn, "clicked", G_CALLBACK(on_save_and_launch_clicked), NULL);
     gtk_container_add(GTK_CONTAINER(right_box), launch_btn);
 
+    // Register launch button with UI so it can be disabled when no dat file exists
+    LauncherUI_SetLaunchButton(launch_btn);
+
     g_object_unref(btn_css);
 
     return window;

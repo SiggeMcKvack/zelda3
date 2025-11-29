@@ -498,8 +498,16 @@ static bool HandleGeneralConfig(const char *key, char *value) {
         nospr = true;
       else if (strcmp(s, "no_visual_fixes") == 0)
         novis = true;
-      else
-        return false;
+      else {
+        // Try to parse as generic W:H ratio (e.g., "21:9", "32:9")
+        int w, h_ratio;
+        if (sscanf(s, "%d:%d", &w, &h_ratio) == 2 && h_ratio > 0) {
+          int extra = (h * w / h_ratio - kSnesBaseWidth) / 2;
+          g_config.extended_aspect_ratio = (extra > 0) ? extra : 0;
+        } else {
+          return false;
+        }
+      }
     }
     if (g_config.extended_aspect_ratio && !nospr)
       g_config.features0 |= kFeatures0_ExtendScreen64;

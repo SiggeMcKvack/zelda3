@@ -117,7 +117,7 @@ zelda3.exe
 
 Zelda3 includes several optional enhancements not in the original game:
 
-- **Widescreen support** (16:9 or 16:10 aspect ratios)
+- **Widescreen support** (any aspect ratio, e.g., 16:9, 21:9, 32:9)
 - **Pixel shaders** for visual effects
 - **MSU audio** support for high-quality soundtracks
 - **Higher quality world map**

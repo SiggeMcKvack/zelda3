@@ -146,7 +146,8 @@ Configure visual rendering options:
   - Off (4:3 original)
   - extend_y, 16:9 (recommended)
   - extend_y, 16:10
-  - Other ratio options
+  - Other presets (18:9)
+  - Custom ratios via zelda3.ini (e.g., 21:9, 32:9)
 
 - **Linear Filtering** - Smooth scaling (on/off)
 - **Integer Scaling** - Pixel-perfect scaling (on/off)
