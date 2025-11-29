@@ -53,6 +53,8 @@ struct Ppu {
   uint32_t renderPitch;
   uint8_t *renderBuffer;
   uint8_t extraLeftCur, extraRightCur, extraLeftRight, extraBottomCur;
+  uint8_t extendEdgePixels;  // When true, sample edge pixels instead of filling with black
+  uint32_t lastLeftEdgeColor, lastRightEdgeColor;  // Track edge colors for uniform check
   float mode7PerspectiveLow, mode7PerspectiveHigh;
 
   // TMW / TSW etc
@@ -142,6 +144,7 @@ int PpuGetCurrentRenderScale(Ppu *ppu, uint32_t render_flags);
 
 void PpuSetMode7PerspectiveCorrection(Ppu *ppu, int low, int high);
 void PpuSetExtraSideSpace(Ppu *ppu, int left, int right, int bottom);
+void PpuSetExtendEdgePixels(Ppu *ppu, bool extend);
 
 // Get current frame buffer as RGBA data (256x224 resolution)
 // Returns pointer to render buffer if available, NULL otherwise

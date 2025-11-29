@@ -174,7 +174,18 @@ void ppu_runLine(Ppu *ppu, int line) {
 
     // outside of visible range?
     if (line >= 225 + ppu->extraBottomCur) {
-      memset(&ppu->renderBuffer[(line - 1) * ppu->renderPitch], 0, sizeof(uint32) * (256 + ppu->extraLeftRight * 2));
+      uint32 *dst = (uint32 *)&ppu->renderBuffer[(line - 1) * ppu->renderPitch];
+      if (ppu->extendEdgePixels) {
+        // Use left/right edge colors for extended bottom (not bottom edge)
+        uint32 *last_row = (uint32 *)&ppu->renderBuffer[(224 - 1) * ppu->renderPitch];
+        uint32 left_color = last_row[ppu->extraLeftRight];
+        uint32 right_color = last_row[ppu->extraLeftRight + 255];
+        int width = 256 + ppu->extraLeftRight * 2;
+        for (int i = 0; i < width; i++)
+          dst[i] = (i < width / 2) ? left_color : right_color;
+      } else {
+        memset(dst, 0, sizeof(uint32) * (256 + ppu->extraLeftRight * 2));
+      }
       return;
     }
 
@@ -698,6 +709,10 @@ void PpuSetExtraSideSpace(Ppu *ppu, int left, int right, int bottom) {
   ppu->extraBottomCur = UintMin(bottom, 16);
 }
 
+void PpuSetExtendEdgePixels(Ppu *ppu, bool extend) {
+  ppu->extendEdgePixels = extend;
+}
+
 static FORCEINLINE float FloatInterpolate(float x, float xmin, float xmax, float ymin, float ymax) {
   return ymin + (ymax - ymin) * (x - xmin) * (1.0f / (xmax - xmin));
 }
@@ -940,11 +955,33 @@ static NOINLINE void PpuDrawWholeLine(Ppu *ppu, uint y) {
   } while (cw_clip_math >>= 1, ++windex < cwin.nr);
 
   // Clear out stuff on the sides.
-  if (ppu->extraLeftRight - ppu->extraLeftCur != 0)
-    memset(dst_org, 0, sizeof(uint32) * (ppu->extraLeftRight - ppu->extraLeftCur));
-  if (ppu->extraLeftRight - ppu->extraRightCur != 0)
-    memset(dst_org + (256 + ppu->extraLeftRight * 2 - (ppu->extraLeftRight - ppu->extraRightCur)), 0,
-        sizeof(uint32) * (ppu->extraLeftRight - ppu->extraRightCur));
+  // When extendEdgePixels is set, sample edge pixels to extend color effects.
+  // Only extend if edge column has uniform color (same color top to bottom).
+  // Otherwise fill with black.
+  if (ppu->extraLeftRight - ppu->extraLeftCur != 0) {
+    uint32 *p = dst_org;
+    int n = ppu->extraLeftRight - ppu->extraLeftCur;
+    uint32 left_edge = dst_org[ppu->extraLeftRight];
+    if (ppu->extendEdgePixels && left_edge == ppu->lastLeftEdgeColor) {
+      for (int i = 0; i < n; i++)
+        p[i] = left_edge;
+    } else {
+      memset(p, 0, sizeof(uint32) * n);
+    }
+    ppu->lastLeftEdgeColor = left_edge;
+  }
+  if (ppu->extraLeftRight - ppu->extraRightCur != 0) {
+    uint32 *p = dst_org + (256 + ppu->extraLeftRight * 2 - (ppu->extraLeftRight - ppu->extraRightCur));
+    int n = ppu->extraLeftRight - ppu->extraRightCur;
+    uint32 right_edge = dst_org[ppu->extraLeftRight + 255];
+    if (ppu->extendEdgePixels && right_edge == ppu->lastRightEdgeColor) {
+      for (int i = 0; i < n; i++)
+        p[i] = right_edge;
+    } else {
+      memset(p, 0, sizeof(uint32) * n);
+    }
+    ppu->lastRightEdgeColor = right_edge;
+  }
 }
 
 static void ppu_handlePixel(Ppu* ppu, int x, int y) {
