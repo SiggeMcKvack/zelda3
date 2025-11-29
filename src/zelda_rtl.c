@@ -171,7 +171,7 @@ static void ConfigurePpuSideSpace() {
 
     int qy = quadrant_fullsize_y >> 1;
     extra_bottom = IntMax(room_bounds_y.v[qy + 2] - BG2VOFS_copy2, 0);
-  } else if (mod == 20 || mod == 0 || mod == 1) {
+  } else if (mod == 20 || mod == 0 || mod == 1 || mod == 2 || mod == 3 || mod == 4) {
     extra_left = kPpuExtraLeftRight, extra_right = kPpuExtraLeftRight;
     extra_bottom = 16;
   }
