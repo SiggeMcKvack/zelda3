@@ -12,6 +12,8 @@
 #ifndef _WIN32
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/wait.h>
+#include <fcntl.h>
 #endif
 
 #ifdef __APPLE__
@@ -184,20 +186,55 @@ static bool launch_game(void) {
         snprintf(cmd, sizeof(cmd), "START \"\" \"%s\"", game_exe);
         system(cmd);
     #else
-        // Unix: Fork and exec
+        // Unix: Double-fork to fully detach child process
+        // This prevents zombie processes and ensures the game doesn't inherit
+        // any launcher file descriptors or connections
         pid_t pid = fork();
         if (pid == 0) {
-            // Child process: execute game
-            execl(game_exe, "zelda3", NULL);
-            // If execl returns, it failed
-            LogError("Failed to execute game: %s", game_exe);
-            exit(1);
+            // First child: fork again and exit immediately
+            // This makes the grandchild orphaned (adopted by init/launchd)
+            pid_t pid2 = fork();
+            if (pid2 == 0) {
+                // Grandchild: this becomes the game process
+
+                // Create new session to fully detach from controlling terminal
+                setsid();
+
+                // Close all inherited file descriptors from GTK/GLib
+                // Keep only stdin/stdout/stderr (0, 1, 2)
+                int max_fd = sysconf(_SC_OPEN_MAX);
+                if (max_fd < 0) max_fd = 1024;
+                for (int fd = 3; fd < max_fd; fd++) {
+                    close(fd);
+                }
+
+                // Redirect stdin/stdout/stderr to /dev/null for clean detachment
+                // This ensures the launcher's terminal doesn't wait for the game
+                int devnull = open("/dev/null", O_RDWR);
+                if (devnull >= 0) {
+                    dup2(devnull, STDIN_FILENO);
+                    dup2(devnull, STDOUT_FILENO);
+                    dup2(devnull, STDERR_FILENO);
+                    if (devnull > 2) close(devnull);
+                }
+
+                // Execute game
+                execl(game_exe, "zelda3", NULL);
+                // If execl returns, it failed
+                _exit(1);
+            } else if (pid2 < 0) {
+                // Second fork failed
+                _exit(1);
+            }
+            // First child exits immediately, making grandchild orphaned
+            _exit(0);
         } else if (pid < 0) {
             // Fork failed
             LogError("Failed to fork process");
             return false;
         }
-        // Parent continues
+        // Parent: wait for first child to exit (it exits immediately)
+        waitpid(pid, NULL, 0);
     #endif
 
     LogInfo("Game launched successfully");

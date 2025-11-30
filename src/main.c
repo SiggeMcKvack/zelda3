@@ -679,14 +679,12 @@ int main(int argc, char** argv) {
   free(g_audiobuffer);
 
   g_renderer_funcs.Destroy();
-
   SDL_DestroyWindow(window);
   SDL_Quit();
 
   // Clean up config memory
   Config_Shutdown();
 
-  //SaveConfigFile();
   return 0;
 }
 

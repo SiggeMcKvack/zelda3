@@ -61,13 +61,24 @@ static bool OpenGLRenderer_Init(SDL_Window *window) {
 
   }
 
-  if (kDebugFlag) {
+  if (kDebugFlag && glDebugMessageCallback) {
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     glDebugMessageCallback(MessageCallback, 0);
   }
 
   glGenTextures(1, &g_texture.gl_texture);
+  glBindTexture(GL_TEXTURE_2D, g_texture.gl_texture);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  // Initialize with 1x1 dummy texture to make OpenGL happy (will be replaced on first frame)
+  uint32_t dummy = 0;
+  if (!g_opengl_es)
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, &dummy);
+  else
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &dummy);
 
   static const float kVertices[] = {
     // positions          // texture coords
@@ -269,9 +280,9 @@ static void OpenGLRenderer_EndDraw() {
     g_texture.width = g_draw_width;
     g_texture.height = g_draw_height;
     if (!g_opengl_es)
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_BGRA, g_draw_width, g_draw_height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, g_screen_buffer);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, g_draw_width, g_draw_height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, g_screen_buffer);
     else
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_BGRA, g_draw_width, g_draw_height, 0, GL_BGRA, GL_UNSIGNED_BYTE, g_screen_buffer);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, g_draw_width, g_draw_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, g_screen_buffer);
   }
 
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
