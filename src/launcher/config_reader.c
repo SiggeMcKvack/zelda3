@@ -73,11 +73,12 @@ static int parse_aspect_ratio(const char *value, int *custom_w, int *custom_h) {
 }
 
 static int parse_output_method(const char *value) {
-    if (strcmp(value, "SDL") == 0) return 0;
-    if (strcmp(value, "OpenGL") == 0) return 1;
-    if (strcmp(value, "OpenGL ES") == 0) return 2;
-    if (strcmp(value, "Vulkan") == 0) return 3;
-    return 0;  // default to SDL
+    if (strcmp(value, "SDL") == 0) return kOutputMethod_SDL;
+    if (strcmp(value, "SDL-Software") == 0) return kOutputMethod_SDLSoftware;
+    if (strcmp(value, "OpenGL") == 0) return kOutputMethod_OpenGL;
+    if (strcmp(value, "OpenGL ES") == 0) return kOutputMethod_OpenGL_ES;
+    if (strcmp(value, "Vulkan") == 0) return kOutputMethod_Vulkan;
+    return kOutputMethod_SDL;  // default to SDL
 }
 
 bool ConfigReader_Read(const char *path, Config *config) {
@@ -175,22 +176,28 @@ bool ConfigReader_Read(const char *path, Config *config) {
                 }
             }
             else if (strcmp(key, "WindowScale") == 0) config->window_scale = parse_int(value);
-            else if (strcmp(key, "Fullscreen") == 0) config->fullscreen = parse_bool(value);
+            else if (strcmp(key, "Fullscreen") == 0) config->fullscreen = parse_int(value);
             else if (strcmp(key, "IgnoreAspectRatio") == 0) config->ignore_aspect_ratio = parse_bool(value);
             else if (strcmp(key, "OutputMethod") == 0) config->output_method = parse_output_method(value);
             else if (strcmp(key, "LinearFiltering") == 0) config->linear_filtering = parse_bool(value);
             else if (strcmp(key, "NewRenderer") == 0) config->new_renderer = parse_bool(value);
             else if (strcmp(key, "EnhancedMode7") == 0) config->enhanced_mode7 = parse_bool(value);
             else if (strcmp(key, "NoSpriteLimits") == 0) config->no_sprite_limits = parse_bool(value);
+            else if (strcmp(key, "DimFlashes") == 0) {
+                if (parse_bool(value)) config->features0 |= kFeatures0_DimFlashes;
+            }
+            else if (strcmp(key, "LinkGraphics") == 0) config->link_graphics = parse_string(value);
+            else if (strcmp(key, "Shader") == 0) config->shader = parse_string(value);
         }
         else if (strcmp(current_section, "Sound") == 0) {
             if (strcmp(key, "EnableAudio") == 0) config->enable_audio = parse_bool(value);
-            else if (strcmp(key, "AudioFrequency") == 0) config->audio_freq = parse_int(value);
+            else if (strcmp(key, "AudioFreq") == 0) config->audio_freq = parse_int(value);
             else if (strcmp(key, "AudioChannels") == 0) config->audio_channels = parse_int(value);
             else if (strcmp(key, "AudioSamples") == 0) config->audio_samples = parse_int(value);
             else if (strcmp(key, "EnableMSU") == 0) config->enable_msu = parse_bool(value);
             else if (strcmp(key, "ResumeMSU") == 0) config->resume_msu = parse_bool(value);
             else if (strcmp(key, "MSUVolume") == 0) config->msuvolume = parse_int(value);
+            else if (strcmp(key, "MSUPath") == 0) config->msu_path = parse_string(value);
         }
         else if (strcmp(current_section, "Features") == 0) {
             // Parse individual feature flags (matches config_writer output)
@@ -227,11 +234,6 @@ bool ConfigReader_Read(const char *path, Config *config) {
                 config->features0 |= kFeatures0_Pokemode;
             else if (strcmp(key, "PrincessZeldaHelps") == 0 && flag_value)
                 config->features0 |= kFeatures0_PrincessZeldaHelps;
-        }
-        else if (strcmp(current_section, "Paths") == 0) {
-            if (strcmp(key, "LinkGraphics") == 0) config->link_graphics = parse_string(value);
-            else if (strcmp(key, "Shader") == 0) config->shader = parse_string(value);
-            else if (strcmp(key, "MSUPath") == 0) config->msu_path = parse_string(value);
         }
         else if (strcmp(current_section, "KeyMap") == 0) {
             if (strcmp(key, "Controls") == 0) {

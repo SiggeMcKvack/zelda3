@@ -226,7 +226,7 @@ static bool WriteGraphicsSection(FILE *f, const Config *config) {
   if (!WriteLine(f, "# Recreate Virtual Console flash dimming\n")) return false;
   if (!WriteLine(f, "# (default: 0, accepts: 0/1)\n")) return false;
   if (!WriteLine(f, "# Lessens flashing effects (accessibility feature)\n")) return false;
-  if (!WriteLine(f, "DimFlashes = 0\n\n")) return false;
+  if (!WriteLine(f, "DimFlashes = %d\n\n", (config->features0 & kFeatures0_DimFlashes) ? 1 : 0)) return false;
 
   if (!WriteLine(f, "# ------------------------------------------------------------------------------\n")) return false;
   if (!WriteLine(f, "# Graphics Customization\n")) return false;
