@@ -26,7 +26,7 @@ enum {
   kFeatures0_TurnWhileDashing = 4,
   kFeatures0_MirrorToDarkworld = 8,
   kFeatures0_CollectItemsWithSword = 16,
-  kFeatures0_BreakPotsWithSword = 32,
+  // Note: kFeatures0_BreakPotsWithSword (32) removed, use g_config.break_pots_min_sword instead
   kFeatures0_DisableLowHealthBeep = 64,
   kFeatures0_SkipIntroOnKeypress = 128,
   kFeatures0_ShowMaxItemsInYellow = 256,

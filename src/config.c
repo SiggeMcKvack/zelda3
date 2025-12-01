@@ -537,7 +537,9 @@ static bool HandleFeaturesConfig(const char *key, char *value) {
   } else if (StringEqualsNoCase(key, "CollectItemsWithSword")) {
     return ParseBoolBit(value, &g_config.features0, kFeatures0_CollectItemsWithSword);
   } else if (StringEqualsNoCase(key, "BreakPotsWithSword")) {
-    return ParseBoolBit(value, &g_config.features0, kFeatures0_BreakPotsWithSword);
+    int v = atoi(value);
+    g_config.break_pots_min_sword = (v < 0) ? 0 : (v > 4) ? 4 : v;
+    return true;
   } else if (StringEqualsNoCase(key, "DisableLowHealthBeep")) {
     return ParseBoolBit(value, &g_config.features0, kFeatures0_DisableLowHealthBeep);
   } else if (StringEqualsNoCase(key, "SkipIntroOnKeypress")) {

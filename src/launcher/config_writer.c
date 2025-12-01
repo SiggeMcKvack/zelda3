@@ -384,10 +384,11 @@ static bool WriteFeaturesSection(FILE *f, const Config *config) {
   if (!WriteLine(f, "# Normally requires touching items\n")) return false;
   if (!WriteLine(f, "CollectItemsWithSword = %d\n\n", (features & kFeatures0_CollectItemsWithSword) ? 1 : 0)) return false;
 
-  if (!WriteLine(f, "# Break pots with level 2-4 sword\n")) return false;
-  if (!WriteLine(f, "# (default: 0, accepts: 0/1)\n")) return false;
+  if (!WriteLine(f, "# Minimum sword level to break pots with sword swing\n")) return false;
+  if (!WriteLine(f, "# (default: 0, accepts: 0-4)\n")) return false;
+  if (!WriteLine(f, "# 0=disabled, 1=wooden, 2=master, 3=tempered, 4=golden\n")) return false;
   if (!WriteLine(f, "# Normally requires lifting or dashing\n")) return false;
-  if (!WriteLine(f, "BreakPotsWithSword = %d\n\n", (features & kFeatures0_BreakPotsWithSword) ? 1 : 0)) return false;
+  if (!WriteLine(f, "BreakPotsWithSword = %d\n\n", config->break_pots_min_sword)) return false;
 
   if (!WriteLine(f, "# Allow more active bombs (4 instead of 2)\n")) return false;
   if (!WriteLine(f, "# (default: 0, accepts: 0/1)\n")) return false;

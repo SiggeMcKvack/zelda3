@@ -166,7 +166,7 @@ enum {
   kFeatures0_TurnWhileDashing = 4,         // Turn during dash
   kFeatures0_MirrorToDarkworld = 8,        // Mirror to dark world
   kFeatures0_CollectItemsWithSword = 16,   // Sword collects items
-  kFeatures0_BreakPotsWithSword = 32,      // Sword breaks pots
+  // Note: BreakPotsWithSword (32) removed - now uses g_config.break_pots_min_sword
   kFeatures0_DisableLowHealthBeep = 64,    // Silence low health beep
   kFeatures0_SkipIntroOnKeypress = 128,    // Skip intro with button
   kFeatures0_ShowMaxItemsInYellow = 256,   // Highlight maxed items
@@ -194,8 +194,8 @@ if (enhanced_features0 & kFeatures0_SwitchLR) {
 
 // Check multiple features
 if ((enhanced_features0 & kFeatures0_CollectItemsWithSword) &&
-    (enhanced_features0 & kFeatures0_BreakPotsWithSword)) {
-  // Both sword features enabled
+    g_config.break_pots_min_sword > 0) {
+  // Sword collects items and can break pots
 }
 
 // Disable original behavior

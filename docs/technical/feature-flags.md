@@ -47,7 +47,7 @@ enum {
   kFeatures0_TurnWhileDashing = 4,         // 2^2
   kFeatures0_MirrorToDarkworld = 8,        // 2^3
   kFeatures0_CollectItemsWithSword = 16,   // 2^4
-  kFeatures0_BreakPotsWithSword = 32,      // 2^5
+  // Note: BreakPotsWithSword (32) removed - now uses g_config.break_pots_min_sword (0-4)
   kFeatures0_DisableLowHealthBeep = 64,    // 2^6
   kFeatures0_SkipIntroOnKeypress = 128,    // 2^7
   kFeatures0_ShowMaxItemsInYellow = 256,   // 2^8
@@ -313,7 +313,7 @@ WidescreenVisualFixes = true  # Fix visual glitches in widescreen
 SwitchLR = true             # L/R item switching
 TurnWhileDashing = true     # Turn during dash
 CollectItemsWithSword = true  # Sword collects items
-BreakPotsWithSword = true   # Sword breaks pots
+BreakPotsWithSword = 2      # Min sword level to break pots (0=off, 1-4=sword level)
 
 # Quality of life
 DisableLowHealthBeep = true  # Silence low health beep
@@ -387,8 +387,9 @@ Add clear comments explaining what changes:
 
 ```c
 // Vanilla behavior: Sword doesn't break pots
-// Enhanced behavior: Sword breaks pots like in later Zelda games
-if (enhanced_features0 & kFeatures0_BreakPotsWithSword) {
+// Enhanced behavior: Sword breaks pots (configurable min sword level 1-4)
+if (g_config.break_pots_min_sword > 0 &&
+    link_sword_type >= g_config.break_pots_min_sword) {
   CheckSwordVsPot();
 }
 ```

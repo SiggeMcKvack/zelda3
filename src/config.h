@@ -71,6 +71,7 @@ typedef struct Config {
   bool disable_frame_delay;
   uint8 msuvolume;
   uint32 features0;
+  uint8 break_pots_min_sword;  // 0=disabled, 1-4=min sword level
 
   const char *link_graphics;
   char *memory_buffer;

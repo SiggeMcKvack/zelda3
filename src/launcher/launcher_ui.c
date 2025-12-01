@@ -1741,6 +1741,18 @@ static GtkWidget* create_sound_tab(const Config *config) {
     return grid;
 }
 
+// Helper: Add a section header to the grid
+static void add_section_header(GtkWidget *grid, int *row, const char *title, bool first) {
+    GtkWidget *label = gtk_label_new(NULL);
+    char markup[128];
+    snprintf(markup, sizeof(markup), "<b>%s</b>", title);
+    gtk_label_set_markup(GTK_LABEL(label), markup);
+    gtk_widget_set_halign(label, GTK_ALIGN_START);
+    if (!first)
+        gtk_widget_set_margin_top(label, 12);
+    gtk_grid_attach(GTK_GRID(grid), label, 0, (*row)++, 2, 1);
+}
+
 // Create Features tab
 static GtkWidget* create_features_tab(const Config *config) {
     GtkWidget *grid = gtk_grid_new();
@@ -1751,8 +1763,14 @@ static GtkWidget* create_features_tab(const Config *config) {
     int row = 0;
     uint32 features = config->features0;
 
+    // === SAVE Section ===
+    add_section_header(grid, &row, "Save", true);
+
     g_widgets.feat_autosave = create_checkbox(grid, row++, "Autosave on quit and reload on start");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_autosave), config->autosave);
+
+    // === CONTROLS Section ===
+    add_section_header(grid, &row, "Controls", false);
 
     g_widgets.feat_switch_lr = create_checkbox(grid, row++, "Item switching with L/R shoulder buttons");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_switch_lr),
@@ -1766,6 +1784,13 @@ static GtkWidget* create_features_tab(const Config *config) {
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_turn_dash),
         features & kFeatures0_TurnWhileDashing);
 
+    // === GAMEPLAY Section ===
+    add_section_header(grid, &row, "Gameplay", false);
+
+    g_widgets.feat_skip_intro = create_checkbox(grid, row++, "Skip intro on any keypress");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_skip_intro),
+        features & kFeatures0_SkipIntroOnKeypress);
+
     g_widgets.feat_mirror_dw = create_checkbox(grid, row++, "Allow magic mirror to warp to the Dark World");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_mirror_dw),
         features & kFeatures0_MirrorToDarkworld);
@@ -1773,10 +1798,6 @@ static GtkWidget* create_features_tab(const Config *config) {
     g_widgets.feat_sword_collect = create_checkbox(grid, row++, "Collect items (hearts, rupees) with sword");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_sword_collect),
         features & kFeatures0_CollectItemsWithSword);
-
-    g_widgets.feat_sword_pots = create_checkbox(grid, row++, "Break pots with level 2-4 sword");
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_sword_pots),
-        features & kFeatures0_BreakPotsWithSword);
 
     g_widgets.feat_more_bombs = create_checkbox(grid, row++, "Allow more active bombs (4 instead of 2)");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_more_bombs),
@@ -1790,17 +1811,23 @@ static GtkWidget* create_features_tab(const Config *config) {
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_cancel_bird),
         features & kFeatures0_CancelBirdTravel);
 
-    g_widgets.feat_no_beep = create_checkbox(grid, row++, "Disable low health beep sound");
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_no_beep),
-        features & kFeatures0_DisableLowHealthBeep);
+    const char *sword_levels[] = {"Disabled", "Level 1 (Wooden)", "Level 2 (Master)", "Level 3 (Tempered)", "Level 4 (Golden)"};
+    g_widgets.feat_sword_pots = create_combo_box_with_label(grid, row++, "Break pots with sword:", sword_levels, 5);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(g_widgets.feat_sword_pots), config->break_pots_min_sword);
 
-    g_widgets.feat_skip_intro = create_checkbox(grid, row++, "Skip intro on any keypress");
-    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_skip_intro),
-        features & kFeatures0_SkipIntroOnKeypress);
+    // === INTERFACE Section ===
+    add_section_header(grid, &row, "Interface", false);
 
     g_widgets.feat_yellow_items = create_checkbox(grid, row++, "Highlight maxed items in yellow");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_yellow_items),
         features & kFeatures0_ShowMaxItemsInYellow);
+
+    g_widgets.feat_no_beep = create_checkbox(grid, row++, "Disable low health beep sound");
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_no_beep),
+        features & kFeatures0_DisableLowHealthBeep);
+
+    // === BUG FIXES Section ===
+    add_section_header(grid, &row, "Bug Fixes", false);
 
     g_widgets.feat_misc_bugs = create_checkbox(grid, row++, "Fix misc bugs from original game");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_misc_bugs),
@@ -1810,11 +1837,14 @@ static GtkWidget* create_features_tab(const Config *config) {
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_game_bugs),
         features & kFeatures0_GameChangingBugFixes);
 
-    g_widgets.feat_pokemode = create_checkbox(grid, row++, "Experimental: Pokemode");
+    // === EXPERIMENTAL Section ===
+    add_section_header(grid, &row, "Experimental", false);
+
+    g_widgets.feat_pokemode = create_checkbox(grid, row++, "Pokemode");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_pokemode),
         features & kFeatures0_Pokemode);
 
-    g_widgets.feat_zelda_helps = create_checkbox(grid, row++, "Experimental: Princess Zelda helps in battle");
+    g_widgets.feat_zelda_helps = create_checkbox(grid, row++, "Princess Zelda helps in battle");
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_zelda_helps),
         features & kFeatures0_PrincessZeldaHelps);
 
@@ -2753,8 +2783,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         config->features0 |= kFeatures0_MirrorToDarkworld;
     if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_sword_collect)))
         config->features0 |= kFeatures0_CollectItemsWithSword;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_sword_pots)))
-        config->features0 |= kFeatures0_BreakPotsWithSword;
+    config->break_pots_min_sword = gtk_combo_box_get_active(GTK_COMBO_BOX(g_widgets.feat_sword_pots));
     if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_more_bombs)))
         config->features0 |= kFeatures0_MoreActiveBombs;
     if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_more_rupees)))

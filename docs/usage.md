@@ -188,7 +188,7 @@ TurnWhileDashing = 0
 
 - **Mirror to Dark World:** Magic mirror warps both directions
 - **Collect with sword:** Pick up items using sword
-- **Break pots with sword:** Level 2-4 sword breaks pots
+- **Break pots with sword:** Configurable min sword level (0=off, 1-4=sword level)
 - **More active bombs:** 4 bombs instead of 2
 - **Increased rupee capacity:** 9999 instead of 999
 - **Cancel bird travel:** Press X to exit bird flight
@@ -383,7 +383,7 @@ TurnWhileDashing = 0
 # Gameplay modifications
 MirrorToDarkworld = 0
 CollectItemsWithSword = 0
-BreakPotsWithSword = 0
+BreakPotsWithSword = 0  # 0=off, 1=wooden, 2=master, 3=tempered, 4=golden
 MoreActiveBombs = 0
 CarryMoreRupees = 0
 CancelBirdTravel = 0

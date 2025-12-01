@@ -1,6 +1,7 @@
 #include "zelda_rtl.h"
 #include "snes/snes_regs.h"
 #include "variables.h"
+#include "config.h"
 #include "dungeon.h"
 #include "nmi.h"
 #include "hud.h"
@@ -5563,8 +5564,8 @@ uint8 ThievesAttic_DrawLightenedHole(uint16 pos6, uint16 a, Point16U *pt) {  // 
 
 uint8 HandleItemTileAction_Dungeon(uint16 x, uint16 y) {  // 81dabb
   if (!(link_item_in_hand & 2)) {
-    if (!(enhanced_features0 & kFeatures0_BreakPotsWithSword) ||
-        button_b_frames == 0 || link_sword_type == 1)
+    if (g_config.break_pots_min_sword == 0 ||
+        button_b_frames == 0 || link_sword_type < g_config.break_pots_min_sword)
       return 0;
   }
   uint16 pos = (y & 0x1f8) * 8 + x + (link_is_on_lower_level ? 0x1000 : 0);

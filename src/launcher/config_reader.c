@@ -212,8 +212,10 @@ bool ConfigReader_Read(const char *path, Config *config) {
                 config->features0 |= kFeatures0_MirrorToDarkworld;
             else if (strcmp(key, "CollectItemsWithSword") == 0 && flag_value)
                 config->features0 |= kFeatures0_CollectItemsWithSword;
-            else if (strcmp(key, "BreakPotsWithSword") == 0 && flag_value)
-                config->features0 |= kFeatures0_BreakPotsWithSword;
+            else if (strcmp(key, "BreakPotsWithSword") == 0) {
+                int v = atoi(value);
+                config->break_pots_min_sword = (v < 0) ? 0 : (v > 4) ? 4 : v;
+            }
             else if (strcmp(key, "MoreActiveBombs") == 0 && flag_value)
                 config->features0 |= kFeatures0_MoreActiveBombs;
             else if (strcmp(key, "CarryMoreRupees") == 0 && flag_value)

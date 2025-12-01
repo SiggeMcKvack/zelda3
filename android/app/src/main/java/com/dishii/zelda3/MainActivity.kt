@@ -20,6 +20,7 @@ import android.view.ViewGroup
 import android.graphics.Bitmap
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
+import android.widget.Spinner
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
@@ -1759,7 +1760,9 @@ class MainActivity : SDLActivity() {
             val switchSkipIntro = dialogView.findViewById<SwitchMaterial>(R.id.switch_skip_intro)
             val switchMirrorToDarkworld = dialogView.findViewById<SwitchMaterial>(R.id.switch_mirror_to_darkworld)
             val switchCollectItemsSword = dialogView.findViewById<SwitchMaterial>(R.id.switch_collect_items_sword)
-            val switchBreakPotsSword = dialogView.findViewById<SwitchMaterial>(R.id.switch_break_pots_sword)
+            val spinnerBreakPotsSword = dialogView.findViewById<Spinner>(R.id.spinner_break_pots_sword)
+            val swordLevels = arrayOf("Disabled", "Level 1 (Wooden)", "Level 2 (Master)", "Level 3 (Tempered)", "Level 4 (Golden)")
+            spinnerBreakPotsSword.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, swordLevels)
             val switchMoreBombs = dialogView.findViewById<SwitchMaterial>(R.id.switch_more_bombs)
             val switchMoreRupees = dialogView.findViewById<SwitchMaterial>(R.id.switch_more_rupees)
             val switchCancelBird = dialogView.findViewById<SwitchMaterial>(R.id.switch_cancel_bird)
@@ -1794,7 +1797,7 @@ class MainActivity : SDLActivity() {
                     ConfigManager.readBool(this@MainActivity, "Features", "CollectItemsWithSword", false)
                 }
                 val origBreakPotsSword = kotlinx.coroutines.runBlocking {
-                    ConfigManager.readBool(this@MainActivity, "Features", "BreakPotsWithSword", false)
+                    ConfigManager.readInt(this@MainActivity, "Features", "BreakPotsWithSword", 0).coerceIn(0, 4)
                 }
                 val origMoreBombs = kotlinx.coroutines.runBlocking {
                     ConfigManager.readBool(this@MainActivity, "Features", "MoreActiveBombs", false)
@@ -1833,7 +1836,7 @@ class MainActivity : SDLActivity() {
                     switchSkipIntro.isChecked = origSkipIntro
                     switchMirrorToDarkworld.isChecked = origMirrorToDarkworld
                     switchCollectItemsSword.isChecked = origCollectItemsSword
-                    switchBreakPotsSword.isChecked = origBreakPotsSword
+                    spinnerBreakPotsSword.setSelection(origBreakPotsSword)
                     switchMoreBombs.isChecked = origMoreBombs
                     switchMoreRupees.isChecked = origMoreRupees
                     switchCancelBird.isChecked = origCancelBird
@@ -1857,7 +1860,7 @@ class MainActivity : SDLActivity() {
                                 val newSkipIntro = switchSkipIntro.isChecked
                                 val newMirrorToDarkworld = switchMirrorToDarkworld.isChecked
                                 val newCollectItemsSword = switchCollectItemsSword.isChecked
-                                val newBreakPotsSword = switchBreakPotsSword.isChecked
+                                val newBreakPotsSword = spinnerBreakPotsSword.selectedItemPosition
                                 val newMoreBombs = switchMoreBombs.isChecked
                                 val newMoreRupees = switchMoreRupees.isChecked
                                 val newCancelBird = switchCancelBird.isChecked
@@ -1912,7 +1915,7 @@ class MainActivity : SDLActivity() {
                                             ConfigManager.writeBool(this@MainActivity, "Features", "CollectItemsWithSword", newCollectItemsSword)
                                         }
                                         if (newBreakPotsSword != origBreakPotsSword) {
-                                            ConfigManager.writeBool(this@MainActivity, "Features", "BreakPotsWithSword", newBreakPotsSword)
+                                            ConfigManager.writeInt(this@MainActivity, "Features", "BreakPotsWithSword", newBreakPotsSword)
                                         }
                                         if (newMoreBombs != origMoreBombs) {
                                             ConfigManager.writeBool(this@MainActivity, "Features", "MoreActiveBombs", newMoreBombs)

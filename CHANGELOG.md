@@ -4,6 +4,30 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## December 2025
 
+### Break Pots with Sword - Configurable Minimum Sword Level
+
+The `BreakPotsWithSword` setting now accepts values 0-4 instead of boolean 0/1:
+- `0` = Disabled (default, original game behavior)
+- `1` = Wooden sword (any sword can break pots)
+- `2` = Master sword or higher
+- `3` = Tempered sword or higher
+- `4` = Golden sword only
+
+**Desktop Launcher:**
+- Features tab reorganized with section headers (Save, Controls, Gameplay, Interface, Bug Fixes, Experimental)
+- Break pots option changed from checkbox to dropdown selector
+
+**Android:**
+- Gameplay settings dialog updated with dropdown for sword level selection
+
+**Files Modified:**
+- `src/config.h` - Added `break_pots_min_sword` field
+- `src/config.c`, `src/dungeon.c` - Use new integer config
+- `src/features.h` - Deprecated `kFeatures0_BreakPotsWithSword` bit flag
+- `src/launcher/launcher_ui.c` - Section headers + combo box
+- `android/.../dialog_gameplay_settings.xml` - Spinner widget
+- `android/.../MainActivity.kt` - Integer config handling
+
 ### Android Refactoring - Generic Utilities
 
 **JNI Helper Library (C):**
