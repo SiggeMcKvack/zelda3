@@ -68,6 +68,9 @@ class RomSelectionActivity : AppCompatActivity() {
             }
         }
 
+    // Counter for unique temp file names
+    private var tempFileCounter = 0
+
     private val langRomPicker: ActivityResultLauncher<Intent> =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK) {
@@ -75,10 +78,10 @@ class RomSelectionActivity : AppCompatActivity() {
                 val clipData = result.data?.clipData
                 if (clipData != null) {
                     for (i in 0 until clipData.itemCount) {
-                        processLanguageRom(clipData.getItemAt(i).uri)
+                        processLanguageRom(clipData.getItemAt(i).uri, tempFileCounter++)
                     }
                 } else {
-                    result.data?.data?.let { processLanguageRom(it) }
+                    result.data?.data?.let { processLanguageRom(it, tempFileCounter++) }
                 }
             }
         }
@@ -174,14 +177,14 @@ class RomSelectionActivity : AppCompatActivity() {
         }
     }
 
-    private fun processLanguageRom(uri: Uri) {
+    private fun processLanguageRom(uri: Uri, uniqueId: Int) {
         if (languageRoms.size >= MAX_LANGUAGE_ROMS) {
             Toast.makeText(this, "Maximum language ROMs reached", Toast.LENGTH_SHORT).show()
             return
         }
 
         lifecycleScope.launch {
-            val tempFile = File(cacheDir, "temp_lang_${System.currentTimeMillis()}.sfc")
+            val tempFile = File(cacheDir, "temp_lang_${uniqueId}.sfc")
             try {
                 // Copy to cache
                 withContext(Dispatchers.IO) {

@@ -225,18 +225,20 @@ class MainActivity : SDLActivity() {
     // JNI function for language settings
     private external fun nativeGetAvailableLanguages(path: String): Array<String>?
 
-    // Language display name mapping
+    // Language display name mapping (matches launcher_ui.c get_language_display_name)
     private val languageDisplayNames = mapOf(
         "us" to "English (US)",
         "en" to "English (EU)",
         "de" to "German",
         "fr" to "French",
-        "fr-c" to "French Canadian",
+        "fr-c" to "French (Canada)",
         "es" to "Spanish",
         "nl" to "Dutch",
         "pl" to "Polish",
-        "pt" to "Portuguese",
-        "sv" to "Swedish"
+        "pt" to "Portuguese (Brazil)",
+        "sv" to "Swedish",
+        "redux" to "English (Redux)",
+        "retrans-kal" to "English (Kaleidoscope)"
     )
 
     private fun getLanguageDisplayName(code: String): String {
@@ -434,6 +436,21 @@ class MainActivity : SDLActivity() {
             override fun onDrawerStateChanged(newState: Int) {}
         })
 
+        // Check for multiple languages and show Language menu item if available
+        Thread {
+            val externalDir = getExternalFilesDir(null)?.absolutePath ?: ""
+            val availableLanguages = nativeGetAvailableLanguages(externalDir)
+            Log.d(TAG, "setupDrawer: availableLanguages = ${availableLanguages?.joinToString() ?: "null"}, count = ${availableLanguages?.size ?: 0}")
+
+            if (availableLanguages != null && availableLanguages.size > 1) {
+                runOnUiThread {
+                    val languageMenuItem = navigationView?.menu?.findItem(R.id.nav_language)
+                    languageMenuItem?.isVisible = true
+                    Log.d(TAG, "setupDrawer: Language menu item set to visible")
+                }
+            }
+        }.start()
+
         navigationView?.setNavigationItemSelectedListener { item ->
             val id = item.itemId
             Log.d(TAG, "Menu item selected with ID: $id")
@@ -472,6 +489,11 @@ class MainActivity : SDLActivity() {
                     Log.d(TAG, "Audio options selected - closing drawer (game stays paused)")
                     drawerLayout.closeDrawers()
                     Handler(Looper.getMainLooper()).postDelayed({ showAudioOptionsDialog() }, 300)
+                }
+                R.id.nav_language -> {
+                    Log.d(TAG, "Language selected - closing drawer and showing dialog")
+                    drawerLayout.closeDrawers()
+                    Handler(Looper.getMainLooper()).postDelayed({ showLanguageDialog() }, 300)
                 }
                 R.id.nav_overlay_options -> {
                     Log.d(TAG, "Overlay options selected - closing drawer (game stays paused)")
@@ -762,22 +784,12 @@ class MainActivity : SDLActivity() {
             val sliderMsuVolume = dialogView.findViewById<Slider>(R.id.slider_msu_volume)
             val textVolumeValue = dialogView.findViewById<TextView>(R.id.text_volume_value)
 
-            // Language section views
-            val sectionLanguage = dialogView.findViewById<android.widget.LinearLayout>(R.id.section_language)
-            val layoutLanguageSetting = dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_language_setting)
-            val textCurrentLanguage = dialogView.findViewById<TextView>(R.id.text_current_language)
-
             // Read current settings in background thread
             Thread {
                 val disableLowHealthBeep = kotlinx.coroutines.runBlocking { readLowHealthBeepSetting() }
                 val settings = kotlinx.coroutines.runBlocking { readMsuSettings() }
                 val msuFileCount = kotlinx.coroutines.runBlocking { scanMsuFiles() }
                 val format = kotlinx.coroutines.runBlocking { detectMsuFormat() }
-
-                // Get available languages from DAT file
-                val externalDir = getExternalFilesDir(null)?.absolutePath ?: ""
-                val availableLanguages = nativeGetAvailableLanguages(externalDir)
-                val currentLanguage = kotlinx.coroutines.runBlocking { readLanguageSetting() }
 
                 // Store originals for restart detection
                 val originalDisableLowHealthBeep = disableLowHealthBeep
@@ -811,28 +823,6 @@ class MainActivity : SDLActivity() {
                     // Volume slider listener
                     sliderMsuVolume.addOnChangeListener { _, value, _ ->
                         textVolumeValue.text = "${value.toInt()}%"
-                    }
-
-                    // Setup language section (only show if multiple languages available)
-                    if (availableLanguages != null && availableLanguages.size > 1) {
-                        sectionLanguage.visibility = View.VISIBLE
-                        textCurrentLanguage.text = getLanguageDisplayName(currentLanguage)
-
-                        layoutLanguageSetting.setOnClickListener {
-                            showLanguageSelectionDialog(availableLanguages, currentLanguage) { newLanguage ->
-                                // Update display
-                                textCurrentLanguage.text = getLanguageDisplayName(newLanguage)
-                                // Save setting and show restart dialog
-                                Thread {
-                                    kotlinx.coroutines.runBlocking { updateLanguageSetting(newLanguage) }
-                                    runOnUiThread {
-                                        showRestartRequiredDialog()
-                                    }
-                                }.start()
-                            }
-                        }
-                    } else {
-                        sectionLanguage.visibility = View.GONE
                     }
 
                     // Create dialog
@@ -1004,6 +994,42 @@ class MainActivity : SDLActivity() {
             backgroundTintList = primaryColor
             setTextColor(onPrimaryColor)
         }
+    }
+
+    /**
+     * Shows language dialog from navigation drawer.
+     * Fetches available languages and current setting, then shows selection dialog.
+     */
+    private fun showLanguageDialog() {
+        Log.d(TAG, "showLanguageDialog() called")
+
+        Thread {
+            val externalDir = getExternalFilesDir(null)?.absolutePath ?: ""
+            val availableLanguages = nativeGetAvailableLanguages(externalDir)
+            val currentLanguage = kotlinx.coroutines.runBlocking { readLanguageSetting() }
+
+            Log.d(TAG, "showLanguageDialog: availableLanguages = ${availableLanguages?.joinToString() ?: "null"}")
+            Log.d(TAG, "showLanguageDialog: currentLanguage = $currentLanguage")
+
+            if (availableLanguages == null || availableLanguages.size <= 1) {
+                runOnUiThread {
+                    Toast.makeText(this, "Only one language available", Toast.LENGTH_SHORT).show()
+                }
+                return@Thread
+            }
+
+            runOnUiThread {
+                showLanguageSelectionDialog(availableLanguages, currentLanguage) { newLanguage ->
+                    // Save setting and show restart dialog
+                    Thread {
+                        kotlinx.coroutines.runBlocking { updateLanguageSetting(newLanguage) }
+                        runOnUiThread {
+                            showRestartRequiredDialog()
+                        }
+                    }.start()
+                }
+            }
+        }.start()
     }
 
     /**

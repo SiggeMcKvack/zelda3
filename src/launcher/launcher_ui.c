@@ -581,7 +581,7 @@ static const char* get_language_display_name(const char *code) {
         {"en", "English (EU)"},
         {"es", "Spanish"},
         {"pl", "Polish"},
-        {"pt", "Portuguese"},
+        {"pt", "Portuguese (Brazil)"},
         {"nl", "Dutch"},
         {"sv", "Swedish"},
         {"redux", "English (Redux)"},

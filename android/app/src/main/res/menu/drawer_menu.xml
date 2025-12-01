@@ -31,6 +31,11 @@
             android:icon="@drawable/ic_music"
             android:title="Audio options" />
         <item
+            android:id="@+id/nav_language"
+            android:icon="@drawable/ic_language"
+            android:title="Language"
+            android:visible="false" />
+        <item
             android:id="@+id/nav_overlay_options"
             android:icon="@android:drawable/ic_menu_manage"
             android:title="Overlay options" />
