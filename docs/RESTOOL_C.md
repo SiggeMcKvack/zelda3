@@ -12,6 +12,7 @@ This guide documents the C-based asset extraction tool (`zelda3_restool`) for Ze
 - [Multi-Language Support](#multi-language-support)
 - [Troubleshooting](#troubleshooting)
 - [Technical Details](#technical-details)
+- [Library API (Embedding)](#library-api-embedding)
 
 ## Quick Start
 
@@ -572,3 +573,146 @@ SNES $10:8000 → ROM offset 0x080000 (512KB into ROM)
 
 - **Disk space:** ~50MB for intermediate files + 680KB for final asset
 - **ROM file:** Valid 1MB SNES ROM (may have 512-byte SMC header, automatically handled)
+
+## Library API (Embedding)
+
+The restool functionality is available as a C library for embedding in other applications (e.g., Android app). The library API is defined in `src/restool/restool_lib.h`.
+
+### Header File
+
+```c
+#include "restool/restool_lib.h"
+```
+
+### Error Codes
+
+```c
+#define RESTOOL_OK                0   // Success
+#define RESTOOL_ERR_ROM_LOAD      1   // Failed to load ROM file
+#define RESTOOL_ERR_ROM_INVALID   2   // ROM not recognized
+#define RESTOOL_ERR_ROM_NOT_US    3   // ROM is not US version (for compilation)
+#define RESTOOL_ERR_EXTRACT       4   // Extraction failed
+#define RESTOOL_ERR_WRITE         5   // Failed to write output file
+#define RESTOOL_ERR_DIALOGUE      6   // Dialogue extraction/compilation failed
+#define RESTOOL_ERR_MEMORY        7   // Memory allocation failed
+```
+
+### Functions
+
+#### Restool_IdentifyRom
+
+Identify a ROM file and get language information.
+
+```c
+typedef struct {
+    char lang_code[16];   // Language code (us, de, fr, etc.)
+    char lang_name[64];   // Display name (USA, German, French, etc.)
+    bool valid;           // True if SHA1 matches a known ROM
+} RestoolRomInfo;
+
+bool Restool_IdentifyRom(const char *rom_path, RestoolRomInfo *out_info);
+```
+
+**Parameters:**
+- `rom_path` - Path to ROM file
+- `out_info` - Output struct with language info
+
+**Returns:** `true` if ROM was read successfully (even if unknown), `false` on read error
+
+#### Restool_ExtractDialogue
+
+Extract dialogue from a single ROM file to a text file.
+
+```c
+int Restool_ExtractDialogue(const char *rom_path, const char *output_dir);
+```
+
+**Parameters:**
+- `rom_path` - Path to ROM file (any supported language)
+- `output_dir` - Directory to write `dialogue_{lang}.txt` (or `dialogue.txt` for US)
+
+**Returns:** `RESTOOL_OK` on success, error code on failure
+
+**Output files:**
+- US ROM → `{output_dir}/dialogue.txt`
+- German ROM → `{output_dir}/dialogue_de.txt`
+- French ROM → `{output_dir}/dialogue_fr.txt`
+- etc.
+
+#### Restool_CompileAssetsEx
+
+Compile assets from US ROM with optional additional languages.
+
+```c
+typedef struct {
+    const char *us_rom_path;     // Path to US ROM file (required)
+    const char *output_path;     // Path to output zelda3_assets.dat
+    const char *languages;       // Comma-separated language codes (e.g., "de,fr") or NULL
+    const char *dialogue_dir;    // Directory containing dialogue_{lang}.txt files (or NULL)
+    bool sprites_from_png;       // If true, load sprites from PNG files instead of ROM
+} RestoolCompileOptions;
+
+int Restool_CompileAssetsEx(const RestoolCompileOptions *options);
+```
+
+**Parameters:**
+- `options` - Compilation options struct
+
+**Returns:** `RESTOOL_OK` on success, error code on failure
+
+#### Restool_CompileAssets (Legacy)
+
+Simplified wrapper for backward compatibility.
+
+```c
+int Restool_CompileAssets(const char *us_rom_path, const char *output_path,
+                          const char *languages, const char *dialogue_dir);
+```
+
+### Android Integration Example
+
+```c
+// 1. Identify ROMs
+RestoolRomInfo us_info, de_info;
+Restool_IdentifyRom("/path/to/us.sfc", &us_info);
+Restool_IdentifyRom("/path/to/german.sfc", &de_info);
+
+// 2. Extract dialogue from each ROM
+Restool_ExtractDialogue("/path/to/us.sfc", "/cache/dialogue");
+Restool_ExtractDialogue("/path/to/german.sfc", "/cache/dialogue");
+
+// 3. Compile assets with both languages
+RestoolCompileOptions options = {
+    .us_rom_path = "/path/to/us.sfc",
+    .output_path = "/data/zelda3_assets.dat",
+    .languages = "de",
+    .dialogue_dir = "/cache/dialogue",
+    .sprites_from_png = false
+};
+int result = Restool_CompileAssetsEx(&options);
+```
+
+### Multi-Language Workflow
+
+To compile assets with multiple languages:
+
+1. **Extract dialogue from each ROM:**
+   ```c
+   Restool_ExtractDialogue(us_rom, output_dir);     // Creates dialogue.txt
+   Restool_ExtractDialogue(german_rom, output_dir); // Creates dialogue_de.txt
+   Restool_ExtractDialogue(french_rom, output_dir); // Creates dialogue_fr.txt
+   ```
+
+2. **Compile with language list:**
+   ```c
+   RestoolCompileOptions options = {
+       .us_rom_path = us_rom,
+       .output_path = "zelda3_assets.dat",
+       .languages = "de,fr",           // Additional languages
+       .dialogue_dir = output_dir,     // Where dialogue files were extracted
+       .sprites_from_png = false
+   };
+   Restool_CompileAssetsEx(&options);
+   ```
+
+**Note:** The `dialogue_dir` parameter is required when using additional languages. Dialogue files must be extracted to this directory before compilation.

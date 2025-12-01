@@ -9,7 +9,9 @@
 #include <string.h>
 #include <stdio.h>
 
+// Signature must be exactly 16 bytes (including null terminator)
 #define ASSET_SIGNATURE "Zelda3_v0     \n"
+#define ASSET_SIGNATURE_SIZE 16
 #define INITIAL_ASSET_CAPACITY 64
 
 AssetBuilder* AssetBuilder_Create(void) {
@@ -177,8 +179,10 @@ bool AssetBuilder_WriteToFile(AssetBuilder *builder, const char *filepath) {
   sha256_final(&ctx, key_hash);
 
   // Write header
-  // Signature (16 bytes)
-  fwrite(ASSET_SIGNATURE, 1, 16, fp);
+  // Signature (16 bytes) - must include null terminator
+  uint8_t sig[ASSET_SIGNATURE_SIZE] = {0};
+  memcpy(sig, ASSET_SIGNATURE, strlen(ASSET_SIGNATURE));
+  fwrite(sig, 1, ASSET_SIGNATURE_SIZE, fp);
 
   // SHA-256 hash of key signature (32 bytes)
   fwrite(key_hash, 1, 32, fp);

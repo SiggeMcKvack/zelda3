@@ -124,6 +124,8 @@ Flags stored at unused RAM offsets (0x648+). Must be toggleable via `zelda3.ini`
 
 **Asset Tools (C Restool):**
 - `src/restool/main.c` - CLI entry point
+- `src/restool/restool_lib.c` - Library API for embedding (Android, etc.)
+- `src/restool/restool_lib.h` - Library API header (`Restool_CompileAssets`, etc.)
 - `src/restool/asset_compiler.c` - Binary asset compilation
 - `src/restool/text.c` - Dialogue extraction (11 languages)
 - `src/restool/graphics.c` - Sprite/tileset extraction
@@ -350,11 +352,12 @@ adb logcat | grep Zelda3       # View Android logs
 
 **C Restool completion (November 2025):**
 - **Full C reimplementation:** Asset extraction tool rewritten in C for speed and portability
+- **Library API:** `restool_lib.h` provides `Restool_CompileAssets()`, `Restool_ExtractDialogue()`, `Restool_IdentifyRom()` for embedding (Android, etc.)
 - **Multi-language support:** 11 ROM versions supported (US, DE, FR, FR-C, EN, ES, PL, PT, NL, SV, Redux)
 - **PNG sprite loading:** `--sprites-from-png` flag loads sprites from PNG files instead of ROM (for ROM hacking)
 - **Embedded assets:** Standalone binary with embedded YAML/asset data
 - **Launcher integration:** General tab allows asset creation from ROM directly
-- **Documentation:** See [docs/RESTOOL_C.md](docs/RESTOOL_C.md) for usage
+- **Documentation:** See [docs/RESTOOL_C.md](docs/RESTOOL_C.md) for CLI usage and library API
 
 **Launcher enhancements (November 2025):**
 - **General tab:** Asset file management, language selection, ROM extraction

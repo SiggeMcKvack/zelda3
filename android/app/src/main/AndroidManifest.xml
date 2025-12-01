@@ -96,6 +96,13 @@
             </intent-filter>
         </activity>
 
+        <!-- ROM selection activity for creating assets from ROM -->
+        <activity android:name=".RomSelectionActivity"
+            android:label="@string/create_asset_file"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/AppTheme" />
+
         <!-- Main game activity (SDL) -->
         <activity android:name=".MainActivity"
             android:label="@string/app_name"

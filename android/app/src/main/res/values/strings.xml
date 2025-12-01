@@ -1,4 +1,32 @@
 <resources>
     <string name="app_name">Zelda3</string>
     <string name="done">Done</string>
+
+    <!-- Language Settings -->
+    <string name="language">Language</string>
+    <string name="language_us">English (US)</string>
+    <string name="language_en">English (EU)</string>
+    <string name="language_de">German</string>
+    <string name="language_fr">French</string>
+    <string name="language_fr_c">French Canadian</string>
+    <string name="language_es">Spanish</string>
+    <string name="language_nl">Dutch</string>
+    <string name="language_pl">Polish</string>
+    <string name="language_pt">Portuguese</string>
+    <string name="language_sv">Swedish</string>
+
+    <!-- ROM Selection Activity -->
+    <string name="create_asset_file">Create Asset File</string>
+    <string name="rom_selection_subtitle">Extract game assets from your SNES ROM files</string>
+    <string name="base_rom_required">Base ROM (Required)</string>
+    <string name="base_rom_description">Select the USA version of the ROM</string>
+    <string name="language_roms_optional">Language ROMs (Optional)</string>
+    <string name="language_roms_description">Add ROMs for other languages to include their dialogue</string>
+    <string name="no_rom_selected">No ROM selected</string>
+    <string name="browse">Browse</string>
+    <string name="add_roms">Add ROMs</string>
+    <string name="create_assets">Create Assets</string>
+    <string name="rom_status">ROM status</string>
+    <string name="remove_rom">Remove ROM</string>
+    <string name="extracting_assets">Extracting game assets\u2026\nThis may take a moment.</string>
 </resources>

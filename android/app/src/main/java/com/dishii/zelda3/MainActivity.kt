@@ -222,6 +222,27 @@ class MainActivity : SDLActivity() {
     private external fun nativeApplyDefaultGamepadBindings()
     private external fun nativeGetButtonForCommand(cmdId: Int): String?
 
+    // JNI function for language settings
+    private external fun nativeGetAvailableLanguages(path: String): Array<String>?
+
+    // Language display name mapping
+    private val languageDisplayNames = mapOf(
+        "us" to "English (US)",
+        "en" to "English (EU)",
+        "de" to "German",
+        "fr" to "French",
+        "fr-c" to "French Canadian",
+        "es" to "Spanish",
+        "nl" to "Dutch",
+        "pl" to "Polish",
+        "pt" to "Portuguese",
+        "sv" to "Swedish"
+    )
+
+    private fun getLanguageDisplayName(code: String): String {
+        return languageDisplayNames[code] ?: code.uppercase()
+    }
+
     // Data class for MSU settings
     private data class MsuSettings(
         val enableMsu: Boolean,
@@ -741,12 +762,22 @@ class MainActivity : SDLActivity() {
             val sliderMsuVolume = dialogView.findViewById<Slider>(R.id.slider_msu_volume)
             val textVolumeValue = dialogView.findViewById<TextView>(R.id.text_volume_value)
 
+            // Language section views
+            val sectionLanguage = dialogView.findViewById<android.widget.LinearLayout>(R.id.section_language)
+            val layoutLanguageSetting = dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_language_setting)
+            val textCurrentLanguage = dialogView.findViewById<TextView>(R.id.text_current_language)
+
             // Read current settings in background thread
             Thread {
                 val disableLowHealthBeep = kotlinx.coroutines.runBlocking { readLowHealthBeepSetting() }
                 val settings = kotlinx.coroutines.runBlocking { readMsuSettings() }
                 val msuFileCount = kotlinx.coroutines.runBlocking { scanMsuFiles() }
                 val format = kotlinx.coroutines.runBlocking { detectMsuFormat() }
+
+                // Get available languages from DAT file
+                val externalDir = getExternalFilesDir(null)?.absolutePath ?: ""
+                val availableLanguages = nativeGetAvailableLanguages(externalDir)
+                val currentLanguage = kotlinx.coroutines.runBlocking { readLanguageSetting() }
 
                 // Store originals for restart detection
                 val originalDisableLowHealthBeep = disableLowHealthBeep
@@ -780,6 +811,28 @@ class MainActivity : SDLActivity() {
                     // Volume slider listener
                     sliderMsuVolume.addOnChangeListener { _, value, _ ->
                         textVolumeValue.text = "${value.toInt()}%"
+                    }
+
+                    // Setup language section (only show if multiple languages available)
+                    if (availableLanguages != null && availableLanguages.size > 1) {
+                        sectionLanguage.visibility = View.VISIBLE
+                        textCurrentLanguage.text = getLanguageDisplayName(currentLanguage)
+
+                        layoutLanguageSetting.setOnClickListener {
+                            showLanguageSelectionDialog(availableLanguages, currentLanguage) { newLanguage ->
+                                // Update display
+                                textCurrentLanguage.text = getLanguageDisplayName(newLanguage)
+                                // Save setting and show restart dialog
+                                Thread {
+                                    kotlinx.coroutines.runBlocking { updateLanguageSetting(newLanguage) }
+                                    runOnUiThread {
+                                        showRestartRequiredDialog()
+                                    }
+                                }.start()
+                            }
+                        }
+                    } else {
+                        sectionLanguage.visibility = View.GONE
                     }
 
                     // Create dialog
@@ -891,6 +944,65 @@ class MainActivity : SDLActivity() {
             setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_restart, 0, 0, 0)
             compoundDrawablePadding = resources.getDimensionPixelSize(android.R.dimen.app_icon_size) / 4
             setCompoundDrawableTintList(onPrimaryColor)
+        }
+    }
+
+    /**
+     * Shows language selection dialog with radio buttons.
+     */
+    private fun showLanguageSelectionDialog(
+        availableLanguages: Array<String>,
+        currentLanguage: String,
+        onLanguageSelected: (String) -> Unit
+    ) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_language_selection, null)
+        val radioGroup = dialogView.findViewById<android.widget.RadioGroup>(R.id.radio_group_languages)
+
+        // Sort languages: US first, then alphabetically by display name
+        val sortedLanguages = availableLanguages.sortedWith(compareBy(
+            { it != "us" },  // US comes first (false < true)
+            { getLanguageDisplayName(it) }  // Then alphabetically
+        ))
+
+        // Create radio buttons
+        sortedLanguages.forEach { langCode ->
+            val radioButton = android.widget.RadioButton(this).apply {
+                id = View.generateViewId()
+                text = getLanguageDisplayName(langCode)
+                tag = langCode
+                isChecked = (langCode == currentLanguage)
+                val horizontalPadding = (24 * resources.displayMetrics.density).toInt()
+                val verticalPadding = (16 * resources.displayMetrics.density).toInt()
+                setPadding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding)
+                textSize = 16f
+            }
+            radioGroup.addView(radioButton)
+        }
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.language)
+            .setView(dialogView)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.done) { _, _ ->
+                val selectedId = radioGroup.checkedRadioButtonId
+                if (selectedId != -1) {
+                    val selectedButton = radioGroup.findViewById<android.widget.RadioButton>(selectedId)
+                    val selectedLanguage = selectedButton.tag as String
+                    if (selectedLanguage != currentLanguage) {
+                        onLanguageSelected(selectedLanguage)
+                    }
+                }
+            }
+            .create()
+
+        dialog.show()
+
+        // Style Done button as filled
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
+            val primaryColor = resources.getColorStateList(R.color.md_theme_primary, theme)
+            val onPrimaryColor = resources.getColorStateList(R.color.md_theme_onPrimary, theme)
+            backgroundTintList = primaryColor
+            setTextColor(onPrimaryColor)
         }
     }
 
@@ -1536,6 +1648,73 @@ class MainActivity : SDLActivity() {
             Log.d(TAG, "Low health beep setting saved successfully")
         } catch (e: IOException) {
             Log.e(TAG, "Error updating low health beep setting", e)
+        }
+    }
+
+    /**
+     * Reads Language setting from zelda3.ini [General] section.
+     */
+    private suspend fun readLanguageSetting(): String = withContext(Dispatchers.IO) {
+        val externalDir = getExternalFilesDir(null) ?: return@withContext "us"
+        val configFile = File(externalDir, "zelda3.ini")
+
+        if (!configFile.exists()) return@withContext "us"
+
+        try {
+            configFile.readLines().forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed.startsWith("Language", ignoreCase = true) && trimmed.contains("=")) {
+                    val value = trimmed.substringAfter("=").trim()
+                    if (value.isNotEmpty()) {
+                        Log.d(TAG, "readLanguageSetting: Found Language = $value")
+                        return@withContext value
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading language setting", e)
+        }
+
+        "us" // Default
+    }
+
+    /**
+     * Updates Language setting in zelda3.ini.
+     */
+    private suspend fun updateLanguageSetting(language: String) = withContext(Dispatchers.IO) {
+        val externalDir = getExternalFilesDir(null) ?: return@withContext
+        val configFile = File(externalDir, "zelda3.ini")
+
+        try {
+            val lines = if (configFile.exists()) configFile.readLines().toMutableList() else mutableListOf()
+
+            // Find and update or add Language setting
+            var found = false
+            for (i in lines.indices) {
+                if (lines[i].trim().startsWith("Language", ignoreCase = true) && lines[i].contains("=")) {
+                    lines[i] = "Language = $language"
+                    found = true
+                    Log.d(TAG, "updateLanguageSetting: Updated existing Language to $language")
+                    break
+                }
+            }
+
+            if (!found) {
+                // Add under [General] section if exists, otherwise at the end
+                val generalIndex = lines.indexOfFirst { it.trim() == "[General]" }
+                if (generalIndex >= 0) {
+                    lines.add(generalIndex + 1, "Language = $language")
+                    Log.d(TAG, "updateLanguageSetting: Added Language under [General]")
+                } else {
+                    lines.add("Language = $language")
+                    Log.d(TAG, "updateLanguageSetting: Added Language at end of file")
+                }
+            }
+
+            configFile.writeText(lines.joinToString("\n"))
+            Log.d(TAG, "Language setting saved: $language")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating language setting", e)
         }
     }
 

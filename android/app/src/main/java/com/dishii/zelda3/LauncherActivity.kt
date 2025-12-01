@@ -63,6 +63,21 @@ class LauncherActivity : AppCompatActivity() {
             }
         }
 
+    // ROM selection activity launcher (for creating assets from ROM)
+    private val romSelectionLauncher: ActivityResultLauncher<Intent> =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                // Asset file was created successfully
+                Log.i(TAG, "Asset file created successfully from ROM")
+                showToast("Assets created successfully!")
+                startMainActivity()
+            } else {
+                // User cancelled or error occurred
+                Log.i(TAG, "ROM selection cancelled or failed")
+                promptForAssetsFile()
+            }
+        }
+
     private val folderPicker: ActivityResultLauncher<Uri?> =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri != null) {
@@ -166,9 +181,12 @@ class LauncherActivity : AppCompatActivity() {
 
     private fun promptForAssetsFile() {
         MaterialAlertDialogBuilder(this)
-            .setTitle("Missing Assets File")
-            .setMessage("zelda3_assets.dat not found.\n\nThis file is required to run the game. Please select the zelda3_assets.dat file from your device.")
-            .setPositiveButton("Select File") { _, _ -> openFilePicker() }
+            .setTitle("Game Assets Required")
+            .setMessage("zelda3_assets.dat is required to play.\n\nYou can select an existing asset file or create one from your SNES ROM(s).")
+            .setPositiveButton("Create from ROM") { _, _ ->
+                romSelectionLauncher.launch(Intent(this, RomSelectionActivity::class.java))
+            }
+            .setNeutralButton("Select .dat File") { _, _ -> openFilePicker() }
             .setNegativeButton("Exit") { _, _ -> finish() }
             .setCancelable(false)
             .create()

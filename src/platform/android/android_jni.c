@@ -10,6 +10,7 @@
 #include "features.h"
 #include "zelda_rtl.h"
 #include "snes/ppu.h"
+#include "logging.h"
 
 #define LOG_TAG "Zelda3JNI"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
@@ -673,4 +674,189 @@ void Android_UpdateRendererConfig(const char *renderer) {
     (*env)->DeleteLocalRef(env, activityClass);
 
     LOGD("Android_UpdateRendererConfig: Successfully updated renderer to: %s", renderer);
+}
+
+// ============================================================================
+// Restool JNI Wrappers (for ROM selection and asset extraction)
+// ============================================================================
+
+#include "restool/restool_lib.h"
+
+/**
+ * Identifies a ROM file and returns language information as JSON.
+ * Called from RomSelectionActivity when user selects a ROM file.
+ *
+ * @param romPath Path to the ROM file
+ * @return JSON string: {"lang_code":"us","lang_name":"USA","valid":true} or null on error
+ */
+JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeIdentifyRom(
+    JNIEnv* env, jobject obj, jstring jromPath) {
+
+    const char *rom_path = (*env)->GetStringUTFChars(env, jromPath, NULL);
+    if (!rom_path) {
+        LOGD("nativeIdentifyRom: Failed to get ROM path string");
+        return NULL;
+    }
+
+    LOGD("nativeIdentifyRom: Identifying ROM at: %s", rom_path);
+
+    RestoolRomInfo info;
+    bool success = Restool_IdentifyRom(rom_path, &info);
+
+    (*env)->ReleaseStringUTFChars(env, jromPath, rom_path);
+
+    if (!success) {
+        LOGD("nativeIdentifyRom: Failed to identify ROM");
+        return NULL;
+    }
+
+    // Return JSON string with ROM info
+    char json[256];
+    snprintf(json, sizeof(json),
+             "{\"lang_code\":\"%s\",\"lang_name\":\"%s\",\"valid\":%s}",
+             info.lang_code, info.lang_name, info.valid ? "true" : "false");
+
+    LOGD("nativeIdentifyRom: Result: %s", json);
+    return (*env)->NewStringUTF(env, json);
+}
+
+/**
+ * Extracts dialogue from a ROM file to a text file.
+ * Called from RomSelectionActivity for each language ROM.
+ *
+ * @param romPath Path to the ROM file
+ * @param outputDir Directory to write dialogue_{lang}.txt
+ * @return RESTOOL_OK (0) on success, error code on failure
+ */
+JNIEXPORT jint JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeExtractDialogue(
+    JNIEnv* env, jobject obj, jstring jromPath, jstring joutputDir) {
+
+    const char *rom_path = (*env)->GetStringUTFChars(env, jromPath, NULL);
+    const char *output_dir = (*env)->GetStringUTFChars(env, joutputDir, NULL);
+
+    if (!rom_path || !output_dir) {
+        if (rom_path) (*env)->ReleaseStringUTFChars(env, jromPath, rom_path);
+        if (output_dir) (*env)->ReleaseStringUTFChars(env, joutputDir, output_dir);
+        LOGD("nativeExtractDialogue: Failed to get string parameters");
+        return RESTOOL_ERR_ROM_LOAD;
+    }
+
+    LOGD("nativeExtractDialogue: rom=%s, output_dir=%s", rom_path, output_dir);
+
+    int result = Restool_ExtractDialogue(rom_path, output_dir);
+
+    (*env)->ReleaseStringUTFChars(env, jromPath, rom_path);
+    (*env)->ReleaseStringUTFChars(env, joutputDir, output_dir);
+
+    LOGD("nativeExtractDialogue: result=%d", result);
+    return result;
+}
+
+/**
+ * Compiles assets from US ROM with optional language dialogues.
+ * Called from RomSelectionActivity after all dialogues are extracted.
+ *
+ * @param usRomPath Path to the US ROM file
+ * @param outputPath Path to output zelda3_assets.dat
+ * @param languages Comma-separated language codes (e.g., "de,fr") or null for US only
+ * @param dialogueDir Directory containing dialogue_{lang}.txt files (or null)
+ * @return RESTOOL_OK (0) on success, error code on failure
+ */
+JNIEXPORT jint JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeCompileAssets(
+    JNIEnv* env, jobject obj,
+    jstring jusRomPath, jstring joutputPath, jstring jlanguages, jstring jdialogueDir) {
+
+    const char *us_rom_path = (*env)->GetStringUTFChars(env, jusRomPath, NULL);
+    const char *output_path = (*env)->GetStringUTFChars(env, joutputPath, NULL);
+    const char *languages = jlanguages ? (*env)->GetStringUTFChars(env, jlanguages, NULL) : NULL;
+    const char *dialogue_dir = jdialogueDir ? (*env)->GetStringUTFChars(env, jdialogueDir, NULL) : NULL;
+
+    if (!us_rom_path || !output_path) {
+        if (us_rom_path) (*env)->ReleaseStringUTFChars(env, jusRomPath, us_rom_path);
+        if (output_path) (*env)->ReleaseStringUTFChars(env, joutputPath, output_path);
+        if (languages) (*env)->ReleaseStringUTFChars(env, jlanguages, languages);
+        if (dialogue_dir) (*env)->ReleaseStringUTFChars(env, jdialogueDir, dialogue_dir);
+        LOGD("nativeCompileAssets: Failed to get required string parameters");
+        return RESTOOL_ERR_ROM_LOAD;
+    }
+
+    LOGD("nativeCompileAssets: us_rom=%s, output=%s, langs=%s, dialogue_dir=%s",
+         us_rom_path, output_path, languages ? languages : "us", dialogue_dir ? dialogue_dir : "(null)");
+
+    // Enable INFO-level logging for asset compilation progress
+    SetLogLevel(LOG_INFO);
+    int result = Restool_CompileAssets(us_rom_path, output_path, languages, dialogue_dir);
+
+    (*env)->ReleaseStringUTFChars(env, jusRomPath, us_rom_path);
+    (*env)->ReleaseStringUTFChars(env, joutputPath, output_path);
+    if (languages) (*env)->ReleaseStringUTFChars(env, jlanguages, languages);
+    if (dialogue_dir) (*env)->ReleaseStringUTFChars(env, jdialogueDir, dialogue_dir);
+
+    LOGD("nativeCompileAssets: result=%d", result);
+    return result;
+}
+
+// ============================================================================
+// Language Settings JNI (for Audio Options)
+// ============================================================================
+
+#include "launcher/dat_reader.h"
+
+/**
+ * Gets the available languages from the zelda3_assets.dat file.
+ * Called from MainActivity to determine if Language option should be shown
+ * in Audio Options dialog.
+ *
+ * @param path Directory containing zelda3_assets.dat
+ * @return Array of language codes (e.g., ["us", "de", "fr"]) or null if error/single language
+ */
+JNIEXPORT jobjectArray JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetAvailableLanguages(
+    JNIEnv* env, jobject obj, jstring jpath) {
+
+    const char *path = (*env)->GetStringUTFChars(env, jpath, NULL);
+    if (!path) {
+        LOGD("nativeGetAvailableLanguages: Failed to get path string");
+        return NULL;
+    }
+
+    LOGD("nativeGetAvailableLanguages: Checking path: %s", path);
+
+    char languages[16][16];
+    int count = DatReader_GetLanguages(path, languages, 16);
+
+    (*env)->ReleaseStringUTFChars(env, jpath, path);
+
+    if (count <= 0) {
+        LOGD("nativeGetAvailableLanguages: No languages found or error");
+        return NULL;
+    }
+
+    LOGD("nativeGetAvailableLanguages: Found %d language(s)", count);
+
+    // Create String array
+    jclass stringClass = (*env)->FindClass(env, "java/lang/String");
+    if (!stringClass) {
+        LOGD("nativeGetAvailableLanguages: Failed to find String class");
+        return NULL;
+    }
+
+    jobjectArray result = (*env)->NewObjectArray(env, count, stringClass, NULL);
+    if (!result) {
+        LOGD("nativeGetAvailableLanguages: Failed to create array");
+        (*env)->DeleteLocalRef(env, stringClass);
+        return NULL;
+    }
+
+    for (int i = 0; i < count; i++) {
+        jstring langStr = (*env)->NewStringUTF(env, languages[i]);
+        if (langStr) {
+            (*env)->SetObjectArrayElement(env, result, i, langStr);
+            (*env)->DeleteLocalRef(env, langStr);
+            LOGD("nativeGetAvailableLanguages: Added language[%d] = '%s'", i, languages[i]);
+        }
+    }
+
+    (*env)->DeleteLocalRef(env, stringClass);
+
+    return result;
 }

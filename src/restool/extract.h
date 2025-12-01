@@ -45,6 +45,9 @@ void ExtractDungeonSprites(AssetBuilder *builder);
 // Extract dungeon secrets from YAML
 void ExtractDungeonSecrets(AssetBuilder *builder);
 
+// Extract misc dungeon ROM assets (5 assets: kDungAttrsForTile_Offs, kDungAttrsForTile, etc.)
+void ExtractMiscDungeonRomAssets(Rom *rom, AssetBuilder *builder);
+
 // Extract dungeon room headers
 void ExtractDungeonRoomHeaders(AssetBuilder *builder);
 
@@ -67,13 +70,16 @@ void ExtractEntrancesAndStartingPoints(AssetBuilder *builder);
 // Extract overworld data from 160 YAML files (~48 assets)
 void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom);
 
+// Extract kOverworld_Hibytes_Comp and kOverworld_Lobytes_Comp (2 packed assets)
+void ExtractOverworldCompressed(Rom *rom, AssetBuilder *builder);
+
 // ============================================================================
 // Dialogue/Text Extraction (extract_dialogue.c)
 // ============================================================================
 
 // Extract dialogue assets (kDialogue, kDialogueFont, kDialogueMap)
 // languages_arg: comma-separated list like "de,fr" (US is always included first), or NULL for US only
-void ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg);
+bool ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg);
 
 // Extract dialogue (wrapper for full extraction)
 // languages_arg: comma-separated list like "de,fr" (US is always included first), or NULL for US only
@@ -91,6 +97,9 @@ void ExtractRomBasedAssets(Rom *rom, AssetBuilder *builder);
 
 // Extract tilemaps from ROM
 void ExtractTilemaps(Rom *rom, AssetBuilder *builder);
+
+// Extract kEnemyDamageData (1 decompressed asset)
+void ExtractEnemyDamageData(Rom *rom, AssetBuilder *builder);
 
 // ============================================================================
 // Map32 Extraction (extract_map32.c)

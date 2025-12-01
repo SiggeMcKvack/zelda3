@@ -11,10 +11,14 @@ add_subdirectory(SDL2_mixer)
 # Opus library (vendored) - Required for MSU audio (.opuz files)
 add_subdirectory(SDL2_mixer/external/opus EXCLUDE_FROM_ALL)
 
+# libyaml library (vendored) - Required for restool YAML parsing
+add_subdirectory(yaml)
+
 # Paths to main repo source code
 set(ZELDA3_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../src)
 set(ZELDA3_SNES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../snes)
 set(ZELDA3_THIRD_PARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party)
+set(ZELDA3_ASSETS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../assets)
 
 # Collect all game source files from main repo
 file(GLOB GAME_SOURCES
@@ -27,10 +31,55 @@ set(ANDROID_SOURCES
     ${ZELDA3_SRC_DIR}/platform/android/android_jni.c
 )
 
+# Launcher sources for settings/language detection
+set(LAUNCHER_SOURCES
+    ${ZELDA3_SRC_DIR}/launcher/dat_reader.c
+)
+
+# Restool sources for asset extraction
+# Note: main.c included but RESTOOL_NO_MAIN disables CLI entry point
+set(RESTOOL_SOURCES
+    ${ZELDA3_SRC_DIR}/restool/main.c
+    ${ZELDA3_SRC_DIR}/restool/restool_util.c
+    ${ZELDA3_SRC_DIR}/restool/restool_lib.c
+    ${ZELDA3_SRC_DIR}/restool/asset_compiler.c
+    ${ZELDA3_SRC_DIR}/restool/asset_reader.c
+    ${ZELDA3_SRC_DIR}/restool/extract_common.c
+    ${ZELDA3_SRC_DIR}/restool/graphics.c
+    ${ZELDA3_SRC_DIR}/restool/overworld.c
+    ${ZELDA3_SRC_DIR}/restool/text.c
+    ${ZELDA3_SRC_DIR}/restool/text_decode.c
+    ${ZELDA3_SRC_DIR}/restool/yaml_util.c
+    ${ZELDA3_SRC_DIR}/restool/tables.c
+    ${ZELDA3_SRC_DIR}/restool/music_compiler.c
+    ${ZELDA3_SRC_DIR}/restool/sprite_loader.c
+    ${ZELDA3_SRC_DIR}/rom_sha1.c
+    ${ZELDA3_THIRD_PARTY_DIR}/lodepng/lodepng.c
+    ${ZELDA3_THIRD_PARTY_DIR}/sha256/sha256.c
+)
+
+# Generate embedded assets at build time
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+set(EMBEDDED_ASSETS_C "${CMAKE_CURRENT_BINARY_DIR}/embedded_assets.c")
+set(EMBEDDED_ASSETS_H "${CMAKE_CURRENT_BINARY_DIR}/embedded_assets.h")
+add_custom_command(
+    OUTPUT ${EMBEDDED_ASSETS_C} ${EMBEDDED_ASSETS_H}
+    COMMAND ${Python3_EXECUTABLE}
+        ${ZELDA3_SRC_DIR}/restool/generate_embedded_assets.py
+        ${ZELDA3_ASSETS_DIR}
+        ${EMBEDDED_ASSETS_C}
+        ${EMBEDDED_ASSETS_H}
+    DEPENDS ${ZELDA3_SRC_DIR}/restool/generate_embedded_assets.py
+    COMMENT "Generating embedded assets for restool..."
+)
+
 # Create main shared library
 add_library(main SHARED
     ${GAME_SOURCES}
     ${ANDROID_SOURCES}
+    ${LAUNCHER_SOURCES}
+    ${RESTOOL_SOURCES}
+    ${EMBEDDED_ASSETS_C}
     ${ZELDA3_THIRD_PARTY_DIR}/gl_core/gl_core_3_1.c
 )
 
@@ -38,11 +87,17 @@ add_library(main SHARED
 target_include_directories(main PRIVATE
     ${ZELDA3_SRC_DIR}
     ${ZELDA3_SRC_DIR}/platform/android
+    ${ZELDA3_SRC_DIR}/restool
+    ${ZELDA3_SRC_DIR}/launcher
     ${ZELDA3_SNES_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../
     ${CMAKE_CURRENT_SOURCE_DIR}/SDL2/include
     ${CMAKE_CURRENT_SOURCE_DIR}/SDL2_mixer/include
     ${CMAKE_CURRENT_SOURCE_DIR}/SDL2_mixer/external/opus/include
+    ${ZELDA3_THIRD_PARTY_DIR}/lodepng
+    ${ZELDA3_THIRD_PARTY_DIR}/sha256
+    ${ZELDA3_THIRD_PARTY_DIR}/stb
+    ${CMAKE_CURRENT_BINARY_DIR}
 )
 
 # Find Android system libraries
@@ -56,6 +111,7 @@ target_link_libraries(main
     SDL2
     SDL2_mixer
     opus
+    yaml
     GLESv1_CM
     GLESv2
     OpenSLES
@@ -82,5 +138,6 @@ target_compile_options(main PRIVATE
 # Platform defines
 target_compile_definitions(main PRIVATE
     PLATFORM_ANDROID=1
+    RESTOOL_NO_MAIN=1
     NDEBUG
 )

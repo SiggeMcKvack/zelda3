@@ -67,6 +67,7 @@ add_custom_target(generate_embedded_assets
 # Source files (in this directory)
 set(RESTOOL_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/main.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/restool_lib.c
   ${CMAKE_CURRENT_SOURCE_DIR}/restool_util.c
   ${CMAKE_CURRENT_SOURCE_DIR}/graphics.c
   ${CMAKE_CURRENT_SOURCE_DIR}/asset_compiler.c

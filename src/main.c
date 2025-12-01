@@ -1001,10 +1001,35 @@ static void LoadAssets() {
 
   static const char kAssetsSig[] = { kAssets_Sig };
 
-  if (length < 16 + 32 + 32 + 8 + kNumberOfAssets * 4 ||
-      memcmp(data, kAssetsSig, 48) != 0 ||
-      *(uint32*)(data + 80) != kNumberOfAssets)
-    Die("Invalid assets file");
+#ifdef PLATFORM_ANDROID
+  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3Main",
+                      "LoadAssets: File size=%zu, kNumberOfAssets=%d", length, kNumberOfAssets);
+#endif
+
+  if (length < 16 + 32 + 32 + 8 + kNumberOfAssets * 4) {
+#ifdef PLATFORM_ANDROID
+    __android_log_print(ANDROID_LOG_ERROR, "Zelda3Main",
+                        "LoadAssets: File too small: %zu < %zu", length, (size_t)(16 + 32 + 32 + 8 + kNumberOfAssets * 4));
+#endif
+    Die("Invalid assets file (too small)");
+  }
+
+  if (memcmp(data, kAssetsSig, 48) != 0) {
+#ifdef PLATFORM_ANDROID
+    __android_log_print(ANDROID_LOG_ERROR, "Zelda3Main",
+                        "LoadAssets: Signature mismatch");
+#endif
+    Die("Invalid assets file (signature mismatch)");
+  }
+
+  uint32 file_asset_count = *(uint32*)(data + 80);
+  if (file_asset_count != kNumberOfAssets) {
+#ifdef PLATFORM_ANDROID
+    __android_log_print(ANDROID_LOG_ERROR, "Zelda3Main",
+                        "LoadAssets: Asset count mismatch: file has %u, expected %d", file_asset_count, kNumberOfAssets);
+#endif
+    Die("Invalid assets file (asset count mismatch)");
+  }
 
   uint32 offset = 88 + kNumberOfAssets * 4 + *(uint32 *)(data + 84);
 

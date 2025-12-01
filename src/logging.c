@@ -9,6 +9,8 @@
   #include <io.h>
   #define isatty _isatty
   #define fileno _fileno
+#elif defined(PLATFORM_ANDROID)
+  #include <android/log.h>
 #else
   #include <unistd.h>
 #endif
@@ -61,6 +63,18 @@ void LogPrintV(LogLevel level, const char *file, int line, const char *fmt, va_l
   if (level > g_log_level)
     return;
 
+#ifdef PLATFORM_ANDROID
+  // Use Android's native logging API
+  int android_priority;
+  switch (level) {
+    case LOG_ERROR: android_priority = ANDROID_LOG_ERROR; break;
+    case LOG_WARN:  android_priority = ANDROID_LOG_WARN; break;
+    case LOG_INFO:  android_priority = ANDROID_LOG_INFO; break;
+    case LOG_DEBUG: android_priority = ANDROID_LOG_DEBUG; break;
+    default:        android_priority = ANDROID_LOG_DEBUG; break;
+  }
+  __android_log_vprint(android_priority, "Zelda3", fmt, args);
+#else
   // Select prefix and color based on level
   const char *prefix = "";
   const char *color = "";
@@ -98,6 +112,7 @@ void LogPrintV(LogLevel level, const char *file, int line, const char *fmt, va_l
   if (fmt && fmt[0] && fmt[strlen(fmt) - 1] != '\n') {
     fprintf(stderr, "\n");
   }
+#endif
 }
 
 void LogPrint(LogLevel level, const char *file, int line, const char *fmt, ...) {

@@ -13,6 +13,7 @@
 // Restool modules
 #include "types.h"
 #include "restool_util.h"
+#include "restool_lib.h"
 #include "graphics.h"
 #include "asset_compiler.h"
 #include "overworld.h"
@@ -30,7 +31,11 @@
 #include "sha256.h"
 #include "lodepng.h"
 
+// Only define STB_IMAGE_IMPLEMENTATION for standalone restool build
+// When building as part of Android app, glsl_shader.c already provides the implementation
+#ifndef RESTOOL_NO_MAIN
 #define STB_IMAGE_IMPLEMENTATION
+#endif
 #include "stb_image.h"
 
 #define RESTOOL_VERSION "0.1.0"
@@ -348,6 +353,34 @@ void ExtractTilemaps(Rom *rom, AssetBuilder *builder) {
 
   printf("    Added 6 tilemaps\n");
   fflush(stdout);
+}
+
+// Extract misc dungeon ROM assets (5 assets)
+void ExtractMiscDungeonRomAssets(Rom *rom, AssetBuilder *builder) {
+  uint16_t *words = (uint16_t*)Rom_ReadPtr(rom, 0x8e9000, 21 * 2);
+  if (words) AssetBuilder_AddAsset(builder, "kDungAttrsForTile_Offs", ASSET_TYPE_UINT16, (const uint8_t*)words, 21*2);
+  AssetBuilder_AddAsset(builder, "kDungAttrsForTile", ASSET_TYPE_UINT8,
+                       Rom_ReadPtr(rom, 0x8e902a, 1024), 1024);
+  words = (uint16_t*)Rom_ReadPtr(rom, 0x84f1de, 198 * 2);
+  if (words) AssetBuilder_AddAsset(builder, "kMovableBlockDataInit", ASSET_TYPE_UINT16, (const uint8_t*)words, 198*2);
+  words = (uint16_t*)Rom_ReadPtr(rom, 0x84F36A, 144 * 2);
+  if (words) AssetBuilder_AddAsset(builder, "kTorchDataInit", ASSET_TYPE_UINT16, (const uint8_t*)words, 144*2);
+  words = (uint16_t*)Rom_ReadPtr(rom, 0x84F48a, 48 * 2);
+  if (words) AssetBuilder_AddAsset(builder, "kTorchDataJunk", ASSET_TYPE_UINT16, (const uint8_t*)words, 48*2);
+}
+
+// Extract kEnemyDamageData (1 decompressed asset)
+void ExtractEnemyDamageData(Rom *rom, AssetBuilder *builder) {
+  printf("  Extracting kEnemyDamageData (decompressed)...\n");
+  fflush(stdout);
+  DecompressedData *enemy_dmg = Snes_Decompress(rom, 0x83e800, true);
+  if (enemy_dmg) {
+    size_t enemy_dmg_size = enemy_dmg->size;
+    AssetBuilder_AddAsset(builder, "kEnemyDamageData", ASSET_TYPE_UINT8,
+                          enemy_dmg->data, enemy_dmg->size);
+    Snes_FreeDecompressed(enemy_dmg);
+    printf("    Added kEnemyDamageData (%zu bytes)\n", enemy_dmg_size);
+  }
 }
 
 // Extract misc assets - simple ROM reads (28 assets from print_misc)
@@ -1361,10 +1394,14 @@ static uint8_t *PackArrays(uint8_t **arrays, size_t *array_lens, size_t count, s
 }
 
 // Helper: Get dialogue filename for a language
+// Uses dialogue_dir override if set, otherwise defaults to "assets/"
 static char* GetDialogueFilename(const char *lang) {
-  char *filename = malloc(64);
+  char *filename = malloc(512);  // Larger buffer for full paths
+  const char *dir = Restool_GetDialogueDir();
+  if (!dir) dir = "assets";
+
   if (strcmp(lang, "us") == 0) {
-    snprintf(filename, 64, "assets/dialogue.txt");
+    snprintf(filename, 512, "%s/dialogue.txt", dir);
   } else {
     // Replace '-' with '_' in language code for filename
     char lang_clean[16];
@@ -1373,7 +1410,7 @@ static char* GetDialogueFilename(const char *lang) {
     for (char *p = lang_clean; *p; p++) {
       if (*p == '-') *p = '_';
     }
-    snprintf(filename, 64, "assets/dialogue_%s.txt", lang_clean);
+    snprintf(filename, 512, "%s/dialogue_%s.txt", dir, lang_clean);
   }
   return filename;
 }
@@ -1497,7 +1534,8 @@ static uint8_t *ProcessLanguageDialogue(const char *lang, const LanguageConfig *
 
 // Extract all dialogue assets with multi-language support
 // languages_arg: comma-separated list like "de,fr,es" (US is always included first)
-void ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
+// Returns true on success, false on error
+bool ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
   // Parse languages - always start with "us"
   const char *lang_list[16];
   size_t lang_count = 1;
@@ -1524,7 +1562,7 @@ void ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
         if (!config) {
           LogError("Unknown language code: %s", token);
           free(languages_copy);
-          return;
+          return false;
         }
 
         // Check dialogue file exists
@@ -1535,7 +1573,7 @@ void ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
           LogError("Dialogue file not found: %s (extract with --extract-dialogue first)", dialogue_filename);
           free(dialogue_filename);
           free(languages_copy);
-          return;
+          return false;
         }
         free(test_data);
         free(dialogue_filename);
@@ -1582,7 +1620,7 @@ void ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
       free(all_fonts); free(all_font_lens);
       free(all_maps); free(all_map_lens);
       if (languages_copy) free(languages_copy);
-      return;
+      return false;
     }
 
     // 2. Extract font
@@ -1597,7 +1635,7 @@ void ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
       free(all_fonts); free(all_font_lens);
       free(all_maps); free(all_map_lens);
       if (languages_copy) free(languages_copy);
-      return;
+      return false;
     }
 
     // Pack font (inner: font_data + font_width)
@@ -1615,7 +1653,7 @@ void ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
       free(all_fonts); free(all_font_lens);
       free(all_maps); free(all_map_lens);
       if (languages_copy) free(languages_copy);
-      return;
+      return false;
     }
 
     // 3. Create map entry (lang_code + flags)
@@ -1645,7 +1683,7 @@ void ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
       free(all_fonts); free(all_font_lens);
       free(all_maps); free(all_map_lens);
       if (languages_copy) free(languages_copy);
-      return;
+      return false;
     }
   }
 
@@ -1675,7 +1713,7 @@ void ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
     free(kDialogue);
     free(kDialogueFont);
     free(kDialogueMap);
-    return;
+    return false;
   }
 
   // Add assets
@@ -1692,6 +1730,7 @@ void ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
   free(kDialogueMap);
 
   printf("  Dialogue complete: 3 assets (%zu language%s)\n", lang_count, lang_count > 1 ? "s" : "");
+  return true;
 }
 
 static void TestLinkGraphics(void) {
@@ -3279,6 +3318,92 @@ static void Overworld_ProcessSpriteStage(Rom *rom, uint8_t *map_is_small,
 }
 
 // ============================================================================
+// Overworld Compressed Data Extraction
+// ============================================================================
+
+// Extract kOverworld_Hibytes_Comp and kOverworld_Lobytes_Comp (2 packed assets)
+void ExtractOverworldCompressed(Rom *rom, AssetBuilder *builder) {
+  printf("  Extracting kOverworld compressed data (160 areas each)...\n");
+
+  // Extract hibytes (compressed tile data high bytes)
+  uint8_t **hibytes = malloc(160 * sizeof(uint8_t*));
+  uint32_t *hi_sizes = malloc(160 * sizeof(uint32_t));
+  if (!hibytes || !hi_sizes) {
+    LogError("Failed to allocate overworld hibytes arrays");
+    free(hibytes);
+    free(hi_sizes);
+    return;
+  }
+  memset(hibytes, 0, 160 * sizeof(uint8_t*));
+  for (int i = 0; i < 160; i++) {
+    uint32_t addr = Rom_ReadAddr(rom, 0x82F94D + i * 3);
+    DecompressedData *decomp = Snes_Decompress(rom, addr, true);
+    if (decomp) {
+      hi_sizes[i] = decomp->compressed_size;
+      hibytes[i] = malloc(hi_sizes[i]);
+      if (hibytes[i]) {
+        memcpy(hibytes[i], Rom_ReadPtr(rom, addr, hi_sizes[i]), hi_sizes[i]);
+      } else {
+        hi_sizes[i] = 0;
+      }
+      Snes_FreeDecompressed(decomp);
+    } else {
+      hibytes[i] = NULL;
+      hi_sizes[i] = 0;
+    }
+  }
+  uint32_t hi_packed_size = 0;
+  uint8_t *hi_packed = AssetBuilder_PackArrays(hibytes, hi_sizes, 160, &hi_packed_size);
+  if (hi_packed) {
+    AssetBuilder_AddAsset(builder, "kOverworld_Hibytes_Comp", ASSET_TYPE_PACKED, hi_packed, hi_packed_size);
+    free(hi_packed);
+  }
+  for (int i = 0; i < 160; i++) free(hibytes[i]);
+  free(hibytes);
+  free(hi_sizes);
+
+  // Extract lobytes (compressed tile data low bytes)
+  uint8_t **lobytes = malloc(160 * sizeof(uint8_t*));
+  uint32_t *lo_sizes = malloc(160 * sizeof(uint32_t));
+  if (!lobytes || !lo_sizes) {
+    LogError("Failed to allocate overworld lobytes arrays");
+    free(lobytes);
+    free(lo_sizes);
+    return;
+  }
+  memset(lobytes, 0, 160 * sizeof(uint8_t*));
+  for (int i = 0; i < 160; i++) {
+    uint32_t addr = Rom_ReadAddr(rom, 0x82FB2D + i * 3);
+    DecompressedData *decomp = Snes_Decompress(rom, addr, true);
+    if (decomp) {
+      lo_sizes[i] = decomp->compressed_size;
+      lobytes[i] = malloc(lo_sizes[i]);
+      if (lobytes[i]) {
+        memcpy(lobytes[i], Rom_ReadPtr(rom, addr, lo_sizes[i]), lo_sizes[i]);
+      } else {
+        lo_sizes[i] = 0;
+      }
+      Snes_FreeDecompressed(decomp);
+    } else {
+      lobytes[i] = NULL;
+      lo_sizes[i] = 0;
+    }
+  }
+  uint32_t lo_packed_size = 0;
+  uint8_t *lo_packed = AssetBuilder_PackArrays(lobytes, lo_sizes, 160, &lo_packed_size);
+  if (lo_packed) {
+    AssetBuilder_AddAsset(builder, "kOverworld_Lobytes_Comp", ASSET_TYPE_PACKED, lo_packed, lo_packed_size);
+    free(lo_packed);
+  }
+  for (int i = 0; i < 160; i++) free(lobytes[i]);
+  free(lobytes);
+  free(lo_sizes);
+
+  printf("    Added kOverworld_Hibytes_Comp (%u bytes) and Lobytes_Comp (%u bytes)\n",
+         hi_packed_size, lo_packed_size);
+}
+
+// ============================================================================
 // Overworld YAML Extraction
 // ============================================================================
 
@@ -4185,10 +4310,10 @@ bool ExtractSoundBanks(AssetBuilder *builder) {
 // Returns true on success, false on error
 bool ExtractDialogue(AssetBuilder *builder, const char *languages_arg) {
   // Call pure C implementation (replaces Python script)
-  ExtractDialogueAssets(builder, languages_arg);
-  return true;
+  return ExtractDialogueAssets(builder, languages_arg);
 }
 
+#ifndef RESTOOL_NO_MAIN
 int main(int argc, char **argv) {
   RestoolArgs args;
 
@@ -4436,206 +4561,13 @@ int main(int argc, char **argv) {
   }
 
   if (args.compile_mode) {
-    printf("Compiling assets to zelda3_assets.dat...\n");
-
     // Need ROM to extract data for compilation
     if (!args.rom_path) {
       LogError("Compilation requires ROM file (use --extract-from-rom)");
       return 1;
     }
 
-    Rom *rom = Rom_Load(args.rom_path);
-    if (!rom) {
-      return 1;
-    }
-
-    // Check for US ROM (matching Python's behavior in util.py)
-    // Python only accepts US ROM for --extract-from-rom, other ROMs only work with --extract-dialogue
-    if (rom->language != ROM_LANG_US) {
-      fprintf(stderr, "\nROM with hash %s not supported.\n\n", rom->sha1);
-      fprintf(stderr, "Expected %s.\n", ROM_SHA1_USA);
-      fprintf(stderr, "Please verify your ROM is \"Legend of Zelda, The - A Link to the Past (USA)\"\n");
-      if (rom->language != ROM_LANG_UNKNOWN) {
-        fprintf(stderr, "\nDetected ROM: %s - \"%s\"\n",
-                Rom_GetLanguageCode(rom->language), rom->language_name);
-        fprintf(stderr, "\nNote: Non-US ROMs can only be used with --extract-dialogue for text extraction.\n");
-      }
-      Rom_Free(rom);
-      return 1;
-    }
-    printf("Identified ROM as: %s - \"%s\"\n", Rom_GetLanguageCode(rom->language), rom->language_name);
-
-    // Create asset builder
-    AssetBuilder *builder = AssetBuilder_Create();
-    if (!builder) {
-      LogError("Failed to create asset builder");
-      Rom_Free(rom);
-      return 1;
-    }
-
-    // ========================================================================
-    // EXTRACTION ORDER MATCHES Python's print_all() - DO NOT REORDER!
-    // ========================================================================
-
-    // 1. print_sound_banks() - 3 assets (0-2)
-    if (!ExtractSoundBanks(builder)) {
-      LogError("Failed to extract sound banks");
-      AssetBuilder_Free(builder);
-      Rom_Free(rom);
-      return 1;
-    }
-
-    // 2. print_dungeon_rooms() - Dungeon room data
-    // Python order: room data → headers → simple data → entrances → starting points → default → overlay → secrets → misc ROM
-    ExtractDungeonRoomData(builder);           // 3 assets: kDungeonRoom, kDungeonRoomOffs, kDungeonRoomDoorOffs
-    ExtractDungeonRoomHeaders(builder);        // 2 assets: kDungeonRoomHeaders, kDungeonRoomHeadersOffs
-    ExtractDungeonRoomSimple(builder);         // 3 assets: kDungeonRoomChests, kDungeonRoomTeleMsg, kDungeonPitsHurtPlayer
-    ExtractEntrancesAndStartingPoints(builder); // 35 assets total (17 entrance + 18 starting point)
-    ExtractDefaultOverlayRooms(builder);       // 4 assets: default + overlay rooms
-    ExtractDungeonSecrets(builder);            // 1 asset: kDungeonSecrets
-
-    // Misc dungeon ROM assets (5 assets)
-    uint16_t *words = (uint16_t*)Rom_ReadPtr(rom, 0x8e9000, 21 * 2);
-    if (words) AssetBuilder_AddAsset(builder, "kDungAttrsForTile_Offs", ASSET_TYPE_UINT16, (const uint8_t*)words, 21*2);
-    AssetBuilder_AddAsset(builder, "kDungAttrsForTile", ASSET_TYPE_UINT8,
-                         Rom_ReadPtr(rom, 0x8e902a, 1024), 1024);
-    words = (uint16_t*)Rom_ReadPtr(rom, 0x84f1de, 198 * 2);
-    if (words) AssetBuilder_AddAsset(builder, "kMovableBlockDataInit", ASSET_TYPE_UINT16, (const uint8_t*)words, 198*2);
-    words = (uint16_t*)Rom_ReadPtr(rom, 0x84F36A, 144 * 2);
-    if (words) AssetBuilder_AddAsset(builder, "kTorchDataInit", ASSET_TYPE_UINT16, (const uint8_t*)words, 144*2);
-    words = (uint16_t*)Rom_ReadPtr(rom, 0x84F48a, 48 * 2);
-    if (words) AssetBuilder_AddAsset(builder, "kTorchDataJunk", ASSET_TYPE_UINT16, (const uint8_t*)words, 48*2);
-
-    // 3. print_enemy_damage_data() - 1 asset
-    printf("  Extracting kEnemyDamageData (decompressed)...\n");
-    DecompressedData *enemy_dmg = Snes_Decompress(rom, 0x83e800, true);
-    if (enemy_dmg) {
-      size_t enemy_dmg_size = enemy_dmg->size;
-      AssetBuilder_AddAsset(builder, "kEnemyDamageData", ASSET_TYPE_UINT8,
-                            enemy_dmg->data, enemy_dmg->size);
-      Snes_FreeDecompressed(enemy_dmg);
-      printf("    Added kEnemyDamageData (%zu bytes)\n", enemy_dmg_size);
-    }
-
-    // 4. print_link_graphics() - 1 asset
-    ExtractLinkGraphics(builder);
-
-    // 5. print_dungeon_sprites() - 2 assets
-    ExtractDungeonSprites(builder);
-
-    // 6. print_map32_to_map16() - 4 assets
-    ExtractMap32toMap16(builder);
-
-    // 7. print_images() - Sprite and background graphics
-    ExtractSpriteGraphics(rom, builder, args.sprites_from_png);
-    ExtractBackgroundGraphics(rom, builder);
-
-    // 8. print_misc() - Misc ROM assets (~28 assets)
-    ExtractMiscAssets(rom, builder);
-
-    // 9. print_dialogue() - 3 assets (kDialogue, kDialogueFont, kDialogueMap)
-    // Pass languages arg to support multi-language builds
-    if (!ExtractDialogue(builder, args.languages)) {
-      LogError("Failed to extract dialogue");
-      AssetBuilder_Free(builder);
-      Rom_Free(rom);
-      return 1;
-    }
-
-    // 10. print_dungeon_map() - 2 packed assets
-    ExtractDungeonMap(rom, builder);
-
-    // 11. print_tilemaps() - 6 assets
-    ExtractTilemaps(rom, builder);
-
-    // 12. print_overworld() - Compressed overworld data (2 packed assets)
-    printf("  Extracting kOverworld compressed data (160 areas each)...\n");
-    uint8_t **hibytes = malloc(160 * sizeof(uint8_t*));
-    uint32_t *hi_sizes = malloc(160 * sizeof(uint32_t));
-    if (!hibytes || !hi_sizes) {
-      LogError("Failed to allocate overworld hibytes arrays");
-      free(hibytes);
-      free(hi_sizes);
-      AssetBuilder_Free(builder);
-      Rom_Free(rom);
-      return 1;
-    }
-    memset(hibytes, 0, 160 * sizeof(uint8_t*));  // Initialize to NULL for safe cleanup
-    for (int i = 0; i < 160; i++) {
-      uint32_t addr = Rom_ReadAddr(rom, 0x82F94D + i * 3);
-      DecompressedData *decomp = Snes_Decompress(rom, addr, true);
-      if (decomp) {
-        hi_sizes[i] = decomp->compressed_size;
-        hibytes[i] = malloc(hi_sizes[i]);
-        if (hibytes[i]) {
-          memcpy(hibytes[i], Rom_ReadPtr(rom, addr, hi_sizes[i]), hi_sizes[i]);
-        } else {
-          hi_sizes[i] = 0;
-        }
-        Snes_FreeDecompressed(decomp);
-      } else {
-        hibytes[i] = NULL;
-        hi_sizes[i] = 0;
-      }
-    }
-    uint32_t hi_packed_size;
-    uint8_t *hi_packed = AssetBuilder_PackArrays(hibytes, hi_sizes, 160, &hi_packed_size);
-    if (hi_packed) {
-      AssetBuilder_AddAsset(builder, "kOverworld_Hibytes_Comp", ASSET_TYPE_PACKED, hi_packed, hi_packed_size);
-      free(hi_packed);
-    }
-    for (int i = 0; i < 160; i++) free(hibytes[i]);
-    free(hibytes);
-    free(hi_sizes);
-
-    uint8_t **lobytes = malloc(160 * sizeof(uint8_t*));
-    uint32_t *lo_sizes = malloc(160 * sizeof(uint32_t));
-    if (!lobytes || !lo_sizes) {
-      LogError("Failed to allocate overworld lobytes arrays");
-      free(lobytes);
-      free(lo_sizes);
-      AssetBuilder_Free(builder);
-      Rom_Free(rom);
-      return 1;
-    }
-    memset(lobytes, 0, 160 * sizeof(uint8_t*));  // Initialize to NULL for safe cleanup
-    for (int i = 0; i < 160; i++) {
-      uint32_t addr = Rom_ReadAddr(rom, 0x82FB2D + i * 3);
-      DecompressedData *decomp = Snes_Decompress(rom, addr, true);
-      if (decomp) {
-        lo_sizes[i] = decomp->compressed_size;
-        lobytes[i] = malloc(lo_sizes[i]);
-        if (lobytes[i]) {
-          memcpy(lobytes[i], Rom_ReadPtr(rom, addr, lo_sizes[i]), lo_sizes[i]);
-        } else {
-          lo_sizes[i] = 0;
-        }
-        Snes_FreeDecompressed(decomp);
-      } else {
-        lobytes[i] = NULL;
-        lo_sizes[i] = 0;
-      }
-    }
-    uint32_t lo_packed_size = 0;
-    uint8_t *lo_packed = AssetBuilder_PackArrays(lobytes, lo_sizes, 160, &lo_packed_size);
-    if (lo_packed) {
-      AssetBuilder_AddAsset(builder, "kOverworld_Lobytes_Comp", ASSET_TYPE_PACKED, lo_packed, lo_packed_size);
-      free(lo_packed);
-    }
-    for (int i = 0; i < 160; i++) free(lobytes[i]);
-    free(lobytes);
-    free(lo_sizes);
-    printf("    Added kOverworld_Hibytes_Comp (%u bytes) and Lobytes_Comp (%u bytes)\n",
-           hi_packed_size, lo_packed_size);
-
-    // 13. print_overworld_tables() - Overworld YAML data (48 assets from 160 files)
-    ExtractOverworldYAML(builder, rom);
-
-    // NOTE: ExtractRomBasedAssets removed - all ROM assets are now added inline in correct order
-
-    printf("  Total: %u assets extracted in Python order\n", builder->asset_count);
-
-    // Write to file (use output_dir if specified)
+    // Build output path
     char output_path[512];
     if (args.output_dir && args.output_dir[0]) {
       snprintf(output_path, sizeof(output_path), "%s/zelda3_assets.dat", args.output_dir);
@@ -4643,17 +4575,22 @@ int main(int argc, char **argv) {
       snprintf(output_path, sizeof(output_path), "zelda3_assets.dat");
     }
 
-    if (!AssetBuilder_WriteToFile(builder, output_path)) {
-      LogError("Failed to write assets file");
-      AssetBuilder_Free(builder);
-      Rom_Free(rom);
+    // Use the library function for compilation
+    RestoolCompileOptions options = {
+      .us_rom_path = args.rom_path,
+      .output_path = output_path,
+      .languages = args.languages,
+      .dialogue_dir = NULL,
+      .sprites_from_png = args.sprites_from_png
+    };
+
+    int result = Restool_CompileAssetsEx(&options);
+    if (result != RESTOOL_OK) {
+      // Library function already logged the error
       return 1;
     }
-
-    printf("Successfully compiled assets to %s\n", output_path);
-    AssetBuilder_Free(builder);
-    Rom_Free(rom);
   }
 
   return 0;
 }
+#endif // RESTOOL_NO_MAIN
