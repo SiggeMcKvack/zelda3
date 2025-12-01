@@ -2,7 +2,40 @@
 
 Notable changes, improvements, and additions to the Zelda3 project.
 
-## Recent Updates (November 2025)
+## December 2025
+
+### Android Refactoring - Generic Utilities
+
+**JNI Helper Library (C):**
+- `src/platform/android/jni_helpers.h/c` - Generic JNI method callers, JSON builder, shared button name table
+- Reduces ~300 lines of duplicated JNI boilerplate in `android_jni.c`
+
+**Kotlin Utilities:**
+- `util/ConfigManager.kt` - Generic INI read/write operations
+- `util/UiExtensions.kt` - Toast/Dialog extension functions
+- `util/FileUtils.kt` - File copy operations (URI, asset, SAF)
+- Reduces ~400 lines across MainActivity, LauncherActivity, RomSelectionActivity
+
+**Platform Save File API:**
+- Added `Platform_OpenSaveFile()`, `Platform_ReadSaveFile()`, `Platform_WriteSaveFile()`, `Platform_CloseSaveFile()`
+- Desktop: Uses `saves/` directory with FILE*
+- Android: Uses SAF (Storage Access Framework) via JNI with fd→FILE* wrapper
+- Unified API removes `#ifdef PLATFORM_ANDROID` branches from `zelda_rtl.c`
+
+**Files Added:**
+- `src/platform/android/jni_helpers.h` (~80 lines)
+- `src/platform/android/jni_helpers.c` (~250 lines)
+- `android/.../util/ConfigManager.kt` (~80 lines)
+- `android/.../util/UiExtensions.kt` (~60 lines)
+- `android/.../util/FileUtils.kt` (~50 lines)
+
+**Files Modified:**
+- `src/platform.h` - Save file API declarations
+- `src/platform.c` - Desktop save file implementation
+- `src/platform/android/android_jni.c` - Android save file implementation (-326 lines)
+- `src/zelda_rtl.c` - Unified save operations (-22 lines)
+
+## November 2025
 
 ### PNG Sprite Loading (--sprites-from-png)
 

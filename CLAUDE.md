@@ -1,443 +1,144 @@
 # CLAUDE.md
 
-This file provides AI-specific guidance for Claude Code when working with this repository.
-
-**Note:** For personal AI development notes, use `CLAUDE.local.md` (git-ignored).
-
-## Table of Contents
-
-- [Project Overview](#project-overview)
-- [Quick Start for Development](#quick-start-for-development)
-- [Critical Architecture Concepts](#critical-architecture-concepts)
-- [Module Organization](#module-organization)
-- [Development Patterns](#development-patterns)
-- [File Locations](#file-locations)
-- [Common Tasks](#common-tasks)
-- [Important Notes](#important-notes)
-- [Recent Changes](#recent-changes)
-- [Getting Help](#getting-help)
+Project-specific instructions for Claude Code. For personal notes, use `CLAUDE.local.md` (git-ignored).
 
 ## Project Overview
 
-Zelda3 is a reverse-engineered C reimplementation of The Legend of Zelda: A Link to the Past. ~70-80kLOC of C code reimplementing all game logic, using SDL2 for rendering/input and SNES hardware emulation (PPU/DSP).
+Zelda3: Reverse-engineered C reimplementation of The Legend of Zelda: A Link to the Past (~70-80kLOC).
 
-**Key Characteristics:**
 - Original behavior preserved for replay compatibility
-- Can verify against original ROM frame-by-frame
-- Enhanced features optional and off by default
-- Variable names from community disassembly efforts
+- SDL2 for rendering/input, SNES PPU/DSP emulation
+- Enhanced features optional, disabled by default
+- Variable names from community disassembly
 
-**Documentation:**
-- **[docs/installation.md](docs/installation.md)** - Build instructions, dependencies
-- **[docs/architecture.md](docs/architecture.md)** - Code architecture, modules, patterns
-- **[docs/development.md](docs/development.md)** - Development workflow and patterns
-- **[docs/debugging.md](docs/debugging.md)** - Debug console and troubleshooting
-- **[docs/platforms/](docs/platforms/)** - Platform-specific guides (Windows, Linux, macOS, Android, Switch)
-- **[docs/technical/](docs/technical/)** - Deep dives (memory layout, graphics, audio, renderers)
-- **[CHANGELOG.md](CHANGELOG.md)** - Recent changes and version history
+**Key docs:** [docs/architecture.md](docs/architecture.md), [docs/installation.md](docs/installation.md), [CHANGELOG.md](CHANGELOG.md)
 
-## Quick Start for Development
+## Quick Start
 
-### Building
 ```bash
-# Build with CMake (includes C restool)
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Debug
-cmake --build . -j$(nproc)
+# Build
+mkdir build && cd build && cmake .. && cmake --build . -j$(nproc)
 
-# Extract assets using C restool (recommended - faster, no Python required)
+# Extract assets (required before running)
 ./src/restool/zelda3_restool --extract-from-rom ../zelda3.sfc --compile
 
-# Alternative: Python restool
-python3 assets/restool.py --extract-from-rom
+# Android
+cd android && ./gradlew assembleDebug
 ```
 
-See [docs/installation.md](docs/installation.md) for full details and platform-specific guides in [docs/platforms/](docs/platforms/).
+## Critical Concepts
 
-### Asset File
-`zelda3_assets.dat` must exist before running the game. Extract from ROM using C restool (recommended) or Python restool. File must be co-located with executable when running.
-
-## Critical Architecture Concepts
-
-### Memory Layout - RAM Macros
-All game state accessed via macros in `src/variables.h`:
+### RAM Macros (variables.h)
+All game state via macros - never access g_ram directly:
 ```c
 #define link_x_coord (*(uint16*)(g_ram+0x22))
-#define link_y_coord (*(uint16*)(g_ram+0x20))
-#define frame_counter (*(uint8*)(g_ram+0x1A))
-
-// Usage
-link_x_coord = 100;        // Sets *(uint16*)(g_ram+0x22) = 100
-uint16 x = link_x_coord;   // Reads from RAM
+link_x_coord = 100;  // Correct
 ```
 
-**Memory regions:**
-- `g_ram` - Main game RAM
-- `g_zenv.vram` - Video RAM
-- `g_zenv.sram` - Save data
+Memory regions: `g_ram` (game), `g_zenv.vram` (video), `g_zenv.sram` (save)
 
-### Feature Flags
-Enhanced features use special RAM locations (`src/features.h`):
+### Feature Flags (features.h)
 ```c
-if (enhanced_features0 & kFeatures0_SwitchLR) {
-  // Feature enabled
-}
+if (enhanced_features0 & kFeatures0_SwitchLR) { /* enabled */ }
 ```
+Flags at unused RAM 0x648+. Must be toggleable via zelda3.ini.
 
-Flags stored at unused RAM offsets (0x648+). Must be toggleable via `zelda3.ini`.
+## Module Map
 
-## Module Organization
+**Game Logic:** `player.c`, `sprite_main.c` (808KB), `ancilla.c`, `dungeon.c`, `overworld.c`
 
-**Game Logic:**
-- `src/player.c` - Link's movement/actions (211KB)
-- `src/sprite_main.c` - All enemy AI (808KB - largest file)
-- `src/ancilla.c` - Projectiles, effects (238KB)
-- `src/dungeon.c` - Dungeon rooms, puzzles (296KB)
-- `src/overworld.c` - Overworld map (135KB)
+**Graphics:** `snes/ppu.c`, `opengl.c`, `vulkan.c`, `glsl_shader.c`
 
-**Graphics:**
-- `snes/ppu.c` - SNES PPU emulation
-- `src/opengl.c` - OpenGL/OpenGL ES renderer
-- `src/vulkan.c` - Vulkan 1.0 renderer (cross-platform)
-- `src/glsl_shader.c` - OpenGL shader support
+**Platform:** `platform.h/c` (file I/O, save files), `config.c`, `logging.h/c`, `platform_detect.h`
 
-**Platform:**
-- `src/platform.h/c` - File I/O and save file abstraction
-- `src/config.c` - INI parsing, gamepad binding
-- `src/logging.h/c` - Logging system with platform detection
-- `src/platform_detect.h` - Platform/compiler/architecture detection
+**Android:** `android/app/jni/`, `src/platform/android/` (jni_helpers, android_jni), `android/.../util/` (Kotlin utils)
 
-**Android Integration:**
-- `android/` - Complete Gradle-based Android app
-- `android/app/jni/` - JNI glue code and SDL integration
-- `src/platform/android/jni_helpers.h/c` - Generic JNI method callers, JSON builder
-- `src/platform/android/android_jni.h/c` - Android-specific APIs and Platform implementations
-- `android/app/src/.../util/` - Kotlin utilities (ConfigManager, FileUtils, UiExtensions)
-- Main entry point: `SDL_main` (macro defined by SDL)
-- Asset loading: SDL external storage path
-- Save files: SAF (Storage Access Framework) via JNI
-- Renderer: OpenGL ES or Vulkan 1.0
+**Launcher:** `src/launcher/` (GTK3 UI, config reader/writer)
 
-**Launcher UI:**
-- `src/launcher/launcher_main.c` - Entry point, GTK init, config loading
-- `src/launcher/launcher_ui.c` - 6-tab UI (General, Graphics, Sound, Features, Keyboard, Gamepad)
-- `src/launcher/launcher_gamepad.c` - SDL2 gamepad detection and binding
-- `src/launcher/config_reader.c` - INI file parsing
-- `src/launcher/config_writer.c` - INI file generation
-- `src/launcher/dat_reader.c` - Asset file reading for language detection
+**Restool:** `src/restool/` (C asset extraction, library API)
 
-**Asset Tools (C Restool):**
-- `src/restool/main.c` - CLI entry point
-- `src/restool/restool_lib.c` - Library API for embedding (Android, etc.)
-- `src/restool/restool_lib.h` - Library API header (`Restool_CompileAssets`, etc.)
-- `src/restool/asset_compiler.c` - Binary asset compilation
-- `src/restool/text.c` - Dialogue extraction (11 languages)
-- `src/restool/graphics.c` - Sprite/tileset extraction
-- `src/restool/sprite_loader.c` - PNG sprite sheet loading (--sprites-from-png)
-- `src/restool/music_compiler.c` - SPC music compilation
-
-See [docs/architecture.md](docs/architecture.md) for complete breakdown and [docs/technical/](docs/technical/) for deep dives.
+See [docs/architecture.md](docs/architecture.md) for details.
 
 ## Development Patterns
 
 ### Adding Features
-1. Define flag in `src/features.h` with power-of-2 value
-2. Store in unused RAM (next available offset from 0x648+)
-3. Add INI option in `zelda3.ini` template
-4. Implement feature gated by flag check
-5. Ensure disabled by default (compatibility)
+1. Define flag in `features.h` (power-of-2)
+2. Store at unused RAM offset (0x648+)
+3. Add INI option in zelda3.ini
+4. Gate implementation with flag check
+5. Disabled by default
 
-### Accessing State
-Use macro accessors from `variables.h` - don't access `g_ram` directly:
+### Platform Code
+Use `platform_detect.h` macros:
 ```c
-// Correct
-link_x_coord = new_x;
-
-// Wrong
-*(uint16*)(g_ram+0x22) = new_x;
-```
-
-### Coordinate System
-- Positions: 16-bit fixed point
-- Subpixel precision: Separate variables (`link_subpixel_x`)
-- Widescreen offset: `kPpuExtraLeftRight` from `types.h`
-
-### Android Development
-When adding Android-specific code:
-1. **Early initialization order matters:**
-   - Create audio mutex BEFORE SDL_Init (prevents race conditions)
-   - Call SDL_Init BEFORE LoadAssets (ensures subsystems are ready)
-   - Use `SDL_AndroidGetExternalStoragePath()` and chdir before loading assets
-
-2. **Logging during initialization:**
-   - Use `__android_log_print()` for logs before `InitializeLogging()` is called
-   - Regular logging automatically disables ANSI colors on Android
-   - Tag convention: "Zelda3Main", "Zelda3Platform", etc.
-
-3. **Renderer setup:**
-   - Vulkan 1.0 and OpenGL ES both supported on Android
-   - Show Toast notifications to user for important fallbacks
-   - Update zelda3.ini to persist renderer changes
-   - Android requires SDL_WINDOW_OPENGL flag for SDL_Renderer and OpenGL ES (but NOT for Vulkan)
-
-4. **Thread safety:**
-   - Audio mutex must exist before SDL audio threads start
-   - Use ZeldaApuLock/ZeldaApuUnlock for audio state access
-   - Check mutex exists before locking (`if (g_audio_mutex) SDL_LockMutex(...)`)
-
-5. **File I/O:**
-   - All file access goes through Platform_* API
-   - Android logging in Platform_ReadWholeFile for debugging asset issues
-   - Working directory is SDL external storage path
-
-### Platform-Specific Code
-Use semantic macros from `src/platform_detect.h`:
-```c
-#include "platform_detect.h"
-
 #ifdef PLATFORM_ANDROID
-  // Android code
-  #include <android/log.h>
-  __android_log_print(ANDROID_LOG_DEBUG, "Zelda3", "Message");
 #elif defined(PLATFORM_WINDOWS)
-  // Windows code
 #elif defined(PLATFORM_MACOS)
-  // macOS code
-#elif defined(PLATFORM_SWITCH)
-  // Switch code
 #elif defined(PLATFORM_LINUX)
-  // Linux code
 #endif
-
-// Also available: COMPILER_MSVC, COMPILER_GCC, COMPILER_CLANG
-//                 ARCH_X64, ARCH_ARM64, etc.
 ```
+Platform files go in `src/platform/<name>/`
 
-Platform-specific files go in `src/platform/<name>/`
-
-**Android-specific patterns:**
-- Use `SDL_AndroidGetExternalStoragePath()` for asset directory
-- Disable ANSI colors in logging (logcat doesn't support them)
-- Early SDL_Init before asset loading to prevent race conditions
-- Create audio mutex before SDL_Init to avoid threading issues
-- Main function must be named `SDL_main` (SDL.h handles macro)
-- Use `__android_log_print()` for critical early initialization logs
+### Android Specifics
+- Init order: audio mutex → SDL_Init → LoadAssets
+- Use `__android_log_print()` before logging system ready
+- File I/O via Platform_* API
+- Save files via SAF (Storage Access Framework)
+- Entry point: `SDL_main`
 
 ## File Locations
 
-**When modifying:**
-- Build system: `CMakeLists.txt`
-- Dependencies: Check CMake auto-detection (SDL2, OpenGL, Vulkan)
-- Config options: `src/config.c`, `src/config.h`
-- Feature flags: `src/features.h`
-- Type definitions: `src/types.h`
-- Platform detection: `src/platform_detect.h`
-- Math utilities: `src/math_util.h`
-- Dynamic arrays: `src/dynamic_array.h`
-- Constants: Typically in module header files
+**Modify:**
+- Build: `CMakeLists.txt`
+- Config: `config.c/h`, `features.h`
+- Types: `types.h`, `variables.h`
+- Platform: `platform_detect.h`, `platform.h/c`
 
-**When adding files:**
+**Add files:**
 - Game logic: `src/`
-- Launcher UI: `src/launcher/`
-- Asset tools: `src/restool/`
-- SNES emulation: `snes/`
-- Platform code: `src/platform/<name>/`
-- Android code: `android/app/jni/` or `android/app/src/`
-- Documentation: `docs/` (see [docs/contributing.md](docs/contributing.md) for structure)
-- Logging: Use `src/logging.h` for errors/warnings
-- File I/O: Use `Platform_ReadWholeFile()` from `src/platform.h`
-- Path validation: Use `Platform_FindFileWithCaseInsensitivity()` from `src/platform.h` for case-sensitive filesystem support
-- Memory: Use `DYNARR_*` macros from `src/dynamic_array.h` for growable arrays
-- Desktop: CMake auto-detects `.c` files via `file(GLOB ...)`
-- Android: Update `android/app/build.gradle` for new JNI sources
+- Platform: `src/platform/<name>/`
+- Android: `android/app/jni/` or `android/app/src/`
+- SNES emu: `snes/`
+- Docs: `docs/`
 
-**Excluded from git (`.gitignore`):**
-- Build artifacts: `build/`, `android/build/`, `android/.gradle/`
-- IDE files: `android/.idea/`, `.vscode/`, `.vs/`
-- Local configs: `android/local.properties`, `CLAUDE.local.md`
-- Planning docs: `ANDROID_MIGRATION_PLAN.md` (internal development notes)
+**APIs:**
+- Logging: `LogError/Warn/Info/Debug()` from `logging.h`
+- File I/O: `Platform_ReadWholeFile()`, `Platform_OpenSaveFile()`
+- Arrays: `DYNARR_*` from `dynamic_array.h`
 
-**Logging:**
-- Use `LogError()`, `LogWarn()`, `LogInfo()`, `LogDebug()` from `logging.h`
-- Simple stderr-based with ANSI colors (TTY auto-detected)
-- Control via `ZELDA3_LOG_LEVEL` environment variable
-- No modules, no file I/O - follows YAGNI/KISS principles
-- Portable: stderr works on all platforms (Android, Switch, desktop)
-- Android: ANSI colors automatically disabled (logcat doesn't support)
-- Early initialization logging: Use `__android_log_print()` on Android before logging system is ready
+## Build Commands
 
-**Renderer abstraction:**
-- `src/util.h` - RendererFuncs interface with Init/Destroy/BeginDraw/EndDraw/OnResize callbacks
-- Implementations: SDL software, OpenGL, OpenGL ES, Vulkan 1.0
-- OnResize callback: Handle window resize events (SDL_WINDOWEVENT_SIZE_CHANGED)
-- Vulkan renderer requires VK_KHR_portability_enumeration and VK_KHR_portability_subset on MoltenVK (macOS)
-- Android uses OpenGL ES by default (Vulkan optional)
-
-## Common Tasks
-
-### Building
-
-**Desktop (CMake):**
+**Desktop:**
 ```bash
-# Standard build
-mkdir build && cd build && cmake .. && cmake --build . -j$(nproc)
-
-# Debug build
+cmake --build build -j$(nproc)
 cmake .. -DCMAKE_BUILD_TYPE=Debug
-
-# Specific compiler
-cmake .. -DCMAKE_C_COMPILER=clang
 ```
 
-**Android (Gradle):**
+**Android:**
 ```bash
-# From android/ directory
-./gradlew assembleDebug        # Build debug APK
-./gradlew assembleRelease      # Build release APK
-./gradlew installDebug         # Install debug APK to device
-adb logcat | grep Zelda3       # View Android logs
+./gradlew assembleDebug
+./gradlew installDebug
+adb logcat | grep Zelda3
 ```
 
-**Prerequisites:**
-- Assets must be in SDL external storage path on Android
-- Use `SDL_AndroidGetExternalStoragePath()` to locate assets
-- Desktop: `zelda3_assets.dat` in same directory as executable
+## Code Style
 
-### Debugging
-- Use `kDebugFlag` for debug-only code (types.h)
-- Frame counter: `frame_counter` macro (variables.h)
-- Snapshot system: F1-F10 save/load, Ctrl+F1-F10 replay
-- Debug console: See [docs/debugging.md](docs/debugging.md) for details
-
-### Testing Changes
-- Must have `zelda3_assets.dat` extracted
-- Test with original behavior first
-- Check replay compatibility if modifying game logic
-- Use verification mode to compare with ROM
-
-## Important Notes
-
-**Code Style:**
-- Reverse-engineered, variable names from disassembly
-- Follows original SNES code structure
 - Function names: `Module_FunctionName()` or camelCase
-- Globals: `g_prefix` (e.g., `g_ram`, `g_r12`)
+- Globals: `g_prefix` (g_ram, g_r12)
 - Constants: `kConstantName`
-- RAM macros: Prefix with `g_` if they might conflict with platform symbols (e.g., Windows register names R10-R20)
+- Follows original SNES code structure
 
-**Compatibility:**
-- Original behavior must be preserved
-- Enhanced features must be optional
-- Replay files must remain compatible
-- Default config matches original game
+## Constraints
 
-**Performance:**
+- Original behavior preserved
+- Enhanced features optional
+- Replay compatibility required
 - No dynamic allocation in game loop (60 FPS)
 - Hot paths: `ZeldaRunFrame()`, PPU rendering
-- Use lookup tables over calculations
-- Inline performance-critical functions
 
-**Build System:**
-- **Desktop:** CMake (Makefile removed)
-- **Android:** Gradle with JNI integration (`android/` directory)
-- Auto-detects dependencies (SDL2, Opus, OpenGL, Vulkan)
-- Uses system libraries (no vendored dependencies)
-- Out-of-source builds (build/ directory for desktop)
-- See [docs/installation.md](docs/installation.md) and [docs/platforms/](docs/platforms/) for details
-- Android build: `./gradlew assembleDebug` from `android/` directory
+## Help
 
-**Case-Sensitive Filesystems (Linux):**
-- MSU audio and shader paths must match exact capitalization
-- Config validation at startup warns about case mismatches
-- Use `Platform_FindFileWithCaseInsensitivity()` to check paths
-- Error messages guide users to correct capitalization
-
-## Recent Changes
-
-**Android refactoring - Generic utilities (December 2025):**
-- **JNI Helper Library (C):** `jni_helpers.h/c` provides generic JNI method callers, JSON builder, shared button name table
-- **Kotlin Utilities:** `util/ConfigManager.kt` for INI read/write, `util/UiExtensions.kt` for Toast/Dialog, `util/FileUtils.kt` for file copy operations
-- **Platform Save File API:** Unified `Platform_OpenSaveFile()`, `Platform_ReadSaveFile()`, etc. abstracts Android SAF vs desktop filesystem
-- **Code reduction:** Removed `#ifdef PLATFORM_ANDROID` branches from `zelda_rtl.c` save operations
-- **Refactored files:** `android_jni.c` (-326 lines), `MainActivity.kt`, `LauncherActivity.kt`, `RomSelectionActivity.kt`
-
-**C Restool completion (November 2025):**
-- **Full C reimplementation:** Asset extraction tool rewritten in C for speed and portability
-- **Library API:** `restool_lib.h` provides `Restool_CompileAssets()`, `Restool_ExtractDialogue()`, `Restool_IdentifyRom()` for embedding (Android, etc.)
-- **Multi-language support:** 11 ROM versions supported (US, DE, FR, FR-C, EN, ES, PL, PT, NL, SV, Redux)
-- **PNG sprite loading:** `--sprites-from-png` flag loads sprites from PNG files instead of ROM (for ROM hacking)
-- **Embedded assets:** Standalone binary with embedded YAML/asset data
-- **Launcher integration:** General tab allows asset creation from ROM directly
-- **Documentation:** See [docs/RESTOOL_C.md](docs/RESTOOL_C.md) for CLI usage and library API
-
-**Launcher enhancements (November 2025):**
-- **General tab:** Asset file management, language selection, ROM extraction
-- **Path browsers:** File/folder selection for MSU audio and shader paths
-- **Gamepad UI:** Complete 4-subtab gamepad configuration interface
-- **Clear buttons:** All keyboard/gamepad bindings can be cleared
-
-**Default configuration updates (November 2025):**
-- **Aspect ratio:** Changed default from 4:3 to `extend_y, 16:9` for widescreen experience
-- **Gamepad quick save/load:** Added L2+R3 (quick save slot 1) and L2+L3 (quick load slot 1) as default bindings
-- **Documentation:** Updated README, usage guide, and getting-started with gamepad defaults
-
-**Vulkan renderer integration (November 2025):**
-- **Cross-platform Vulkan 1.0:** Ported from zelda3-android, works on desktop and mobile
-- **MoltenVK support:** Auto-detects and enables VK_KHR_portability_enumeration/subset on macOS
-- **Shader loading:** Cross-platform (filesystem on desktop, APK assets on Android via JNI)
-- **Surface creation:** SDL_Vulkan_CreateSurface for cross-platform compatibility
-- **Shaders:** Pre-compiled SPIR-V shaders (vert.spv, frag.spv) with GLSL source
-- **Configuration:** Added Vulkan to zelda3.ini OutputMethod options
-
-**Android platform integration (November 2025):**
-- **Android build system:** Complete Gradle-based Android app with JNI integration
-- **Platform detection:** Enhanced logging with Android-specific path handling
-- **SDL initialization:** Early SDL_Init before LoadAssets to prevent race conditions
-- **Audio mutex timing:** Create audio mutex before SDL_Init to avoid threading issues
-- **Working directory:** Automatic chdir to SDL external storage path on Android
-- **Renderer architecture:** Added OnResize callback to RendererFuncs interface
-- **OpenGL ES:** Android defaults to OpenGL ES renderer with Vulkan as optional
-- **Window events:** Handle SDL_WINDOWEVENT_SIZE_CHANGED for dynamic resizing
-- **Debug logging:** Android logcat integration via `__android_log_print()`
-- **File I/O:** Enhanced Platform_ReadWholeFile with Android-specific error logging
-- **Config updates:** Extended aspect ratio now defaults to `extend_y, 16:10` for mobile
-- **isatty() handling:** Disable ANSI colors on Android (logcat doesn't support)
-
-**Build system and Windows compatibility (November 2025):**
-- **Opus migration:** Switched from vendored Opus 1.3.1 to system library (-924KB)
-- **CMake modules:** Added FindOpus.cmake for pkg-config-based detection
-- **Windows fix:** Renamed R10/R12/R14/R16/R18/R20 macros to g_r10/g_r12/etc to avoid Windows x64 register name collisions
-- **CI improvements:** Updated GitHub Actions with Opus dependencies, vcpkg@v11.5
-- **All platforms building:** 10/10 CI jobs passing (Ubuntu, Arch, Windows, macOS x86_64/ARM64)
-
-**Code quality improvements (November 2025):**
-- **Refactoring:** Config section handlers, magic number extraction, shader cleanup
-- **Platform consistency:** MSU audio now uses Platform_* API
-- **Utility headers:** platform_detect.h, math_util.h, dynamic_array.h, logging.h
-- **Path validation:** Case-insensitive path lookup for MSU/shader paths on Linux
-- **Logging standardization:** All user-facing errors/warnings now use LogError/LogWarn API
-- **Debug output gating:** Debug-only code properly gated with NDEBUG
-- **Debug state tracking:** Event-driven game state console output for bug fixing
-- **Compatibility:** Original SNES bugs preserved, fixes gated behind feature flags
-
-**Major update: Android port integration (2024)**
-- CMake build system
-- Platform abstraction layer
-- Bug fixes (OpenGL, memory safety)
-- New APIs (frame buffer, gamepad binding)
-- Documentation reorganization
-
-See [CHANGELOG.md](CHANGELOG.md) for complete details.
-
-## Getting Help
-
-- **Getting started:** See [docs/getting-started.md](docs/getting-started.md)
-- **Build issues:** See [docs/installation.md](docs/installation.md) and [docs/troubleshooting.md](docs/troubleshooting.md)
-- **Architecture questions:** See [docs/architecture.md](docs/architecture.md) and [docs/technical/](docs/technical/)
-- **Contributing:** See [docs/contributing.md](docs/contributing.md) and [docs/development.md](docs/development.md)
-- **Platform-specific:** See [docs/platforms/](docs/platforms/) (Windows, Linux, macOS, Android, Switch)
-- **Recent changes:** See [CHANGELOG.md](CHANGELOG.md)
-- **Original project:** https://github.com/snesrev/zelda3 (base C reimplementation)
-- **Android integration:** https://github.com/Waterdish/zelda3-android
-- **Touchpad controls:** https://git.eden-emu.dev/eden-emu/eden (Eden emulator project)
-- **Discord:** https://discord.gg/AJJbJAzNNJ
+- Build: [docs/installation.md](docs/installation.md), [docs/platforms/](docs/platforms/)
+- Architecture: [docs/architecture.md](docs/architecture.md), [docs/technical/](docs/technical/)
+- Changes: [CHANGELOG.md](CHANGELOG.md)
+- Debug: [docs/debugging.md](docs/debugging.md)
