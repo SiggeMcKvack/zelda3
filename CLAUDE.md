@@ -102,7 +102,7 @@ Flags stored at unused RAM offsets (0x648+). Must be toggleable via `zelda3.ini`
 - `src/glsl_shader.c` - OpenGL shader support
 
 **Platform:**
-- `src/platform.h/c` - File I/O abstraction
+- `src/platform.h/c` - File I/O and save file abstraction
 - `src/config.c` - INI parsing, gamepad binding
 - `src/logging.h/c` - Logging system with platform detection
 - `src/platform_detect.h` - Platform/compiler/architecture detection
@@ -110,8 +110,12 @@ Flags stored at unused RAM offsets (0x648+). Must be toggleable via `zelda3.ini`
 **Android Integration:**
 - `android/` - Complete Gradle-based Android app
 - `android/app/jni/` - JNI glue code and SDL integration
+- `src/platform/android/jni_helpers.h/c` - Generic JNI method callers, JSON builder
+- `src/platform/android/android_jni.h/c` - Android-specific APIs and Platform implementations
+- `android/app/src/.../util/` - Kotlin utilities (ConfigManager, FileUtils, UiExtensions)
 - Main entry point: `SDL_main` (macro defined by SDL)
 - Asset loading: SDL external storage path
+- Save files: SAF (Storage Access Framework) via JNI
 - Renderer: OpenGL ES or Vulkan 1.0
 
 **Launcher UI:**
@@ -349,6 +353,13 @@ adb logcat | grep Zelda3       # View Android logs
 - Error messages guide users to correct capitalization
 
 ## Recent Changes
+
+**Android refactoring - Generic utilities (December 2025):**
+- **JNI Helper Library (C):** `jni_helpers.h/c` provides generic JNI method callers, JSON builder, shared button name table
+- **Kotlin Utilities:** `util/ConfigManager.kt` for INI read/write, `util/UiExtensions.kt` for Toast/Dialog, `util/FileUtils.kt` for file copy operations
+- **Platform Save File API:** Unified `Platform_OpenSaveFile()`, `Platform_ReadSaveFile()`, etc. abstracts Android SAF vs desktop filesystem
+- **Code reduction:** Removed `#ifdef PLATFORM_ANDROID` branches from `zelda_rtl.c` save operations
+- **Refactored files:** `android_jni.c` (-326 lines), `MainActivity.kt`, `LauncherActivity.kt`, `RomSelectionActivity.kt`
 
 **C Restool completion (November 2025):**
 - **Full C reimplementation:** Asset extraction tool rewritten in C for speed and portability

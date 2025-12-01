@@ -29,6 +29,7 @@ file(GLOB GAME_SOURCES
 # Android-specific platform files
 set(ANDROID_SOURCES
     ${ZELDA3_SRC_DIR}/platform/android/android_jni.c
+    ${ZELDA3_SRC_DIR}/platform/android/jni_helpers.c
 )
 
 # Launcher sources for settings/language detection

@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import com.dishii.zelda3.util.showToast
 
 /**
  * Activity for selecting ROM files to create zelda3_assets.dat.
@@ -145,8 +146,7 @@ class RomSelectionActivity : AppCompatActivity() {
                 }
 
                 if (jsonStr == null) {
-                    Toast.makeText(this@RomSelectionActivity,
-                        "Failed to read ROM file", Toast.LENGTH_LONG).show()
+                    showToast("Failed to read ROM file", Toast.LENGTH_LONG)
                     tempFile.delete()
                     return@launch
                 }
@@ -157,9 +157,8 @@ class RomSelectionActivity : AppCompatActivity() {
                 val valid = json.getBoolean("valid")
 
                 if (langCode != "us") {
-                    Toast.makeText(this@RomSelectionActivity,
-                        "US ROM required. Detected: $langName\n\nUse 'Add Language ROMs' for other languages.",
-                        Toast.LENGTH_LONG).show()
+                    showToast("US ROM required. Detected: $langName\n\nUse 'Add Language ROMs' for other languages.",
+                        Toast.LENGTH_LONG)
                     tempFile.delete()
                     return@launch
                 }
@@ -170,8 +169,7 @@ class RomSelectionActivity : AppCompatActivity() {
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing base ROM", e)
-                Toast.makeText(this@RomSelectionActivity,
-                    "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                showToast("Error: ${e.message}", Toast.LENGTH_LONG)
                 tempFile.delete()
             }
         }
@@ -179,7 +177,7 @@ class RomSelectionActivity : AppCompatActivity() {
 
     private fun processLanguageRom(uri: Uri, uniqueId: Int) {
         if (languageRoms.size >= MAX_LANGUAGE_ROMS) {
-            Toast.makeText(this, "Maximum language ROMs reached", Toast.LENGTH_SHORT).show()
+            showToast("Maximum language ROMs reached")
             return
         }
 
@@ -201,8 +199,7 @@ class RomSelectionActivity : AppCompatActivity() {
                 }
 
                 if (jsonStr == null) {
-                    Toast.makeText(this@RomSelectionActivity,
-                        "Failed to read ROM file", Toast.LENGTH_LONG).show()
+                    showToast("Failed to read ROM file", Toast.LENGTH_LONG)
                     tempFile.delete()
                     return@launch
                 }
@@ -214,9 +211,8 @@ class RomSelectionActivity : AppCompatActivity() {
 
                 // Check for US ROM (should use base ROM field)
                 if (langCode == "us") {
-                    Toast.makeText(this@RomSelectionActivity,
-                        "US ROM detected.\n\nPlease use 'Select Base ROM' for the USA ROM.",
-                        Toast.LENGTH_LONG).show()
+                    showToast("US ROM detected.\n\nPlease use 'Select Base ROM' for the USA ROM.",
+                        Toast.LENGTH_LONG)
                     tempFile.delete()
                     return@launch
                 }
@@ -235,8 +231,7 @@ class RomSelectionActivity : AppCompatActivity() {
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing language ROM", e)
-                Toast.makeText(this@RomSelectionActivity,
-                    "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                showToast("Error: ${e.message}", Toast.LENGTH_LONG)
                 tempFile.delete()
             }
         }
@@ -364,8 +359,7 @@ class RomSelectionActivity : AppCompatActivity() {
 
                 if (result == 0) {
                     Log.i(TAG, "Asset file created successfully at: $outputPath")
-                    Toast.makeText(this@RomSelectionActivity,
-                        "Assets created successfully!", Toast.LENGTH_SHORT).show()
+                    showToast("Assets created successfully!")
                     setResult(RESULT_OK)
                     finish()
                 } else {

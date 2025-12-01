@@ -6,6 +6,7 @@
 #include <string.h>
 #include <android/log.h>
 #include <SDL.h>
+#include "jni_helpers.h"
 #include "config.h"
 #include "features.h"
 #include "zelda_rtl.h"
@@ -68,173 +69,7 @@ JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeReloadAudioConf
     LOGD("Hot-reload complete");
 }
 
-/**
- * Get the JavaVM pointer from SDL's cached copy.
- * SDL's JNI_OnLoad stores this when libSDL2.so loads.
- */
-static JavaVM* GetJavaVM(void) {
-    // SDL caches the JavaVM in SDL_android.c as a static variable
-    // We can access it via SDL_AndroidGetJNIEnv which uses it internally
-    JNIEnv *env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-    if (!env) {
-        return NULL;
-    }
-    JavaVM *vm = NULL;
-    (*env)->GetJavaVM(env, &vm);
-    return vm;
-}
-
-/**
- * Helper to get JNIEnv, attaching thread if needed.
- * @return JNIEnv pointer or NULL on failure
- */
-static JNIEnv* GetJNIEnv(void) {
-    JavaVM *vm = GetJavaVM();
-    if (!vm) return NULL;
-
-    JNIEnv *env = NULL;
-    int getEnvStat = (*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6);
-
-    if (getEnvStat == JNI_EDETACHED) {
-        if ((*vm)->AttachCurrentThread(vm, &env, NULL) != 0) {
-            return NULL;
-        }
-    } else if (getEnvStat != JNI_OK) {
-        return NULL;
-    }
-    return env;
-}
-
-/**
- * Call static int method(String) on MainActivity.
- * @param methodName Name of the static method to call
- * @param arg String argument to pass
- * @return Method return value, or -1 on failure
- */
-static int CallMainActivityIntMethod1S(const char *methodName, const char *arg) {
-    JNIEnv *env = GetJNIEnv();
-    if (!env) {
-        LOGD("%s: Failed to get JNIEnv", methodName);
-        return -1;
-    }
-
-    jclass cls = (*env)->FindClass(env, "com/dishii/zelda3/MainActivity");
-    if (!cls) {
-        LOGD("%s: Failed to find MainActivity class", methodName);
-        return -1;
-    }
-
-    jmethodID method = (*env)->GetStaticMethodID(env, cls, methodName, "(Ljava/lang/String;)I");
-    if (!method) {
-        LOGD("%s: Failed to find method", methodName);
-        (*env)->DeleteLocalRef(env, cls);
-        return -1;
-    }
-
-    jstring jarg = (*env)->NewStringUTF(env, arg);
-    if (!jarg) {
-        LOGD("%s: Failed to create Java string", methodName);
-        (*env)->DeleteLocalRef(env, cls);
-        return -1;
-    }
-
-    jint result = (*env)->CallStaticIntMethod(env, cls, method, jarg);
-
-    (*env)->DeleteLocalRef(env, jarg);
-    (*env)->DeleteLocalRef(env, cls);
-
-    LOGD("%s: arg='%s', result=%d", methodName, arg, result);
-    return (int)result;
-}
-
-/**
- * Call static boolean method(String) on MainActivity.
- * @param methodName Name of the static method to call
- * @param arg String argument to pass
- * @return 1 if method returns true, 0 otherwise
- */
-static int CallMainActivityBoolMethod1S(const char *methodName, const char *arg) {
-    JNIEnv *env = GetJNIEnv();
-    if (!env) {
-        LOGD("%s: Failed to get JNIEnv", methodName);
-        return 0;
-    }
-
-    jclass cls = (*env)->FindClass(env, "com/dishii/zelda3/MainActivity");
-    if (!cls) {
-        LOGD("%s: Failed to find MainActivity class", methodName);
-        return 0;
-    }
-
-    jmethodID method = (*env)->GetStaticMethodID(env, cls, methodName, "(Ljava/lang/String;)Z");
-    if (!method) {
-        LOGD("%s: Failed to find method", methodName);
-        (*env)->DeleteLocalRef(env, cls);
-        return 0;
-    }
-
-    jstring jarg = (*env)->NewStringUTF(env, arg);
-    if (!jarg) {
-        LOGD("%s: Failed to create Java string", methodName);
-        (*env)->DeleteLocalRef(env, cls);
-        return 0;
-    }
-
-    jboolean result = (*env)->CallStaticBooleanMethod(env, cls, method, jarg);
-
-    (*env)->DeleteLocalRef(env, jarg);
-    (*env)->DeleteLocalRef(env, cls);
-
-    LOGD("%s: arg='%s', result=%d", methodName, arg, result);
-    return result ? 1 : 0;
-}
-
-/**
- * Call static boolean method(String, String) on MainActivity.
- * @param methodName Name of the static method to call
- * @param arg1 First string argument
- * @param arg2 Second string argument
- * @return 1 if method returns true, 0 otherwise
- */
-static int CallMainActivityBoolMethod2S(const char *methodName, const char *arg1, const char *arg2) {
-    JNIEnv *env = GetJNIEnv();
-    if (!env) {
-        LOGD("%s: Failed to get JNIEnv", methodName);
-        return 0;
-    }
-
-    jclass cls = (*env)->FindClass(env, "com/dishii/zelda3/MainActivity");
-    if (!cls) {
-        LOGD("%s: Failed to find MainActivity class", methodName);
-        return 0;
-    }
-
-    jmethodID method = (*env)->GetStaticMethodID(env, cls, methodName, "(Ljava/lang/String;Ljava/lang/String;)Z");
-    if (!method) {
-        LOGD("%s: Failed to find method", methodName);
-        (*env)->DeleteLocalRef(env, cls);
-        return 0;
-    }
-
-    jstring jarg1 = (*env)->NewStringUTF(env, arg1);
-    jstring jarg2 = (*env)->NewStringUTF(env, arg2);
-    if (!jarg1 || !jarg2) {
-        LOGD("%s: Failed to create Java strings", methodName);
-        if (jarg1) (*env)->DeleteLocalRef(env, jarg1);
-        if (jarg2) (*env)->DeleteLocalRef(env, jarg2);
-        (*env)->DeleteLocalRef(env, cls);
-        return 0;
-    }
-
-    jboolean result = (*env)->CallStaticBooleanMethod(env, cls, method, jarg1, jarg2);
-
-    (*env)->DeleteLocalRef(env, jarg1);
-    (*env)->DeleteLocalRef(env, jarg2);
-    (*env)->DeleteLocalRef(env, cls);
-
-    LOGD("%s: arg1='%s', arg2='%s', result=%d", methodName, arg1, arg2, result);
-    return result ? 1 : 0;
-}
+// JNI environment and method calling helpers are now in jni_helpers.c
 
 /**
  * Opens an MSU file using Android SAF (Storage Access Framework).
@@ -244,7 +79,7 @@ static int CallMainActivityBoolMethod2S(const char *methodName, const char *arg1
  * @return File descriptor (>= 0) on success, -1 on failure
  */
 int Android_OpenMsuFileDescriptor(const char *filename) {
-    return CallMainActivityIntMethod1S("openMsuFile", filename);
+    return JniHelper_CallStaticIntMethod_1S("openMsuFile", filename);
 }
 
 /**
@@ -257,98 +92,7 @@ int Android_OpenMsuFileDescriptor(const char *filename) {
  *         Caller must free() the returned buffer.
  */
 void* Android_LoadAsset(const char *asset_path, int *out_size) {
-    JavaVM *vm = GetJavaVM();
-    if (!vm) {
-        LOGD("Android_LoadAsset: JavaVM not initialized");
-        return NULL;
-    }
-
-    JNIEnv *env = NULL;
-    int getEnvStat = (*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6);
-
-    // If GetEnv fails, we need to attach the current thread
-    if (getEnvStat == JNI_EDETACHED) {
-        LOGD("Android_LoadAsset: Attaching thread to JavaVM");
-        if ((*vm)->AttachCurrentThread(vm, &env, NULL) != 0) {
-            LOGD("Android_LoadAsset: Failed to attach thread");
-            return NULL;
-        }
-    } else if (getEnvStat != JNI_OK) {
-        LOGD("Android_LoadAsset: Failed to get JNIEnv");
-        return NULL;
-    }
-
-    // Find MainActivity class
-    jclass mainActivityClass = (*env)->FindClass(env, "com/dishii/zelda3/MainActivity");
-    if (!mainActivityClass) {
-        LOGD("Android_LoadAsset: Failed to find MainActivity class");
-        return NULL;
-    }
-
-    // Find the static loadAsset method
-    jmethodID loadAssetMethod = (*env)->GetStaticMethodID(env, mainActivityClass,
-                                                           "loadAsset",
-                                                           "(Ljava/lang/String;)[B");
-    if (!loadAssetMethod) {
-        LOGD("Android_LoadAsset: Failed to find loadAsset method");
-        (*env)->DeleteLocalRef(env, mainActivityClass);
-        return NULL;
-    }
-
-    // Convert C string to Java string
-    jstring jassetPath = (*env)->NewStringUTF(env, asset_path);
-    if (!jassetPath) {
-        LOGD("Android_LoadAsset: Failed to create Java string");
-        (*env)->DeleteLocalRef(env, mainActivityClass);
-        return NULL;
-    }
-
-    // Call Java method to get asset data
-    jbyteArray jdata = (jbyteArray)(*env)->CallStaticObjectMethod(env, mainActivityClass,
-                                                                   loadAssetMethod, jassetPath);
-
-    (*env)->DeleteLocalRef(env, jassetPath);
-    (*env)->DeleteLocalRef(env, mainActivityClass);
-
-    if (!jdata) {
-        LOGD("Android_LoadAsset: loadAsset returned null for '%s'", asset_path);
-        return NULL;
-    }
-
-    // Get array length and copy data
-    jsize length = (*env)->GetArrayLength(env, jdata);
-    if (length <= 0) {
-        LOGD("Android_LoadAsset: Empty or invalid array for '%s'", asset_path);
-        (*env)->DeleteLocalRef(env, jdata);
-        return NULL;
-    }
-
-    // Allocate C buffer and copy data
-    void *buffer = malloc(length);
-    if (!buffer) {
-        LOGD("Android_LoadAsset: malloc failed for %d bytes", length);
-        (*env)->DeleteLocalRef(env, jdata);
-        return NULL;
-    }
-
-    jbyte *data = (*env)->GetByteArrayElements(env, jdata, NULL);
-    if (!data) {
-        LOGD("Android_LoadAsset: GetByteArrayElements failed");
-        free(buffer);
-        (*env)->DeleteLocalRef(env, jdata);
-        return NULL;
-    }
-
-    memcpy(buffer, data, length);
-    (*env)->ReleaseByteArrayElements(env, jdata, data, JNI_ABORT);
-    (*env)->DeleteLocalRef(env, jdata);
-
-    if (out_size) {
-        *out_size = (int)length;
-    }
-
-    LOGD("Android_LoadAsset: Loaded '%s' (%d bytes)", asset_path, length);
-    return buffer;
+    return JniHelper_CallStaticByteArrayMethod_1S("loadAsset", asset_path, out_size);
 }
 
 /**
@@ -559,19 +303,9 @@ JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeClearGamepadBin
 JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetGamepadBindings(
     JNIEnv* env, jobject obj) {
 
-    // Button name lookup table
-    static const char *const kGamepadButtonNames[] = {
-        "A", "B", "X", "Y", "Back", "Guide", "Start", "L3", "R3",
-        "L1", "R1", "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "L2", "R2"
-    };
-
-    // Build JSON manually (simple approach, no external libs)
-    char json[8192] = "[";  // Start JSON array
-    int first = 1;
-
-    // Iterate through all possible commands and check if they're bound
-    // This covers: Controls (1-12), Save (33-42), Load (13-22), Pause (121), Turbo (123), DisplayPerf (125), Cheats (113-116)
-    const int cmdIds[] = {
+    // Command IDs to check for bindings
+    // Covers: Controls (1-12), Save (33-42), Load (13-22), Pause (121), Turbo (123), DisplayPerf (125), Cheats (113-116)
+    static const int cmdIds[] = {
         1,2,3,4,5,6,7,8,9,10,11,12,  // Controls
         33,34,35,36,37,38,39,40,41,42,  // Save
         13,14,15,16,17,18,19,20,21,22,  // Load
@@ -581,43 +315,59 @@ JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetGamepadBi
         113,114,115,116  // Cheats
     };
 
+    JniJsonBuilder *arr = JniJson_CreateArray();
+    if (!arr) {
+        LOGD("nativeGetGamepadBindings: Failed to create JSON array");
+        return (*env)->NewStringUTF(env, "[]");
+    }
+
     for (int i = 0; i < sizeof(cmdIds)/sizeof(cmdIds[0]); i++) {
         int cmdId = cmdIds[i];
         uint32 modifiers = 0;
         int button = GamepadMap_GetBindingForCommand(cmdId, &modifiers);
 
         if (button != -1) {
-            // Found a binding - get command name
             const char *cmdName = FindCmdName(cmdId);
-            if (!cmdName) continue;  // Skip if no name found
+            if (!cmdName) continue;
 
             // Build button combo string (e.g., "L2" or "L2+R3")
-            char buttonCombo[128] = "";
-            snprintf(buttonCombo, sizeof(buttonCombo), "%s", kGamepadButtonNames[button]);
+            char buttonCombo[128];
+            const char *btnName = JniHelper_GetButtonName(button);
+            if (!btnName) continue;
+            snprintf(buttonCombo, sizeof(buttonCombo), "%s", btnName);
 
             // Add modifiers
-            for (int mod = 0; mod < 17; mod++) {
+            for (int mod = 0; mod < JNI_GAMEPAD_BUTTON_COUNT; mod++) {
                 if (modifiers & (1 << mod)) {
-                    char temp[128];
-                    snprintf(temp, sizeof(temp), "%s+%s", buttonCombo, kGamepadButtonNames[mod]);
-                    snprintf(buttonCombo, sizeof(buttonCombo), "%s", temp);
+                    const char *modName = JniHelper_GetButtonName(mod);
+                    if (modName) {
+                        char temp[128];
+                        snprintf(temp, sizeof(temp), "%s+%s", buttonCombo, modName);
+                        snprintf(buttonCombo, sizeof(buttonCombo), "%s", temp);
+                    }
                 }
             }
 
-            // Add to JSON
-            if (!first) strcat(json, ",");
-            first = 0;
-
-            char entry[256];
-            snprintf(entry, sizeof(entry), "{\"commandName\":\"%s\",\"binding\":\"%s\"}", cmdName, buttonCombo);
-            strcat(json, entry);
+            // Add binding entry to JSON array
+            JniJsonBuilder *obj = JniJson_CreateObject();
+            if (obj) {
+                JniJson_AddString(obj, "commandName", cmdName);
+                JniJson_AddString(obj, "binding", buttonCombo);
+                JniJson_AddObject(arr, obj);
+            }
         }
     }
 
-    strcat(json, "]");  // End JSON array
+    char *json = JniJson_Finalize(arr);
+    if (!json) {
+        LOGD("nativeGetGamepadBindings: Failed to finalize JSON");
+        return (*env)->NewStringUTF(env, "[]");
+    }
 
     LOGD("nativeGetGamepadBindings: Returning JSON: %s", json);
-    return (*env)->NewStringUTF(env, json);
+    jstring result = (*env)->NewStringUTF(env, json);
+    free(json);
+    return result;
 }
 
 /**
@@ -654,32 +404,33 @@ JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeApplyDefaultGam
 JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetButtonForCommand(
     JNIEnv* env, jobject obj, jint cmdId) {
 
-    // Button name lookup table
-    static const char *const kGamepadButtonNames[] = {
-        "A", "B", "X", "Y", "Back", "Guide", "Start", "L3", "R3",
-        "L1", "R1", "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "L2", "R2"
-    };
-
-    // Get the binding from config.c
     uint32 modifiers = 0;
     int button = GamepadMap_GetBindingForCommand(cmdId, &modifiers);
 
     if (button == -1) {
-        // Not bound
         LOGD("nativeGetButtonForCommand: cmd=%d -> not bound", cmdId);
+        return NULL;
+    }
+
+    const char *btnName = JniHelper_GetButtonName(button);
+    if (!btnName) {
+        LOGD("nativeGetButtonForCommand: cmd=%d -> invalid button %d", cmdId, button);
         return NULL;
     }
 
     // Build the button combo string
     static char result[256];
-    strcpy(result, kGamepadButtonNames[button]);
+    snprintf(result, sizeof(result), "%s", btnName);
 
     // Add modifier buttons (if any)
     if (modifiers) {
-        for (int mod_btn = 0; mod_btn < kGamepadBtn_Count; mod_btn++) {
+        for (int mod_btn = 0; mod_btn < JNI_GAMEPAD_BUTTON_COUNT; mod_btn++) {
             if (modifiers & (1 << mod_btn)) {
-                strcat(result, "+");
-                strcat(result, kGamepadButtonNames[mod_btn]);
+                const char *modName = JniHelper_GetButtonName(mod_btn);
+                if (modName) {
+                    strncat(result, "+", sizeof(result) - strlen(result) - 1);
+                    strncat(result, modName, sizeof(result) - strlen(result) - 1);
+                }
             }
         }
     }
@@ -690,88 +441,12 @@ JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetButtonFor
 
 // Show a Toast notification to the user
 void Android_ShowToast(const char* message) {
-    JNIEnv *env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-    if (!env) {
-        LOGD("Android_ShowToast: Failed to get JNI environment");
-        return;
-    }
-
-    // Get MainActivity class
-    jclass activityClass = (*env)->FindClass(env, "com/dishii/zelda3/MainActivity");
-    if (!activityClass) {
-        LOGD("Android_ShowToast: Failed to find MainActivity class");
-        return;
-    }
-
-    // Get showToast static method
-    jmethodID showToastMethod = (*env)->GetStaticMethodID(env, activityClass,
-                                                           "showToast",
-                                                           "(Ljava/lang/String;)V");
-    if (!showToastMethod) {
-        LOGD("Android_ShowToast: Failed to find showToast method");
-        (*env)->DeleteLocalRef(env, activityClass);
-        return;
-    }
-
-    // Convert C string to Java string
-    jstring jMessage = (*env)->NewStringUTF(env, message);
-    if (!jMessage) {
-        LOGD("Android_ShowToast: Failed to create Java string");
-        (*env)->DeleteLocalRef(env, activityClass);
-        return;
-    }
-
-    // Call static method
-    (*env)->CallStaticVoidMethod(env, activityClass, showToastMethod, jMessage);
-
-    // Cleanup
-    (*env)->DeleteLocalRef(env, jMessage);
-    (*env)->DeleteLocalRef(env, activityClass);
-
-    LOGD("Android_ShowToast: Successfully showed toast: %s", message);
+    JniHelper_CallStaticVoidMethod_1S("showToast", message);
 }
 
 // Update renderer setting in zelda3.ini
 void Android_UpdateRendererConfig(const char *renderer) {
-    JNIEnv *env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-    if (!env) {
-        LOGD("Android_UpdateRendererConfig: Failed to get JNI environment");
-        return;
-    }
-
-    // Get MainActivity class
-    jclass activityClass = (*env)->FindClass(env, "com/dishii/zelda3/MainActivity");
-    if (!activityClass) {
-        LOGD("Android_UpdateRendererConfig: Failed to find MainActivity class");
-        return;
-    }
-
-    // Get updateRendererSetting static method
-    jmethodID updateMethod = (*env)->GetStaticMethodID(env, activityClass,
-                                                        "updateRendererSetting",
-                                                        "(Ljava/lang/String;)V");
-    if (!updateMethod) {
-        LOGD("Android_UpdateRendererConfig: Failed to find updateRendererSetting method");
-        (*env)->DeleteLocalRef(env, activityClass);
-        return;
-    }
-
-    // Convert C string to Java string
-    jstring jRenderer = (*env)->NewStringUTF(env, renderer);
-    if (!jRenderer) {
-        LOGD("Android_UpdateRendererConfig: Failed to create Java string");
-        (*env)->DeleteLocalRef(env, activityClass);
-        return;
-    }
-
-    // Call static method
-    (*env)->CallStaticVoidMethod(env, activityClass, updateMethod, jRenderer);
-
-    // Cleanup
-    (*env)->DeleteLocalRef(env, jRenderer);
-    (*env)->DeleteLocalRef(env, activityClass);
-
-    LOGD("Android_UpdateRendererConfig: Successfully updated renderer to: %s", renderer);
+    JniHelper_CallStaticVoidMethod_1S("updateRendererSetting", renderer);
 }
 
 // ============================================================================
@@ -971,7 +646,7 @@ JNIEXPORT jobjectArray JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetAvai
  * @return File descriptor (>= 0) on success, -1 on failure
  */
 int Android_OpenSaveFileRead(const char *filename) {
-    return CallMainActivityIntMethod1S("openSaveFileRead", filename);
+    return JniHelper_CallStaticIntMethod_1S("openSaveFileRead", filename);
 }
 
 /**
@@ -983,7 +658,7 @@ int Android_OpenSaveFileRead(const char *filename) {
  * @return File descriptor (>= 0) on success, -1 on failure
  */
 int Android_OpenSaveFileWrite(const char *filename) {
-    return CallMainActivityIntMethod1S("openSaveFileWrite", filename);
+    return JniHelper_CallStaticIntMethod_1S("openSaveFileWrite", filename);
 }
 
 /**
@@ -995,7 +670,7 @@ int Android_OpenSaveFileWrite(const char *filename) {
  * @return 1 on success, 0 on failure
  */
 int Android_RenameSaveFile(const char *old_name, const char *new_name) {
-    return CallMainActivityBoolMethod2S("renameSaveFile", old_name, new_name);
+    return JniHelper_CallStaticBoolMethod_2S("renameSaveFile", old_name, new_name) ? 1 : 0;
 }
 
 /**
@@ -1005,7 +680,7 @@ int Android_RenameSaveFile(const char *old_name, const char *new_name) {
  * @return 1 if file exists, 0 if not
  */
 int Android_SaveFileExists(const char *filename) {
-    return CallMainActivityBoolMethod1S("saveFileExists", filename);
+    return JniHelper_CallStaticBoolMethod_1S("saveFileExists", filename) ? 1 : 0;
 }
 
 /**
@@ -1016,5 +691,90 @@ int Android_SaveFileExists(const char *filename) {
  * @return 1 on success, 0 on failure
  */
 int Android_DeleteSaveFile(const char *filename) {
-    return CallMainActivityBoolMethod1S("deleteSaveFile", filename);
+    return JniHelper_CallStaticBoolMethod_1S("deleteSaveFile", filename) ? 1 : 0;
+}
+
+// ============================================================================
+// Platform Save File API Implementation (Android)
+// These implement the unified platform.h API using Android SAF via JNI
+// ============================================================================
+
+#include "platform.h"
+#include <unistd.h>
+
+struct PlatformSaveFile {
+    int fd;       // File descriptor from Android SAF
+    FILE *fp;     // FILE* wrapper via fdopen
+};
+
+const char *Platform_GetSaveDirectory(void) {
+    // Android SAF handles paths internally - return empty string
+    return "";
+}
+
+PlatformSaveFile *Platform_OpenSaveFile(const char *filename, bool for_writing) {
+    int fd;
+    if (for_writing) {
+        fd = Android_OpenSaveFileWrite(filename);
+    } else {
+        fd = Android_OpenSaveFileRead(filename);
+    }
+
+    if (fd < 0)
+        return NULL;
+
+    FILE *fp = fdopen(fd, for_writing ? "wb" : "rb");
+    if (!fp) {
+        close(fd);
+        return NULL;
+    }
+
+    PlatformSaveFile *sf = (PlatformSaveFile *)malloc(sizeof(PlatformSaveFile));
+    if (!sf) {
+        fclose(fp);  // fclose also closes the fd
+        return NULL;
+    }
+    sf->fd = fd;
+    sf->fp = fp;
+    return sf;
+}
+
+size_t Platform_ReadSaveFile(void *ptr, size_t size, size_t count, PlatformSaveFile *file) {
+    if (!file || !file->fp)
+        return 0;
+    return fread(ptr, size, count, file->fp);
+}
+
+size_t Platform_WriteSaveFile(const void *ptr, size_t size, size_t count, PlatformSaveFile *file) {
+    if (!file || !file->fp)
+        return 0;
+    return fwrite(ptr, size, count, file->fp);
+}
+
+int Platform_CloseSaveFile(PlatformSaveFile *file) {
+    if (!file)
+        return -1;
+    int result = 0;
+    if (file->fp)
+        result = fclose(file->fp);  // fclose also closes the fd
+    free(file);
+    return result;
+}
+
+FILE *Platform_GetSaveFileHandle(PlatformSaveFile *file) {
+    if (!file)
+        return NULL;
+    return file->fp;
+}
+
+bool Platform_SaveFileExists(const char *filename) {
+    return Android_SaveFileExists(filename) != 0;
+}
+
+bool Platform_DeleteSaveFile(const char *filename) {
+    return Android_DeleteSaveFile(filename) != 0;
+}
+
+bool Platform_RenameSaveFile(const char *old_name, const char *new_name) {
+    return Android_RenameSaveFile(old_name, new_name) != 0;
 }

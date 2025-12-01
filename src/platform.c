@@ -148,6 +148,93 @@ uint8_t *Platform_ReadWholeFile(const char *filename, size_t *length_out) {
   return data;
 }
 
+// ============================================================================
+// Save File API Implementation (Desktop)
+// ============================================================================
+
+#ifndef PLATFORM_ANDROID
+
+static const char *kSaveDirectory = "saves/";
+
+struct PlatformSaveFile {
+  FILE *fp;
+};
+
+const char *Platform_GetSaveDirectory(void) {
+  return kSaveDirectory;
+}
+
+PlatformSaveFile *Platform_OpenSaveFile(const char *filename, bool for_writing) {
+  char path[512];
+  snprintf(path, sizeof(path), "%s%s", kSaveDirectory, filename);
+
+  FILE *fp = fopen(path, for_writing ? "wb" : "rb");
+  if (!fp)
+    return NULL;
+
+  PlatformSaveFile *sf = (PlatformSaveFile *)malloc(sizeof(PlatformSaveFile));
+  if (!sf) {
+    fclose(fp);
+    return NULL;
+  }
+  sf->fp = fp;
+  return sf;
+}
+
+size_t Platform_ReadSaveFile(void *ptr, size_t size, size_t count, PlatformSaveFile *file) {
+  if (!file || !file->fp)
+    return 0;
+  return fread(ptr, size, count, file->fp);
+}
+
+size_t Platform_WriteSaveFile(const void *ptr, size_t size, size_t count, PlatformSaveFile *file) {
+  if (!file || !file->fp)
+    return 0;
+  return fwrite(ptr, size, count, file->fp);
+}
+
+int Platform_CloseSaveFile(PlatformSaveFile *file) {
+  if (!file)
+    return -1;
+  int result = 0;
+  if (file->fp)
+    result = fclose(file->fp);
+  free(file);
+  return result;
+}
+
+FILE *Platform_GetSaveFileHandle(PlatformSaveFile *file) {
+  if (!file)
+    return NULL;
+  return file->fp;
+}
+
+bool Platform_SaveFileExists(const char *filename) {
+  char path[512];
+  snprintf(path, sizeof(path), "%s%s", kSaveDirectory, filename);
+  struct stat st;
+  return stat(path, &st) == 0;
+}
+
+bool Platform_DeleteSaveFile(const char *filename) {
+  char path[512];
+  snprintf(path, sizeof(path), "%s%s", kSaveDirectory, filename);
+  return remove(path) == 0;
+}
+
+bool Platform_RenameSaveFile(const char *old_name, const char *new_name) {
+  char old_path[512], new_path[512];
+  snprintf(old_path, sizeof(old_path), "%s%s", kSaveDirectory, old_name);
+  snprintf(new_path, sizeof(new_path), "%s%s", kSaveDirectory, new_name);
+  return rename(old_path, new_path) == 0;
+}
+
+#endif  // !PLATFORM_ANDROID
+
+// ============================================================================
+// Case-insensitive path lookup
+// ============================================================================
+
 char *Platform_FindFileWithCaseInsensitivity(const char *path) {
   if (!path)
     return NULL;

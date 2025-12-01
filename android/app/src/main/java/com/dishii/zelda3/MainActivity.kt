@@ -44,6 +44,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
+import com.dishii.zelda3.util.ConfigManager
+import com.dishii.zelda3.util.showToast
 
 /**
  * Main SDL game activity.
@@ -2059,80 +2061,14 @@ class MainActivity : SDLActivity() {
     /**
      * Reads DisableLowHealthBeep setting from zelda3.ini [Features] section.
      */
-    private suspend fun readLowHealthBeepSetting(): Boolean = withContext(Dispatchers.IO) {
-        val externalDir = getExternalFilesDir(null) ?: return@withContext false
-        val configFile = File(externalDir, "zelda3.ini")
-
-        if (!configFile.exists()) return@withContext false
-
-        try {
-            var inFeaturesSection = false
-
-            configFile.readLines().forEach { line ->
-                val trimmed = line.trim()
-
-                when {
-                    trimmed == "[Features]" -> inFeaturesSection = true
-                    trimmed.startsWith("[") -> inFeaturesSection = false
-                    inFeaturesSection && trimmed.startsWith("DisableLowHealthBeep") -> {
-                        val value = trimmed.substringAfter("=").trim()
-                        return@withContext value == "1" || value.equals("true", ignoreCase = true)
-                    }
-                }
-            }
-        } catch (e: IOException) {
-            Log.e(TAG, "Error reading low health beep setting", e)
-        }
-
-        false // Default: beep enabled
-    }
+    private suspend fun readLowHealthBeepSetting(): Boolean =
+        ConfigManager.readBool(this, "Features", "DisableLowHealthBeep", false)
 
     /**
      * Updates DisableLowHealthBeep setting in zelda3.ini [Features] section.
      */
-    private suspend fun updateLowHealthBeepSetting(disable: Boolean) = withContext(Dispatchers.IO) {
-        val externalDir = getExternalFilesDir(null) ?: return@withContext
-        val configFile = File(externalDir, "zelda3.ini")
-
-        if (!configFile.exists()) return@withContext
-
-        try {
-            val lines = configFile.readLines()
-            var inFeaturesSection = false
-            var settingUpdated = false
-
-            val updatedLines = lines.map { line ->
-                val trimmed = line.trim()
-
-                when {
-                    trimmed == "[Features]" -> {
-                        inFeaturesSection = true
-                        line
-                    }
-                    trimmed.startsWith("[") && trimmed.endsWith("]") -> {
-                        inFeaturesSection = false
-                        line
-                    }
-                    inFeaturesSection && trimmed.startsWith("DisableLowHealthBeep") -> {
-                        settingUpdated = true
-                        val newValue = "DisableLowHealthBeep = ${if (disable) 1 else 0}"
-                        Log.d(TAG, "Updated DisableLowHealthBeep to: ${if (disable) 1 else 0}")
-                        newValue
-                    }
-                    else -> line
-                }
-            }
-
-            if (!settingUpdated) {
-                Log.w(TAG, "DisableLowHealthBeep not found in config file")
-                return@withContext
-            }
-
-            configFile.writeText(updatedLines.joinToString("\n"))
-            Log.d(TAG, "Low health beep setting saved successfully")
-        } catch (e: IOException) {
-            Log.e(TAG, "Error updating low health beep setting", e)
-        }
+    private suspend fun updateLowHealthBeepSetting(disable: Boolean) {
+        ConfigManager.writeBool(this, "Features", "DisableLowHealthBeep", disable)
     }
 
     /**
@@ -2319,10 +2255,6 @@ class MainActivity : SDLActivity() {
         }
     }
 
-    // Helper extension function
-    private fun showToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
-        Toast.makeText(this, message, duration).show()
-    }
 
     // ========== Save/Load State Functions ==========
 

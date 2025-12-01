@@ -20,6 +20,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import com.dishii.zelda3.util.ConfigManager
+import com.dishii.zelda3.util.FileUtils
+import com.dishii.zelda3.util.showToast
+import com.dishii.zelda3.util.stylePositiveAsFilled
 
 /**
  * First activity shown on app launch.
@@ -32,7 +36,6 @@ class LauncherActivity : AppCompatActivity() {
         const val PREFS_NAME = "app_prefs"
         const val PREF_ZELDA3_FOLDER_PATH = "zelda3_folder_path"
         const val PREF_ZELDA3_FOLDER_URI = "zelda3_folder_uri"
-        const val BUFFER_SIZE = 8192
     }
 
     private val prefs: SharedPreferences by lazy {
@@ -148,24 +151,13 @@ class LauncherActivity : AppCompatActivity() {
 
             // Copy zelda3.ini if it doesn't exist (only on first run)
             if (!configFile.exists()) {
-                copyAssetToFile("zelda3.ini", configFile)
+                FileUtils.copyAssetToFile(this@LauncherActivity, "zelda3.ini", configFile)
             }
 
             true
         } catch (e: IOException) {
             Log.e(TAG, "Failed to create config files", e)
             false
-        }
-    }
-
-    /**
-     * Copies a single asset file to external storage using Kotlin's .use {} for resource management.
-     */
-    private suspend fun copyAssetToFile(assetPath: String, destFile: File) = withContext(Dispatchers.IO) {
-        assets.open(assetPath).use { input ->
-            destFile.outputStream().use { output ->
-                input.copyTo(output, bufferSize = BUFFER_SIZE)
-            }
         }
     }
 
@@ -192,7 +184,7 @@ class LauncherActivity : AppCompatActivity() {
             .create()
             .apply {
                 show()
-                stylePositiveButtonAsFilled()
+                stylePositiveAsFilled()
             }
     }
 
@@ -218,9 +210,9 @@ class LauncherActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val totalBytes = withContext(Dispatchers.IO) {
-                    copyUriToFile(uri, File(externalDir, "zelda3_assets.dat"))
-                }
+                val totalBytes = FileUtils.copyUriToFile(
+                    contentResolver, uri, File(externalDir, "zelda3_assets.dat")
+                )
 
                 Log.i(TAG, "Successfully copied zelda3_assets.dat ($totalBytes bytes)")
                 showToast("Assets file loaded successfully. Starting game...")
@@ -233,27 +225,6 @@ class LauncherActivity : AppCompatActivity() {
                 promptForAssetsFile()
             }
         }
-    }
-
-    /**
-     * Copies content from URI to file, returning total bytes copied.
-     */
-    private suspend fun copyUriToFile(uri: Uri, destFile: File): Long = withContext(Dispatchers.IO) {
-        val inputStream = contentResolver.openInputStream(uri)
-            ?: throw IOException("Could not open input stream")
-
-        var totalBytes = 0L
-        inputStream.use { input ->
-            destFile.outputStream().use { output ->
-                val buffer = ByteArray(BUFFER_SIZE)
-                var length: Int
-                while (input.read(buffer).also { length = it } > 0) {
-                    output.write(buffer, 0, length)
-                    totalBytes += length
-                }
-            }
-        }
-        totalBytes
     }
 
     private fun isExternalStorageWritable(): Boolean =
@@ -269,7 +240,7 @@ class LauncherActivity : AppCompatActivity() {
             .create()
             .apply {
                 show()
-                stylePositiveButtonAsFilled()
+                stylePositiveAsFilled()
             }
     }
 
@@ -353,7 +324,7 @@ class LauncherActivity : AppCompatActivity() {
 
                 // Update zelda3.ini MSUPath
                 val msuPath = "$folderPath/MSU/alttp_msu-"
-                if (updateMsuPathInConfig(msuPath)) {
+                if (ConfigManager.writeString(this@LauncherActivity, "Sound", "MSUPath", msuPath)) {
                     Log.i(TAG, "Zelda3 folder set to: $folderPath")
                     Log.i(TAG, "MSU path updated to: $msuPath")
                     showToast("Zelda3 folder set to:\n$folderPath", Toast.LENGTH_LONG)
@@ -377,74 +348,4 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Updates MSUPath in zelda3.ini [Sound] section.
-     * Uses functional approach for cleaner INI parsing.
-     */
-    private suspend fun updateMsuPathInConfig(msuPath: String): Boolean = withContext(Dispatchers.IO) {
-        val externalDir = getExternalFilesDir(null) ?: return@withContext false
-        val configFile = File(externalDir, "zelda3.ini")
-
-        if (!configFile.exists()) return@withContext false
-
-        try {
-            val lines = configFile.readLines()
-            var inSoundSection = false
-            var msuPathUpdated = false
-
-            val updatedLines = lines.map { line ->
-                val trimmed = line.trim()
-
-                when {
-                    // Track [Sound] section
-                    trimmed == "[Sound]" -> {
-                        inSoundSection = true
-                        line
-                    }
-                    // Detect other sections
-                    trimmed.startsWith("[") && trimmed.endsWith("]") -> {
-                        inSoundSection = false
-                        line
-                    }
-                    // Update MSUPath in [Sound] section
-                    inSoundSection && trimmed.startsWith("MSUPath") -> {
-                        msuPathUpdated = true
-                        Log.d(TAG, "Updated MSUPath to: $msuPath")
-                        "MSUPath = $msuPath"
-                    }
-                    else -> line
-                }
-            }
-
-            if (!msuPathUpdated) {
-                Log.w(TAG, "MSUPath not found in config file")
-                return@withContext false
-            }
-
-            // Write updated config
-            configFile.writeText(updatedLines.joinToString("\n"))
-            true
-        } catch (e: IOException) {
-            Log.e(TAG, "Error updating MSU path in config", e)
-            false
-        }
-    }
-
-    // Extension functions for cleaner dialog styling and common operations
-
-    /**
-     * Styles dialog positive button as filled (solid primary color) for emphasis.
-     */
-    private fun AlertDialog.stylePositiveButtonAsFilled() {
-        getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
-            val primaryColor = resources.getColorStateList(R.color.md_theme_primary, theme)
-            val onPrimaryColor = resources.getColorStateList(R.color.md_theme_onPrimary, theme)
-            backgroundTintList = primaryColor
-            setTextColor(onPrimaryColor)
-        }
-    }
-
-    private fun showToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
-        Toast.makeText(this, message, duration).show()
-    }
 }

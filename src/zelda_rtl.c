@@ -13,11 +13,7 @@
 #include "assets.h"
 #include "debug_state.h"
 #include "logging.h"
-#include "platform_detect.h"
-#ifdef PLATFORM_ANDROID
-#include <unistd.h>
-#include "platform/android/android_jni.h"
-#endif
+#include "platform.h"
 ZeldaEnv g_zenv;
 uint8 g_ram[131072];
 
@@ -828,31 +824,20 @@ static const char *const kReferenceSaves[] = {
 void SaveLoadSlot(int cmd, int which) {
   char name[128];
   FILE *f = NULL;
+  PlatformSaveFile *sf = NULL;
 
   if (which & 256) {
-    // Reference saves - always from internal storage (APK assets)
+    // Reference saves - always from internal storage (APK assets or saves/ref/)
     if (cmd == kSaveLoad_Save)
       return;
     sprintf(name, "saves/ref/%s", kReferenceSaves[which - 256]);
     f = fopen(name, "rb");
   } else {
-#ifdef PLATFORM_ANDROID
-    // User save slots - use SAF on Android
+    // User save slots - use platform abstraction
     sprintf(name, "save%d.sav", which);
-    int fd;
-    if (cmd == kSaveLoad_Save) {
-      fd = Android_OpenSaveFileWrite(name);
-      if (fd >= 0)
-        f = fdopen(fd, "wb");
-    } else {
-      fd = Android_OpenSaveFileRead(name);
-      if (fd >= 0)
-        f = fdopen(fd, "rb");
-    }
-#else
-    sprintf(name, "saves/save%d.sav", which);
-    f = fopen(name, cmd != kSaveLoad_Save ? "rb" : "wb");
-#endif
+    sf = Platform_OpenSaveFile(name, cmd == kSaveLoad_Save);
+    if (sf)
+      f = Platform_GetSaveFileHandle(sf);
   }
 
   if (f) {
@@ -864,7 +849,10 @@ void SaveLoadSlot(int cmd, int which) {
     else
       StateRecorder_Save(&state_recorder, f);
 
-    fclose(f);
+    if (sf)
+      Platform_CloseSaveFile(sf);
+    else
+      fclose(f);
   }
 }
 
@@ -923,45 +911,24 @@ void PatchCommand(char c) {
 
 
 void ZeldaReadSram() {
-#ifdef PLATFORM_ANDROID
-  int fd = Android_OpenSaveFileRead("sram.dat");
-  if (fd >= 0) {
-    if (read(fd, g_zenv.sram, 8192) != 8192)
+  PlatformSaveFile *sf = Platform_OpenSaveFile("sram.dat", false);
+  if (sf) {
+    if (Platform_ReadSaveFile(g_zenv.sram, 1, 8192, sf) != 8192)
       LogError("Error reading sram.dat");
-    close(fd);
+    Platform_CloseSaveFile(sf);
     EmuSynchronizeWholeState();
   }
-#else
-  FILE *f = fopen("saves/sram.dat", "rb");
-  if (f) {
-    if (fread(g_zenv.sram, 1, 8192, f) != 8192)
-      LogError("Error reading saves/sram.dat");
-    fclose(f);
-    EmuSynchronizeWholeState();
-  }
-#endif
 }
 
 void ZeldaWriteSram() {
-#ifdef PLATFORM_ANDROID
   // Delete existing backup, then rename current to backup
-  Android_DeleteSaveFile("sram.bak");
-  Android_RenameSaveFile("sram.dat", "sram.bak");
-  int fd = Android_OpenSaveFileWrite("sram.dat");
-  if (fd >= 0) {
-    write(fd, g_zenv.sram, 8192);
-    close(fd);
+  Platform_DeleteSaveFile("sram.bak");
+  Platform_RenameSaveFile("sram.dat", "sram.bak");
+  PlatformSaveFile *sf = Platform_OpenSaveFile("sram.dat", true);
+  if (sf) {
+    Platform_WriteSaveFile(g_zenv.sram, 1, 8192, sf);
+    Platform_CloseSaveFile(sf);
   } else {
     LogError("Unable to write sram.dat");
   }
-#else
-  rename("saves/sram.dat", "saves/sram.bak");
-  FILE *f = fopen("saves/sram.dat", "wb");
-  if (f) {
-    fwrite(g_zenv.sram, 1, 8192, f);
-    fclose(f);
-  } else {
-    LogError("Unable to write saves/sram.dat");
-  }
-#endif
 }
