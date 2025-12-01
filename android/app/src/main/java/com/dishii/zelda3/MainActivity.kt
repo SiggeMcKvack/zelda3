@@ -59,6 +59,13 @@ class MainActivity : SDLActivity() {
         const val BUFFER_SIZE = 8192
 
         /**
+         * Helper to get MainActivity instance from SDLActivity context.
+         */
+        private fun getActivityInstance(): MainActivity? {
+            return SDLActivity.getContext() as? MainActivity
+        }
+
+        /**
          * Opens an MSU file using SAF and returns a file descriptor.
          * Called from native C code via JNI.
          *
@@ -67,58 +74,8 @@ class MainActivity : SDLActivity() {
          */
         @JvmStatic
         fun openMsuFile(filename: String): Int {
-            Log.d(TAG, "openMsuFile called from JNI: filename='$filename'")
-
-            // Get singleton MainActivity instance (SDLActivity stores this)
-            val activity = SDLActivity.getContext() as? MainActivity
-            if (activity == null) {
-                Log.e(TAG, "openMsuFile: Failed to get MainActivity instance")
-                return -1
-            }
-
-            val uriString = activity.zelda3FolderUri
-            if (uriString == null) {
-                Log.e(TAG, "openMsuFile: No SAF Uri stored")
-                return -1
-            }
-
-            return try {
-                val treeUri = Uri.parse(uriString)
-                val rootDir = DocumentFile.fromTreeUri(activity, treeUri)
-                if (rootDir == null) {
-                    Log.e(TAG, "openMsuFile: Failed to get DocumentFile from tree Uri")
-                    return -1
-                }
-
-                val msuDir = rootDir.findFile("MSU")
-                if (msuDir == null || !msuDir.isDirectory) {
-                    Log.e(TAG, "openMsuFile: MSU directory not found or not a directory")
-                    return -1
-                }
-
-                val file = msuDir.findFile(filename)
-                if (file == null || !file.isFile) {
-                    Log.e(TAG, "openMsuFile: File not found: $filename")
-                    return -1
-                }
-
-                val uri = file.uri
-                val pfd = activity.contentResolver.openFileDescriptor(uri, "r")
-                if (pfd == null) {
-                    Log.e(TAG, "openMsuFile: Failed to open ParcelFileDescriptor for $filename")
-                    return -1
-                }
-
-                // CRITICAL: Detach the file descriptor so C code owns it
-                // Without detachFd(), the fd would be closed when pfd is garbage collected
-                val fd = pfd.detachFd()
-                Log.d(TAG, "openMsuFile: Successfully opened $filename, fd=$fd")
-                fd
-
-            } catch (e: Exception) {
-                Log.e(TAG, "openMsuFile: Exception while opening $filename", e)
-                -1
-            }
+            Log.d(TAG, "openMsuFile: filename='$filename'")
+            return getActivityInstance()?.openFileInSubdir("MSU", filename, "r") ?: -1
         }
 
         /**
@@ -199,6 +156,261 @@ class MainActivity : SDLActivity() {
             kotlinx.coroutines.GlobalScope.launch {
                 activity.updateRendererSetting(renderer)
             }
+        }
+
+        /**
+         * Opens a save file for reading using SAF.
+         * Called from native C code via JNI.
+         *
+         * @param filename Filename like "sram.dat" or "save0.sav"
+         * @return File descriptor (>= 0) on success, -1 on failure
+         */
+        @JvmStatic
+        fun openSaveFileRead(filename: String): Int {
+            Log.d(TAG, "openSaveFileRead: filename='$filename'")
+            return getActivityInstance()?.openFileInSubdir("saves", filename, "r") ?: -1
+        }
+
+        /**
+         * Opens a save file for writing using SAF. Creates file if it doesn't exist.
+         * Called from native C code via JNI.
+         *
+         * @param filename Filename like "sram.dat" or "save0.sav"
+         * @return File descriptor (>= 0) on success, -1 on failure
+         */
+        @JvmStatic
+        fun openSaveFileWrite(filename: String): Int {
+            Log.d(TAG, "openSaveFileWrite: filename='$filename'")
+            return getActivityInstance()?.openFileInSubdir("saves", filename, "wt", createIfMissing = true) ?: -1
+        }
+
+        /**
+         * Renames a save file in external storage.
+         * Used for creating backup files (sram.dat -> sram.bak).
+         * Called from native C code via JNI.
+         *
+         * @param oldName Current filename
+         * @param newName New filename
+         * @return true on success, false on failure
+         */
+        @JvmStatic
+        fun renameSaveFile(oldName: String, newName: String): Boolean {
+            Log.d(TAG, "renameSaveFile called from JNI: '$oldName' -> '$newName'")
+
+            val activity = SDLActivity.getContext() as? MainActivity
+            if (activity == null) {
+                Log.e(TAG, "renameSaveFile: Failed to get MainActivity instance")
+                return false
+            }
+
+            val uriString = activity.zelda3FolderUri
+            if (uriString == null) {
+                Log.e(TAG, "renameSaveFile: No SAF Uri stored")
+                return false
+            }
+
+            return try {
+                val treeUri = Uri.parse(uriString)
+                val rootDir = DocumentFile.fromTreeUri(activity, treeUri)
+                if (rootDir == null) {
+                    Log.e(TAG, "renameSaveFile: Failed to get DocumentFile from tree Uri")
+                    return false
+                }
+
+                val savesDir = rootDir.findFile("saves")
+                if (savesDir == null || !savesDir.isDirectory) {
+                    Log.e(TAG, "renameSaveFile: saves directory not found")
+                    return false
+                }
+
+                val oldFile = savesDir.findFile(oldName)
+                if (oldFile == null || !oldFile.isFile) {
+                    Log.d(TAG, "renameSaveFile: Source file not found: $oldName")
+                    return false
+                }
+
+                // Delete existing file with new name if it exists
+                val existingNewFile = savesDir.findFile(newName)
+                existingNewFile?.delete()
+
+                // Rename the file
+                val success = oldFile.renameTo(newName)
+                Log.d(TAG, "renameSaveFile: Result: $success")
+                success
+
+            } catch (e: Exception) {
+                Log.e(TAG, "renameSaveFile: Exception", e)
+                false
+            }
+        }
+
+        /**
+         * Checks if a save file exists in external storage.
+         * Called from native C code via JNI.
+         *
+         * @param filename Filename to check
+         * @return true if file exists, false otherwise
+         */
+        @JvmStatic
+        fun saveFileExists(filename: String): Boolean {
+            Log.d(TAG, "saveFileExists called from JNI: filename='$filename'")
+
+            val activity = SDLActivity.getContext() as? MainActivity
+            if (activity == null) {
+                Log.e(TAG, "saveFileExists: Failed to get MainActivity instance")
+                return false
+            }
+
+            val uriString = activity.zelda3FolderUri
+            if (uriString == null) {
+                Log.e(TAG, "saveFileExists: No SAF Uri stored")
+                return false
+            }
+
+            return try {
+                val treeUri = Uri.parse(uriString)
+                val rootDir = DocumentFile.fromTreeUri(activity, treeUri)
+                if (rootDir == null) {
+                    Log.e(TAG, "saveFileExists: Failed to get DocumentFile from tree Uri")
+                    return false
+                }
+
+                val savesDir = rootDir.findFile("saves")
+                if (savesDir == null || !savesDir.isDirectory) {
+                    Log.d(TAG, "saveFileExists: saves directory not found")
+                    return false
+                }
+
+                val file = savesDir.findFile(filename)
+                val exists = file != null && file.isFile
+                Log.d(TAG, "saveFileExists: '$filename' exists=$exists")
+                exists
+
+            } catch (e: Exception) {
+                Log.e(TAG, "saveFileExists: Exception", e)
+                false
+            }
+        }
+
+        /**
+         * Deletes a save file in external storage.
+         * Called from native C code via JNI.
+         *
+         * @param filename Filename to delete
+         * @return true on success, false on failure
+         */
+        @JvmStatic
+        fun deleteSaveFile(filename: String): Boolean {
+            Log.d(TAG, "deleteSaveFile called from JNI: filename='$filename'")
+
+            val activity = SDLActivity.getContext() as? MainActivity
+            if (activity == null) {
+                Log.e(TAG, "deleteSaveFile: Failed to get MainActivity instance")
+                return false
+            }
+
+            val uriString = activity.zelda3FolderUri
+            if (uriString == null) {
+                Log.e(TAG, "deleteSaveFile: No SAF Uri stored")
+                return false
+            }
+
+            return try {
+                val treeUri = Uri.parse(uriString)
+                val rootDir = DocumentFile.fromTreeUri(activity, treeUri)
+                if (rootDir == null) {
+                    Log.e(TAG, "deleteSaveFile: Failed to get DocumentFile from tree Uri")
+                    return false
+                }
+
+                val savesDir = rootDir.findFile("saves")
+                if (savesDir == null || !savesDir.isDirectory) {
+                    Log.e(TAG, "deleteSaveFile: saves directory not found")
+                    return false
+                }
+
+                val file = savesDir.findFile(filename)
+                if (file == null || !file.isFile) {
+                    Log.d(TAG, "deleteSaveFile: File not found: $filename")
+                    return false
+                }
+
+                val success = file.delete()
+                Log.d(TAG, "deleteSaveFile: Result: $success")
+                success
+
+            } catch (e: Exception) {
+                Log.e(TAG, "deleteSaveFile: Exception", e)
+                false
+            }
+        }
+    }
+
+    /**
+     * Opens a file in a subdirectory of the Zelda3 folder using SAF.
+     * Shared helper for MSU and save file access.
+     *
+     * @param subdir Subdirectory name ("MSU" or "saves")
+     * @param filename File to open
+     * @param mode "r" for read, "wt" for write+truncate
+     * @param createIfMissing If true, create file/directory if they don't exist
+     * @return File descriptor (>= 0) on success, -1 on failure
+     */
+    private fun openFileInSubdir(
+        subdir: String,
+        filename: String,
+        mode: String,
+        createIfMissing: Boolean = false
+    ): Int {
+        val uriString = zelda3FolderUri ?: run {
+            Log.e(TAG, "openFileInSubdir: No SAF Uri stored")
+            return -1
+        }
+
+        return try {
+            val treeUri = Uri.parse(uriString)
+            val rootDir = DocumentFile.fromTreeUri(this, treeUri) ?: run {
+                Log.e(TAG, "openFileInSubdir: Failed to get DocumentFile from tree Uri")
+                return -1
+            }
+
+            var subdirFile = rootDir.findFile(subdir)
+            if (subdirFile == null) {
+                if (createIfMissing) {
+                    subdirFile = rootDir.createDirectory(subdir) ?: run {
+                        Log.e(TAG, "openFileInSubdir: Failed to create $subdir directory")
+                        return -1
+                    }
+                } else {
+                    Log.e(TAG, "openFileInSubdir: $subdir directory not found")
+                    return -1
+                }
+            }
+
+            var file = subdirFile.findFile(filename)
+            if (file == null) {
+                if (createIfMissing) {
+                    file = subdirFile.createFile("application/octet-stream", filename) ?: run {
+                        Log.e(TAG, "openFileInSubdir: Failed to create $filename")
+                        return -1
+                    }
+                } else {
+                    Log.d(TAG, "openFileInSubdir: File not found: $subdir/$filename")
+                    return -1
+                }
+            }
+
+            val pfd = contentResolver.openFileDescriptor(file.uri, mode) ?: run {
+                Log.e(TAG, "openFileInSubdir: Failed to open file descriptor")
+                return -1
+            }
+
+            val fd = pfd.detachFd()
+            Log.d(TAG, "openFileInSubdir: $subdir/$filename -> fd=$fd")
+            fd
+        } catch (e: Exception) {
+            Log.e(TAG, "openFileInSubdir: Exception for $subdir/$filename", e)
+            -1
         }
     }
 
@@ -311,6 +523,9 @@ class MainActivity : SDLActivity() {
             }
         }
 
+        // Check for save file migration from internal to external storage
+        migrateSavesToExternalStorage()
+
         inflateOverlay()
         setupDrawer()
     }
@@ -346,6 +561,249 @@ class MainActivity : SDLActivity() {
             }
         } catch (e: IOException) {
             Log.e(TAG, "Failed to create config files", e)
+        }
+    }
+
+    // Enum for conflict resolution dialog
+    private enum class ConflictResolution { ASK, OVERWRITE_ALL, SKIP_ALL }
+
+    /**
+     * Migrates save files from internal storage (getExternalFilesDir) to external storage (SAF).
+     * Shows conflict resolution dialog if files exist in both locations.
+     */
+    private fun migrateSavesToExternalStorage() {
+        val internalDir = getExternalFilesDir(null) ?: return
+        val internalSavesDir = File(internalDir, "saves")
+
+        // Check if internal saves exist
+        if (!internalSavesDir.exists() || !internalSavesDir.isDirectory) {
+            Log.d(TAG, "migrateSavesToExternalStorage: No internal saves directory")
+            return
+        }
+
+        // Check if already migrated (backup exists)
+        val backupDir = File(internalDir, "saves.backup")
+        if (backupDir.exists()) {
+            Log.d(TAG, "migrateSavesToExternalStorage: Already migrated (saves.backup exists)")
+            return
+        }
+
+        // Check if SAF folder is configured
+        val uriString = zelda3FolderUri
+        if (uriString == null) {
+            Log.d(TAG, "migrateSavesToExternalStorage: No SAF Uri configured")
+            return
+        }
+
+        val treeUri = Uri.parse(uriString)
+        val rootDir = DocumentFile.fromTreeUri(this, treeUri)
+        if (rootDir == null) {
+            Log.e(TAG, "migrateSavesToExternalStorage: Failed to get DocumentFile from tree Uri")
+            return
+        }
+
+        // Get or create external saves directory
+        var externalSavesDir = rootDir.findFile("saves")
+        if (externalSavesDir == null) {
+            externalSavesDir = rootDir.createDirectory("saves")
+            if (externalSavesDir == null) {
+                Log.e(TAG, "migrateSavesToExternalStorage: Failed to create external saves directory")
+                return
+            }
+        }
+
+        // Identify all files to migrate (everything in saves/ except ref/ subdirectory)
+        val existingInternalFiles = internalSavesDir.listFiles()
+            ?.filter { it.isFile }  // Only files, not directories (excludes ref/)
+            ?.map { it.name }
+            ?: emptyList()
+
+        if (existingInternalFiles.isEmpty()) {
+            Log.d(TAG, "migrateSavesToExternalStorage: No save files to migrate")
+            return
+        }
+
+        // Check for conflicts
+        val conflicts = existingInternalFiles.filter { filename ->
+            externalSavesDir.findFile(filename) != null
+        }
+
+        Log.d(TAG, "migrateSavesToExternalStorage: Found ${existingInternalFiles.size} files, ${conflicts.size} conflicts")
+
+        if (conflicts.isNotEmpty()) {
+            // Show conflict resolution dialog
+            showMigrationConflictDialog(existingInternalFiles, conflicts, internalSavesDir, externalSavesDir)
+        } else {
+            // No conflicts - migrate directly
+            performMigration(existingInternalFiles, emptySet(), internalSavesDir, externalSavesDir)
+        }
+    }
+
+    /**
+     * Shows conflict resolution dialog for each conflicting file.
+     */
+    private fun showMigrationConflictDialog(
+        filesToMigrate: List<String>,
+        conflicts: List<String>,
+        internalSavesDir: File,
+        externalSavesDir: DocumentFile
+    ) {
+        var resolution = ConflictResolution.ASK
+        val skipFiles = mutableSetOf<String>()
+
+        fun processNextConflict(index: Int) {
+            if (index >= conflicts.size || resolution != ConflictResolution.ASK) {
+                // Done with conflicts, perform migration
+                val filesToSkip = when (resolution) {
+                    ConflictResolution.SKIP_ALL -> conflicts.toSet()
+                    ConflictResolution.OVERWRITE_ALL -> emptySet()
+                    ConflictResolution.ASK -> skipFiles
+                }
+                performMigration(filesToMigrate, filesToSkip, internalSavesDir, externalSavesDir)
+                return
+            }
+
+            val filename = conflicts[index]
+            val remainingCount = conflicts.size - index
+
+            // Use custom layout for 4-button dialog
+            val dialogView = layoutInflater.inflate(android.R.layout.simple_list_item_1, null)
+
+            AlertDialog.Builder(this)
+                .setTitle("Save File Conflict ($remainingCount remaining)")
+                .setMessage("'$filename' already exists in external storage.\n\nOverwrite with internal version?")
+                .setPositiveButton("Overwrite") { _, _ ->
+                    // Don't add to skip, will be overwritten
+                    processNextConflict(index + 1)
+                }
+                .setNegativeButton("Skip") { _, _ ->
+                    skipFiles.add(filename)
+                    processNextConflict(index + 1)
+                }
+                .setNeutralButton("Overwrite All") { _, _ ->
+                    resolution = ConflictResolution.OVERWRITE_ALL
+                    processNextConflict(index + 1)
+                }
+                .setCancelable(false)
+                .create()
+                .apply {
+                    setOnShowListener {
+                        // Add "Skip All" button manually (AlertDialog only supports 3 buttons natively)
+                        // We'll use a custom approach: add it as a 4th option in the message
+                    }
+                    // For simplicity, we'll use a different approach: show Skip All in neutral position alternately
+                    // Instead, let's add Skip All via a list dialog approach
+                }
+                .show()
+        }
+
+        // If there are multiple conflicts, offer bulk options first
+        if (conflicts.size > 1) {
+            val options = arrayOf(
+                "Review each file individually",
+                "Overwrite all ${conflicts.size} files",
+                "Skip all ${conflicts.size} files"
+            )
+
+            AlertDialog.Builder(this)
+                .setTitle("Multiple Save File Conflicts")
+                .setMessage("${conflicts.size} save files already exist in external storage.")
+                .setItems(options) { _, which ->
+                    when (which) {
+                        0 -> processNextConflict(0) // Review individually
+                        1 -> {
+                            resolution = ConflictResolution.OVERWRITE_ALL
+                            performMigration(filesToMigrate, emptySet(), internalSavesDir, externalSavesDir)
+                        }
+                        2 -> {
+                            resolution = ConflictResolution.SKIP_ALL
+                            performMigration(filesToMigrate, conflicts.toSet(), internalSavesDir, externalSavesDir)
+                        }
+                    }
+                }
+                .setCancelable(false)
+                .show()
+        } else {
+            // Single conflict - show individual dialog
+            processNextConflict(0)
+        }
+    }
+
+    /**
+     * Performs the actual migration of save files.
+     */
+    private fun performMigration(
+        filesToMigrate: List<String>,
+        filesToSkip: Set<String>,
+        internalSavesDir: File,
+        externalSavesDir: DocumentFile
+    ) {
+        kotlinx.coroutines.GlobalScope.launch {
+            var migratedCount = 0
+            var skippedCount = 0
+            var errorCount = 0
+
+            withContext(Dispatchers.IO) {
+                for (filename in filesToMigrate) {
+                    if (filename in filesToSkip) {
+                        skippedCount++
+                        continue
+                    }
+
+                    val srcFile = File(internalSavesDir, filename)
+                    if (!srcFile.exists()) continue
+
+                    try {
+                        // Delete existing file in destination if overwriting
+                        externalSavesDir.findFile(filename)?.delete()
+
+                        // Create destination file
+                        val destFile = externalSavesDir.createFile("application/octet-stream", filename)
+                        if (destFile == null) {
+                            Log.e(TAG, "performMigration: Failed to create $filename")
+                            errorCount++
+                            continue
+                        }
+
+                        // Copy contents
+                        contentResolver.openOutputStream(destFile.uri)?.use { output ->
+                            srcFile.inputStream().use { input ->
+                                input.copyTo(output, BUFFER_SIZE)
+                            }
+                        }
+
+                        migratedCount++
+                        Log.d(TAG, "performMigration: Migrated $filename")
+
+                    } catch (e: Exception) {
+                        Log.e(TAG, "performMigration: Error migrating $filename", e)
+                        errorCount++
+                    }
+                }
+
+                // Rename internal saves/ to saves.backup/
+                if (migratedCount > 0 || skippedCount > 0) {
+                    val backupDir = File(internalSavesDir.parentFile, "saves.backup")
+                    if (internalSavesDir.renameTo(backupDir)) {
+                        Log.d(TAG, "performMigration: Renamed internal saves to saves.backup")
+                    } else {
+                        Log.e(TAG, "performMigration: Failed to rename internal saves to backup")
+                    }
+                }
+            }
+
+            // Show result Toast on UI thread
+            val message = when {
+                errorCount > 0 -> "Migrated $migratedCount saves, $errorCount errors"
+                skippedCount > 0 -> "Migrated $migratedCount saves, skipped $skippedCount"
+                migratedCount > 0 -> "Migrated $migratedCount save files to external storage"
+                else -> return@launch  // Nothing to report
+            }
+
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+            }
+            Log.i(TAG, "performMigration: $message")
         }
     }
 
@@ -1868,17 +2326,47 @@ class MainActivity : SDLActivity() {
 
     // ========== Save/Load State Functions ==========
 
-    private fun getSaveSlotThumbnailPath(slot: Int): File {
-        val externalDir = getExternalFilesDir(null)
-            ?: throw IllegalStateException("External storage not available")
-        return File(externalDir, "saves/save$slot.png")
+    /**
+     * Gets the SAF DocumentFile for the saves directory.
+     * Returns null if SAF is not configured.
+     */
+    private fun getSafSavesDir(): DocumentFile? {
+        val uriString = zelda3FolderUri ?: return null
+        val treeUri = Uri.parse(uriString)
+        val rootDir = DocumentFile.fromTreeUri(this, treeUri) ?: return null
+        return rootDir.findFile("saves")
     }
 
+    /**
+     * Checks if a save slot exists in SAF external storage.
+     */
     private fun saveSlotExists(slot: Int): Boolean {
-        val externalDir = getExternalFilesDir(null) ?: return false
-        return File(externalDir, "saves/save$slot.sav").exists()
+        val savesDir = getSafSavesDir() ?: return false
+        val file = savesDir.findFile("save$slot.sav")
+        return file != null && file.isFile
     }
 
+    /**
+     * Gets the thumbnail for a save slot from SAF external storage.
+     * Returns null if thumbnail doesn't exist.
+     */
+    private fun getSaveSlotThumbnail(slot: Int): Bitmap? {
+        val savesDir = getSafSavesDir() ?: return null
+        val thumbnailFile = savesDir.findFile("save$slot.png") ?: return null
+
+        return try {
+            contentResolver.openInputStream(thumbnailFile.uri)?.use { input ->
+                android.graphics.BitmapFactory.decodeStream(input)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "getSaveSlotThumbnail: Error loading thumbnail for slot $slot", e)
+            null
+        }
+    }
+
+    /**
+     * Saves a thumbnail for a save slot to SAF external storage.
+     */
     private fun captureSaveThumbnail(slot: Int) {
         try {
             // Get screenshot from C code
@@ -1891,9 +2379,35 @@ class MainActivity : SDLActivity() {
             val bitmap = Bitmap.createBitmap(256, 224, Bitmap.Config.ARGB_8888)
             bitmap.copyPixelsFromBuffer(ByteBuffer.wrap(rgbaData))
 
-            // Save as PNG
-            val thumbnailFile = getSaveSlotThumbnailPath(slot)
-            FileOutputStream(thumbnailFile).use { out ->
+            // Get or create saves directory in SAF
+            val uriString = zelda3FolderUri ?: run {
+                Log.e(TAG, "captureSaveThumbnail: No SAF Uri configured")
+                return
+            }
+            val treeUri = Uri.parse(uriString)
+            val rootDir = DocumentFile.fromTreeUri(this, treeUri) ?: run {
+                Log.e(TAG, "captureSaveThumbnail: Failed to get DocumentFile")
+                return
+            }
+            var savesDir = rootDir.findFile("saves")
+            if (savesDir == null) {
+                savesDir = rootDir.createDirectory("saves") ?: run {
+                    Log.e(TAG, "captureSaveThumbnail: Failed to create saves directory")
+                    return
+                }
+            }
+
+            // Delete existing thumbnail if present
+            savesDir.findFile("save$slot.png")?.delete()
+
+            // Create new thumbnail file
+            val thumbnailFile = savesDir.createFile("image/png", "save$slot.png") ?: run {
+                Log.e(TAG, "captureSaveThumbnail: Failed to create thumbnail file")
+                return
+            }
+
+            // Write PNG data
+            contentResolver.openOutputStream(thumbnailFile.uri)?.use { out ->
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
 
@@ -1984,11 +2498,10 @@ class MainActivity : SDLActivity() {
             val saveExists = saveSlotExists(slot)
             holder.emptyIndicator.visibility = if (saveExists) View.GONE else View.VISIBLE
 
-            // Load thumbnail if exists
-            val thumbnailFile = getSaveSlotThumbnailPath(slot)
-            if (thumbnailFile.exists()) {
-                val bitmap = android.graphics.BitmapFactory.decodeFile(thumbnailFile.absolutePath)
-                holder.thumbnail.setImageBitmap(bitmap)
+            // Load thumbnail from SAF if exists
+            val thumbnail = getSaveSlotThumbnail(slot)
+            if (thumbnail != null) {
+                holder.thumbnail.setImageBitmap(thumbnail)
             } else {
                 holder.thumbnail.setImageResource(R.drawable.ic_placeholder_snes)
             }

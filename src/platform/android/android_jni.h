@@ -51,6 +51,52 @@ void Android_ShowToast(const char* message);
  */
 void Android_UpdateRendererConfig(const char *renderer);
 
+/**
+ * Opens a save file for reading using Android SAF (Storage Access Framework).
+ * Called from zelda_rtl.c when loading save files on Android.
+ *
+ * @param filename Relative filename like "sram.dat" or "save0.sav"
+ * @return File descriptor (>= 0) on success, -1 on failure
+ */
+int Android_OpenSaveFileRead(const char *filename);
+
+/**
+ * Opens a save file for writing using Android SAF (Storage Access Framework).
+ * Creates the file if it doesn't exist.
+ * Called from zelda_rtl.c when saving on Android.
+ *
+ * @param filename Relative filename like "sram.dat" or "save0.sav"
+ * @return File descriptor (>= 0) on success, -1 on failure
+ */
+int Android_OpenSaveFileWrite(const char *filename);
+
+/**
+ * Renames a save file in external storage using Android SAF.
+ * Used for creating backup files (sram.dat -> sram.bak).
+ *
+ * @param old_name Current filename
+ * @param new_name New filename
+ * @return 1 on success, 0 on failure
+ */
+int Android_RenameSaveFile(const char *old_name, const char *new_name);
+
+/**
+ * Checks if a save file exists in external storage.
+ *
+ * @param filename Relative filename to check
+ * @return 1 if file exists, 0 if not
+ */
+int Android_SaveFileExists(const char *filename);
+
+/**
+ * Deletes a save file in external storage using Android SAF.
+ * Used for removing old backup files before renaming.
+ *
+ * @param filename Filename to delete
+ * @return 1 on success, 0 on failure
+ */
+int Android_DeleteSaveFile(const char *filename);
+
 // Note: The actual JNI function declarations are in android_jni.c
 // They are:
 // - Java_com_dishii_zelda3_MainActivity_nativeSaveState(JNIEnv* env, jobject obj, jint slot)

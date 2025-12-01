@@ -333,11 +333,15 @@ class LauncherActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                // Create MSU subdirectory
+                // Create MSU and saves subdirectories
                 val msuDir = File(folderPath, "MSU")
+                val savesDir = File(folderPath, "saves")
                 withContext(Dispatchers.IO) {
                     if (!msuDir.exists() && !msuDir.mkdirs()) {
                         throw IOException("Failed to create MSU directory")
+                    }
+                    if (!savesDir.exists() && !savesDir.mkdirs()) {
+                        throw IOException("Failed to create saves directory")
                     }
                 }
 

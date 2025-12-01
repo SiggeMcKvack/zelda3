@@ -230,19 +230,21 @@ adb shell ls -lh /sdcard/Android/data/com.dishii.zelda3/files/zelda3_assets.dat
 **App-Specific Storage** (`/sdcard/Android/data/com.dishii.zelda3/files/`):
 - `zelda3_assets.dat` - Game assets (required)
 - `zelda3.ini` - Configuration file (auto-generated)
-- `saves/` - Save files directory
-  - `sram.dat` - In-game saves (Link's file)
-  - `save1.sav` through `save10.sav` - Snapshot files (F1-F10)
-  - `save1.png` through `save10.png` - Snapshot thumbnails
+- `saves/ref/` - Reference save files (shipped with app)
 
 **User-Selected Folder** (e.g., `/sdcard/Zelda3/`):
-- `MSU/` - MSU audio files only
+- `MSU/` - MSU audio files
   - `alttp_msu-1.pcm`, `alttp_msu-2.pcm`, etc.
+- `saves/` - Save files directory (user-accessible)
+  - `sram.dat` - In-game saves (Link's file)
+  - `save0.sav` through `save9.sav` - Snapshot files (Quick Save + slots 1-9)
+  - `save0.png` through `save9.png` - Snapshot thumbnails
 
 **Why the split?**
 - Android 11+ restricts direct access to `/sdcard/Android/data/` for security
-- MSU files (1-2 GB) are stored in accessible location for easy management
-- Assets, config, and saves remain in protected app-specific storage
+- MSU files (1-2 GB) and saves are stored in user-accessible location for easy management and backup
+- Assets and config remain in protected app-specific storage
+- **Migration:** On upgrade, existing saves from app-specific storage are automatically migrated to the user-selected folder
 
 ### In-App Settings
 
@@ -333,29 +335,30 @@ adb shell ls -lh /sdcard/Android/data/com.dishii.zelda3/files/zelda3_assets.dat
 
 ### Save Files
 
-Save files are stored in app-specific storage (accessible only via ADB or root):
+Save files are stored in the user-selected Zelda3 folder alongside MSU files:
 
 ```
-/sdcard/Android/data/com.dishii.zelda3/files/saves/
+<Zelda3-folder>/saves/
 ```
+
+For example, if you selected `/sdcard/Zelda3` as your folder:
+```
+/sdcard/Zelda3/saves/sram.dat      # Main save data
+/sdcard/Zelda3/saves/save0.sav     # Save slot 0
+/sdcard/Zelda3/saves/save0.png     # Slot 0 thumbnail
+```
+
+**Benefits of external storage:**
+- Save files are easily accessible via file manager
+- No ADB or root access required for backup/restore
+- Survives app uninstall/reinstall
+- Easy to transfer between devices
 
 **Backup save files:**
-```bash
-# Pull all saves from device
-adb pull /sdcard/Android/data/com.dishii.zelda3/files/saves/ ./saves_backup/
-
-# Restore saves to device
-adb push ./saves_backup/ /sdcard/Android/data/com.dishii.zelda3/files/saves/
-```
+Simply copy the `saves/` folder from your Zelda3 folder using any file manager.
 
 **Transfer saves between desktop and Android:**
-```bash
-# Desktop → Android
-adb push saves/sram.dat /sdcard/Android/data/com.dishii.zelda3/files/saves/
-
-# Android → Desktop
-adb pull /sdcard/Android/data/com.dishii.zelda3/files/saves/sram.dat ./saves/
-```
+Copy save files directly to/from the `saves/` subfolder in your Zelda3 folder.
 
 ### Configuration File Access
 
@@ -381,7 +384,7 @@ adb push zelda3.ini /sdcard/Android/data/com.dishii.zelda3/files/
 |---------|---------|---------|
 | Configuration | Edit `zelda3.ini` manually | In-app Settings UI |
 | Assets location | Same as executable | `/sdcard/Android/data/com.dishii.zelda3/files/` |
-| Saves location | Same as executable | `/sdcard/Android/data/com.dishii.zelda3/files/saves/` |
+| Saves location | Same as executable | User-selected folder + `/saves/` |
 | MSU location | `msu/` subfolder | User-selected folder + `/MSU/` |
 | Renderer default | SDL | OpenGL ES |
 | Aspect ratio default | 4:3 | extend_y, 16:10 (mobile-friendly) |

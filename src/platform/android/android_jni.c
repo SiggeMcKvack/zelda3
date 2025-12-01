@@ -72,7 +72,7 @@ JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeReloadAudioConf
  * Get the JavaVM pointer from SDL's cached copy.
  * SDL's JNI_OnLoad stores this when libSDL2.so loads.
  */
-static JavaVM* GetJavaVM() {
+static JavaVM* GetJavaVM(void) {
     // SDL caches the JavaVM in SDL_android.c as a static variable
     // We can access it via SDL_AndroidGetJNIEnv which uses it internally
     JNIEnv *env = (JNIEnv*)SDL_AndroidGetJNIEnv();
@@ -85,6 +85,158 @@ static JavaVM* GetJavaVM() {
 }
 
 /**
+ * Helper to get JNIEnv, attaching thread if needed.
+ * @return JNIEnv pointer or NULL on failure
+ */
+static JNIEnv* GetJNIEnv(void) {
+    JavaVM *vm = GetJavaVM();
+    if (!vm) return NULL;
+
+    JNIEnv *env = NULL;
+    int getEnvStat = (*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6);
+
+    if (getEnvStat == JNI_EDETACHED) {
+        if ((*vm)->AttachCurrentThread(vm, &env, NULL) != 0) {
+            return NULL;
+        }
+    } else if (getEnvStat != JNI_OK) {
+        return NULL;
+    }
+    return env;
+}
+
+/**
+ * Call static int method(String) on MainActivity.
+ * @param methodName Name of the static method to call
+ * @param arg String argument to pass
+ * @return Method return value, or -1 on failure
+ */
+static int CallMainActivityIntMethod1S(const char *methodName, const char *arg) {
+    JNIEnv *env = GetJNIEnv();
+    if (!env) {
+        LOGD("%s: Failed to get JNIEnv", methodName);
+        return -1;
+    }
+
+    jclass cls = (*env)->FindClass(env, "com/dishii/zelda3/MainActivity");
+    if (!cls) {
+        LOGD("%s: Failed to find MainActivity class", methodName);
+        return -1;
+    }
+
+    jmethodID method = (*env)->GetStaticMethodID(env, cls, methodName, "(Ljava/lang/String;)I");
+    if (!method) {
+        LOGD("%s: Failed to find method", methodName);
+        (*env)->DeleteLocalRef(env, cls);
+        return -1;
+    }
+
+    jstring jarg = (*env)->NewStringUTF(env, arg);
+    if (!jarg) {
+        LOGD("%s: Failed to create Java string", methodName);
+        (*env)->DeleteLocalRef(env, cls);
+        return -1;
+    }
+
+    jint result = (*env)->CallStaticIntMethod(env, cls, method, jarg);
+
+    (*env)->DeleteLocalRef(env, jarg);
+    (*env)->DeleteLocalRef(env, cls);
+
+    LOGD("%s: arg='%s', result=%d", methodName, arg, result);
+    return (int)result;
+}
+
+/**
+ * Call static boolean method(String) on MainActivity.
+ * @param methodName Name of the static method to call
+ * @param arg String argument to pass
+ * @return 1 if method returns true, 0 otherwise
+ */
+static int CallMainActivityBoolMethod1S(const char *methodName, const char *arg) {
+    JNIEnv *env = GetJNIEnv();
+    if (!env) {
+        LOGD("%s: Failed to get JNIEnv", methodName);
+        return 0;
+    }
+
+    jclass cls = (*env)->FindClass(env, "com/dishii/zelda3/MainActivity");
+    if (!cls) {
+        LOGD("%s: Failed to find MainActivity class", methodName);
+        return 0;
+    }
+
+    jmethodID method = (*env)->GetStaticMethodID(env, cls, methodName, "(Ljava/lang/String;)Z");
+    if (!method) {
+        LOGD("%s: Failed to find method", methodName);
+        (*env)->DeleteLocalRef(env, cls);
+        return 0;
+    }
+
+    jstring jarg = (*env)->NewStringUTF(env, arg);
+    if (!jarg) {
+        LOGD("%s: Failed to create Java string", methodName);
+        (*env)->DeleteLocalRef(env, cls);
+        return 0;
+    }
+
+    jboolean result = (*env)->CallStaticBooleanMethod(env, cls, method, jarg);
+
+    (*env)->DeleteLocalRef(env, jarg);
+    (*env)->DeleteLocalRef(env, cls);
+
+    LOGD("%s: arg='%s', result=%d", methodName, arg, result);
+    return result ? 1 : 0;
+}
+
+/**
+ * Call static boolean method(String, String) on MainActivity.
+ * @param methodName Name of the static method to call
+ * @param arg1 First string argument
+ * @param arg2 Second string argument
+ * @return 1 if method returns true, 0 otherwise
+ */
+static int CallMainActivityBoolMethod2S(const char *methodName, const char *arg1, const char *arg2) {
+    JNIEnv *env = GetJNIEnv();
+    if (!env) {
+        LOGD("%s: Failed to get JNIEnv", methodName);
+        return 0;
+    }
+
+    jclass cls = (*env)->FindClass(env, "com/dishii/zelda3/MainActivity");
+    if (!cls) {
+        LOGD("%s: Failed to find MainActivity class", methodName);
+        return 0;
+    }
+
+    jmethodID method = (*env)->GetStaticMethodID(env, cls, methodName, "(Ljava/lang/String;Ljava/lang/String;)Z");
+    if (!method) {
+        LOGD("%s: Failed to find method", methodName);
+        (*env)->DeleteLocalRef(env, cls);
+        return 0;
+    }
+
+    jstring jarg1 = (*env)->NewStringUTF(env, arg1);
+    jstring jarg2 = (*env)->NewStringUTF(env, arg2);
+    if (!jarg1 || !jarg2) {
+        LOGD("%s: Failed to create Java strings", methodName);
+        if (jarg1) (*env)->DeleteLocalRef(env, jarg1);
+        if (jarg2) (*env)->DeleteLocalRef(env, jarg2);
+        (*env)->DeleteLocalRef(env, cls);
+        return 0;
+    }
+
+    jboolean result = (*env)->CallStaticBooleanMethod(env, cls, method, jarg1, jarg2);
+
+    (*env)->DeleteLocalRef(env, jarg1);
+    (*env)->DeleteLocalRef(env, jarg2);
+    (*env)->DeleteLocalRef(env, cls);
+
+    LOGD("%s: arg1='%s', arg2='%s', result=%d", methodName, arg1, arg2, result);
+    return result ? 1 : 0;
+}
+
+/**
  * Opens an MSU file using Android SAF (Storage Access Framework).
  * Called from audio.c when loading MSU files on Android 13+.
  *
@@ -92,61 +244,7 @@ static JavaVM* GetJavaVM() {
  * @return File descriptor (>= 0) on success, -1 on failure
  */
 int Android_OpenMsuFileDescriptor(const char *filename) {
-    JavaVM *vm = GetJavaVM();
-    if (!vm) {
-        LOGD("Android_OpenMsuFileDescriptor: JavaVM not initialized");
-        return -1;
-    }
-
-    JNIEnv *env = NULL;
-    int getEnvStat = (*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6);
-
-    // If GetEnv fails, we need to attach the current thread
-    if (getEnvStat == JNI_EDETACHED) {
-        LOGD("Android_OpenMsuFileDescriptor: Attaching thread to JavaVM");
-        if ((*vm)->AttachCurrentThread(vm, &env, NULL) != 0) {
-            LOGD("Android_OpenMsuFileDescriptor: Failed to attach thread");
-            return -1;
-        }
-    } else if (getEnvStat != JNI_OK) {
-        LOGD("Android_OpenMsuFileDescriptor: Failed to get JNIEnv");
-        return -1;
-    }
-
-    // Find MainActivity class
-    jclass mainActivityClass = (*env)->FindClass(env, "com/dishii/zelda3/MainActivity");
-    if (!mainActivityClass) {
-        LOGD("Android_OpenMsuFileDescriptor: Failed to find MainActivity class");
-        return -1;
-    }
-
-    // Find the static openMsuFile method
-    jmethodID openMsuFileMethod = (*env)->GetStaticMethodID(env, mainActivityClass,
-                                                             "openMsuFile",
-                                                             "(Ljava/lang/String;)I");
-    if (!openMsuFileMethod) {
-        LOGD("Android_OpenMsuFileDescriptor: Failed to find openMsuFile method");
-        (*env)->DeleteLocalRef(env, mainActivityClass);
-        return -1;
-    }
-
-    // Convert C string to Java string
-    jstring jfilename = (*env)->NewStringUTF(env, filename);
-    if (!jfilename) {
-        LOGD("Android_OpenMsuFileDescriptor: Failed to create Java string");
-        (*env)->DeleteLocalRef(env, mainActivityClass);
-        return -1;
-    }
-
-    // Call Java method to get file descriptor
-    jint fd = (*env)->CallStaticIntMethod(env, mainActivityClass, openMsuFileMethod, jfilename);
-
-    // Clean up local references
-    (*env)->DeleteLocalRef(env, jfilename);
-    (*env)->DeleteLocalRef(env, mainActivityClass);
-
-    LOGD("Android_OpenMsuFileDescriptor: filename='%s', fd=%d", filename, fd);
-    return (int)fd;
+    return CallMainActivityIntMethod1S("openMsuFile", filename);
 }
 
 /**
@@ -859,4 +957,64 @@ JNIEXPORT jobjectArray JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetAvai
     (*env)->DeleteLocalRef(env, stringClass);
 
     return result;
+}
+
+// ============================================================================
+// Save File JNI Functions (for external storage via SAF)
+// ============================================================================
+
+/**
+ * Opens a save file for reading using Android SAF (Storage Access Framework).
+ * Called from zelda_rtl.c when loading save files on Android.
+ *
+ * @param filename Relative filename like "sram.dat" or "save0.sav"
+ * @return File descriptor (>= 0) on success, -1 on failure
+ */
+int Android_OpenSaveFileRead(const char *filename) {
+    return CallMainActivityIntMethod1S("openSaveFileRead", filename);
+}
+
+/**
+ * Opens a save file for writing using Android SAF (Storage Access Framework).
+ * Creates the file if it doesn't exist.
+ * Called from zelda_rtl.c when saving on Android.
+ *
+ * @param filename Relative filename like "sram.dat" or "save0.sav"
+ * @return File descriptor (>= 0) on success, -1 on failure
+ */
+int Android_OpenSaveFileWrite(const char *filename) {
+    return CallMainActivityIntMethod1S("openSaveFileWrite", filename);
+}
+
+/**
+ * Renames a save file in external storage using Android SAF.
+ * Used for creating backup files (sram.dat -> sram.bak).
+ *
+ * @param old_name Current filename
+ * @param new_name New filename
+ * @return 1 on success, 0 on failure
+ */
+int Android_RenameSaveFile(const char *old_name, const char *new_name) {
+    return CallMainActivityBoolMethod2S("renameSaveFile", old_name, new_name);
+}
+
+/**
+ * Checks if a save file exists in external storage.
+ *
+ * @param filename Relative filename to check
+ * @return 1 if file exists, 0 if not
+ */
+int Android_SaveFileExists(const char *filename) {
+    return CallMainActivityBoolMethod1S("saveFileExists", filename);
+}
+
+/**
+ * Deletes a save file in external storage using Android SAF.
+ * Used for removing old backup files before renaming.
+ *
+ * @param filename Filename to delete
+ * @return 1 on success, 0 on failure
+ */
+int Android_DeleteSaveFile(const char *filename) {
+    return CallMainActivityBoolMethod1S("deleteSaveFile", filename);
 }
