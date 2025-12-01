@@ -252,16 +252,38 @@ adb shell ls -lh /sdcard/Android/data/com.dishii.zelda3/files/zelda3_assets.dat
 
 **To access Settings:**
 1. Launch the app
-2. Tap the **menu button** (three dots) or **back button** during gameplay
-3. Select **Settings** from the menu
-4. Configure options through the UI
+2. Swipe from the left edge or tap the **menu button** during gameplay
+3. The navigation drawer appears with all options
+4. Configure options through the UI dialogs
 
-**Available Settings:**
-- **Graphics:** Renderer (OpenGL ES/Vulkan), window scale, aspect ratio, sprite limits
-- **Audio:** MSU audio enable/disable, volume, sample rate
-- **Controls:** Gamepad configuration, button mapping
-- **Features:** Enhanced features (L/R switching, bug fixes, experimental features)
-- **Language:** Select from available language packs
+**Navigation Drawer Options:**
+- **Return to game** - Resume gameplay
+- **Pause** - Pause/unpause the game
+- **Save state / Load state** - Quick save and load with thumbnails
+- **Gameplay settings** - Feature toggles (see below)
+- **Controller settings** - Button mapping for physical gamepads
+- **Graphics options** - Renderer, aspect ratio, display settings
+- **Audio options** - MSU audio, volume, low health beep
+- **Overlay options** - Touch control customization
+- **Language** - Select from available language packs
+- **Exit** - Close the app
+
+**Graphics Options:**
+- **Renderer:** SDL, OpenGL ES, or Vulkan
+- **Aspect ratio:** 8:7, 4:3, 3:2, 16:9, 16:10, 18:9
+- **Extended height (240 lines):** Use full SNES resolution
+- **Disable frame delay:** For 60Hz displays only
+- **Optimized SNES PPU renderer:** Faster rendering
+- **High resolution world map:** Enhanced Mode 7
+- **Dim flashing effects:** Accessibility option
+
+**Gameplay Settings:**
+- **Save:** Autosave on quit
+- **Controls:** Item switching with L/R, turn while dashing
+- **Gameplay:** Skip intro, mirror to Dark World, collect/break with sword, more bombs/rupees, cancel bird travel
+- **Interface:** Show max items in yellow
+- **Bug fixes:** Miscellaneous and gameplay bug fixes
+- **Experimental:** Pokemode, Princess Zelda helps
 
 **Settings are saved to `zelda3.ini` automatically** - no manual editing required.
 

@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+
+    <!-- SAVE Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="SAVE"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="8dp"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textStyle="bold" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_autosave"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Autosave on quit"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <!-- CONTROLS Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="CONTROLS"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="8dp"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textStyle="bold" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_item_switch_lr"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Item switching with L/R"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_item_switch_lr_limit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Limit L/R to first 4 items"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_turn_while_dashing"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Turn while dashing"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <!-- GAMEPLAY Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="GAMEPLAY"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="8dp"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textStyle="bold" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_skip_intro"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Skip intro on keypress"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_mirror_to_darkworld"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Mirror warps to Dark World"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_collect_items_sword"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Collect items with sword"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_break_pots_sword"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Break pots with sword"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_more_bombs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="More active bombs (4)"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_more_rupees"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Carry more rupees (9999)"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_cancel_bird"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Cancel bird travel with X"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <!-- INTERFACE Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="INTERFACE"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="8dp"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textStyle="bold" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_yellow_items"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Show max items in yellow"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <!-- BUG FIXES Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="BUG FIXES"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="8dp"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textStyle="bold" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_misc_bugs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Miscellaneous bug fixes"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_gameplay_bugs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Gameplay bug fixes"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <!-- EXPERIMENTAL Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="EXPERIMENTAL"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="24dp"
+        android:paddingBottom="8dp"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textStyle="bold" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_pokemode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Pokemode"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_zelda_helps"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Princess Zelda helps"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+</LinearLayout>
+
+</ScrollView>

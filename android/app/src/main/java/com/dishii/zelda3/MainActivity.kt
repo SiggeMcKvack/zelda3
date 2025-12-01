@@ -18,6 +18,8 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.graphics.Bitmap
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
@@ -935,6 +937,11 @@ class MainActivity : SDLActivity() {
                     drawerLayout.closeDrawers()
                     Handler(Looper.getMainLooper()).postDelayed({ showLoadStateDialog() }, 300)
                 }
+                R.id.nav_gameplay_settings -> {
+                    Log.d(TAG, "Gameplay settings selected - closing drawer and showing dialog")
+                    drawerLayout.closeDrawers()
+                    Handler(Looper.getMainLooper()).postDelayed({ showGameplaySettingsDialog() }, 300)
+                }
                 R.id.nav_controller_settings -> {
                     Log.d(TAG, "Controller settings selected - closing drawer and showing dialog")
                     drawerLayout.closeDrawers()
@@ -1501,7 +1508,7 @@ class MainActivity : SDLActivity() {
         try {
             val dialogView = layoutInflater.inflate(R.layout.dialog_graphics_options, null)
 
-            // Get views
+            // Get views - Renderer
             val textRestartWarning = dialogView.findViewById<TextView>(R.id.text_restart_warning)
             val toggleRenderer = dialogView.findViewById<com.google.android.material.button.MaterialButtonToggleGroup>(R.id.toggle_renderer)
             val buttonSdl = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.button_renderer_sdl)
@@ -1509,12 +1516,47 @@ class MainActivity : SDLActivity() {
             val buttonVulkan = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.button_renderer_vulkan)
             val textRendererInfo = dialogView.findViewById<TextView>(R.id.text_renderer_info)
 
-            // Read current renderer setting in background thread
+            // Get views - Aspect ratio dropdown
+            val dropdownAspectRatio = dialogView.findViewById<AutoCompleteTextView>(R.id.dropdown_aspect_ratio)
+
+            // Get views - Display toggles
+            val switchExtendY = dialogView.findViewById<SwitchMaterial>(R.id.switch_extend_y)
+            val switchDisableFrameDelay = dialogView.findViewById<SwitchMaterial>(R.id.switch_disable_frame_delay)
+            val switchNewRenderer = dialogView.findViewById<SwitchMaterial>(R.id.switch_new_renderer)
+            val switchEnhancedMode7 = dialogView.findViewById<SwitchMaterial>(R.id.switch_enhanced_mode7)
+            val switchDimFlashes = dialogView.findViewById<SwitchMaterial>(R.id.switch_dim_flashes)
+
+            // Aspect ratio options
+            val aspectRatios = arrayOf("8:7", "4:3", "3:2", "16:9", "16:10", "18:9")
+            val adapter = ArrayAdapter(this, R.layout.list_item, aspectRatios)
+            dropdownAspectRatio.setAdapter(adapter)
+
+            // Read all settings in background thread
             Thread {
                 val currentRenderer = kotlinx.coroutines.runBlocking { readRendererSetting() }
                 val originalRenderer = currentRenderer
 
-                Log.d(TAG, "showGraphicsOptionsDialog: current renderer = $currentRenderer")
+                // Read aspect ratio settings
+                val aspectSettings = kotlinx.coroutines.runBlocking { readExtendedAspectRatio() }
+                val originalAspectRatio = aspectSettings.aspectRatio
+                val originalExtendY = aspectSettings.extendY
+
+                // Read boolean settings using ConfigManager
+                val originalDisableFrameDelay = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "General", "DisableFrameDelay", false)
+                }
+                val originalNewRenderer = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Graphics", "NewRenderer", true)
+                }
+                val originalEnhancedMode7 = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Graphics", "EnhancedMode7", true)
+                }
+                val originalDimFlashes = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Graphics", "DimFlashes", false)
+                }
+
+                Log.d(TAG, "showGraphicsOptionsDialog: renderer=$currentRenderer, aspectRatio=$originalAspectRatio, extendY=$originalExtendY")
+                Log.d(TAG, "showGraphicsOptionsDialog: disableFrameDelay=$originalDisableFrameDelay, newRenderer=$originalNewRenderer, enhancedMode7=$originalEnhancedMode7, dimFlashes=$originalDimFlashes")
 
                 // Update UI on main thread
                 runOnUiThread {
@@ -1556,6 +1598,21 @@ class MainActivity : SDLActivity() {
                     toggleRenderer.check(checkedButtonId)
                     updateInfoText(currentRenderer)
 
+                    // Set initial aspect ratio - find matching value or default to 16:9
+                    val initialAspectRatio = if (aspectRatios.contains(originalAspectRatio)) {
+                        originalAspectRatio
+                    } else {
+                        "16:9"
+                    }
+                    dropdownAspectRatio.setText(initialAspectRatio, false)
+
+                    // Set initial toggle states
+                    switchExtendY.isChecked = originalExtendY
+                    switchDisableFrameDelay.isChecked = originalDisableFrameDelay
+                    switchNewRenderer.isChecked = originalNewRenderer
+                    switchEnhancedMode7.isChecked = originalEnhancedMode7
+                    switchDimFlashes.isChecked = originalDimFlashes
+
                     // Create dialog
                     val dialog = MaterialAlertDialogBuilder(this@MainActivity)
                         .setTitle("Graphics options")
@@ -1571,22 +1628,60 @@ class MainActivity : SDLActivity() {
                                     "SDL"
                                 }
                             }
-                            Log.d(TAG, "showGraphicsOptionsDialog: Done clicked, selected = '$selectedRenderer'")
-                            Log.d(TAG, "showGraphicsOptionsDialog: Original = '$originalRenderer'")
+
+                            // Get all new values
+                            val selectedAspectRatio = dropdownAspectRatio.text.toString()
+                            val selectedExtendY = switchExtendY.isChecked
+                            val selectedDisableFrameDelay = switchDisableFrameDelay.isChecked
+                            val selectedNewRenderer = switchNewRenderer.isChecked
+                            val selectedEnhancedMode7 = switchEnhancedMode7.isChecked
+                            val selectedDimFlashes = switchDimFlashes.isChecked
+
+                            Log.d(TAG, "showGraphicsOptionsDialog: Done clicked")
+                            Log.d(TAG, "showGraphicsOptionsDialog: renderer=$selectedRenderer, aspectRatio=$selectedAspectRatio, extendY=$selectedExtendY")
 
                             Thread {
-                                // Check if renderer changed (also handle "OpenGL" vs "OpenGL ES")
+                                // Check if any setting changed
                                 val normalizedOriginal = if (originalRenderer == "OpenGL") "OpenGL ES" else originalRenderer
-                                val actuallyChanged = selectedRenderer != normalizedOriginal
+                                val rendererChanged = selectedRenderer != normalizedOriginal
+                                val aspectRatioChanged = selectedAspectRatio != originalAspectRatio
+                                val extendYChanged = selectedExtendY != originalExtendY
+                                val disableFrameDelayChanged = selectedDisableFrameDelay != originalDisableFrameDelay
+                                val newRendererChanged = selectedNewRenderer != originalNewRenderer
+                                val enhancedMode7Changed = selectedEnhancedMode7 != originalEnhancedMode7
+                                val dimFlashesChanged = selectedDimFlashes != originalDimFlashes
 
-                                Log.d(TAG, "showGraphicsOptionsDialog: Actually changed = $actuallyChanged")
+                                val anyChanged = rendererChanged || aspectRatioChanged || extendYChanged ||
+                                        disableFrameDelayChanged || newRendererChanged ||
+                                        enhancedMode7Changed || dimFlashesChanged
 
-                                if (actuallyChanged) {
-                                    Log.d(TAG, "Renderer changed from '$normalizedOriginal' to '$selectedRenderer'")
+                                Log.d(TAG, "showGraphicsOptionsDialog: anyChanged=$anyChanged")
 
-                                    // Save new renderer setting
+                                if (anyChanged) {
                                     kotlinx.coroutines.runBlocking {
-                                        updateRendererSetting(selectedRenderer)
+                                        // Save renderer if changed
+                                        if (rendererChanged) {
+                                            updateRendererSetting(selectedRenderer)
+                                        }
+
+                                        // Save aspect ratio and extend_y if changed
+                                        if (aspectRatioChanged || extendYChanged) {
+                                            writeExtendedAspectRatio(selectedAspectRatio, selectedExtendY)
+                                        }
+
+                                        // Save boolean settings if changed
+                                        if (disableFrameDelayChanged) {
+                                            ConfigManager.writeBool(this@MainActivity, "General", "DisableFrameDelay", selectedDisableFrameDelay)
+                                        }
+                                        if (newRendererChanged) {
+                                            ConfigManager.writeBool(this@MainActivity, "Graphics", "NewRenderer", selectedNewRenderer)
+                                        }
+                                        if (enhancedMode7Changed) {
+                                            ConfigManager.writeBool(this@MainActivity, "Graphics", "EnhancedMode7", selectedEnhancedMode7)
+                                        }
+                                        if (dimFlashesChanged) {
+                                            ConfigManager.writeBool(this@MainActivity, "Graphics", "DimFlashes", selectedDimFlashes)
+                                        }
                                     }
 
                                     // Show restart dialog
@@ -1594,7 +1689,7 @@ class MainActivity : SDLActivity() {
                                         showRendererRestartDialog()
                                     }
                                 } else {
-                                    Log.d(TAG, "Renderer unchanged, no restart needed")
+                                    Log.d(TAG, "No graphics settings changed, no restart needed")
                                 }
 
                                 // Return to drawer
@@ -1644,6 +1739,231 @@ class MainActivity : SDLActivity() {
             setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_restart, 0, 0, 0)
             compoundDrawablePadding = resources.getDimensionPixelSize(android.R.dimen.app_icon_size) / 4
             setCompoundDrawableTintList(onPrimaryColor)
+        }
+    }
+
+    /**
+     * Shows gameplay settings dialog with feature toggles.
+     */
+    private fun showGameplaySettingsDialog() {
+        Log.d(TAG, "showGameplaySettingsDialog() called")
+
+        try {
+            val dialogView = layoutInflater.inflate(R.layout.dialog_gameplay_settings, null)
+
+            // Get all switch references
+            val switchAutosave = dialogView.findViewById<SwitchMaterial>(R.id.switch_autosave)
+            val switchItemSwitchLR = dialogView.findViewById<SwitchMaterial>(R.id.switch_item_switch_lr)
+            val switchItemSwitchLRLimit = dialogView.findViewById<SwitchMaterial>(R.id.switch_item_switch_lr_limit)
+            val switchTurnWhileDashing = dialogView.findViewById<SwitchMaterial>(R.id.switch_turn_while_dashing)
+            val switchSkipIntro = dialogView.findViewById<SwitchMaterial>(R.id.switch_skip_intro)
+            val switchMirrorToDarkworld = dialogView.findViewById<SwitchMaterial>(R.id.switch_mirror_to_darkworld)
+            val switchCollectItemsSword = dialogView.findViewById<SwitchMaterial>(R.id.switch_collect_items_sword)
+            val switchBreakPotsSword = dialogView.findViewById<SwitchMaterial>(R.id.switch_break_pots_sword)
+            val switchMoreBombs = dialogView.findViewById<SwitchMaterial>(R.id.switch_more_bombs)
+            val switchMoreRupees = dialogView.findViewById<SwitchMaterial>(R.id.switch_more_rupees)
+            val switchCancelBird = dialogView.findViewById<SwitchMaterial>(R.id.switch_cancel_bird)
+            val switchYellowItems = dialogView.findViewById<SwitchMaterial>(R.id.switch_yellow_items)
+            val switchMiscBugs = dialogView.findViewById<SwitchMaterial>(R.id.switch_misc_bugs)
+            val switchGameplayBugs = dialogView.findViewById<SwitchMaterial>(R.id.switch_gameplay_bugs)
+            val switchPokemode = dialogView.findViewById<SwitchMaterial>(R.id.switch_pokemode)
+            val switchZeldaHelps = dialogView.findViewById<SwitchMaterial>(R.id.switch_zelda_helps)
+
+            // Read all settings in background thread
+            Thread {
+                // Read all settings
+                val origAutosave = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "General", "Autosave", false)
+                }
+                val origItemSwitchLR = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "ItemSwitchLR", false)
+                }
+                val origItemSwitchLRLimit = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "ItemSwitchLRLimit", false)
+                }
+                val origTurnWhileDashing = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "TurnWhileDashing", false)
+                }
+                val origSkipIntro = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "SkipIntroOnKeypress", false)
+                }
+                val origMirrorToDarkworld = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "MirrorToDarkworld", false)
+                }
+                val origCollectItemsSword = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "CollectItemsWithSword", false)
+                }
+                val origBreakPotsSword = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "BreakPotsWithSword", false)
+                }
+                val origMoreBombs = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "MoreActiveBombs", false)
+                }
+                val origMoreRupees = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "CarryMoreRupees", false)
+                }
+                val origCancelBird = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "CancelBirdTravel", false)
+                }
+                val origYellowItems = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "ShowMaxItemsInYellow", false)
+                }
+                val origMiscBugs = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "MiscBugFixes", false)
+                }
+                val origGameplayBugs = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "GameChangingBugFixes", false)
+                }
+                val origPokemode = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "Pokemode", false)
+                }
+                val origZeldaHelps = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readBool(this@MainActivity, "Features", "PrincessZeldaHelps", false)
+                }
+
+                Log.d(TAG, "showGameplaySettingsDialog: Read all settings")
+
+                // Update UI on main thread
+                runOnUiThread {
+                    // Set initial toggle states
+                    switchAutosave.isChecked = origAutosave
+                    switchItemSwitchLR.isChecked = origItemSwitchLR
+                    switchItemSwitchLRLimit.isChecked = origItemSwitchLRLimit
+                    switchTurnWhileDashing.isChecked = origTurnWhileDashing
+                    switchSkipIntro.isChecked = origSkipIntro
+                    switchMirrorToDarkworld.isChecked = origMirrorToDarkworld
+                    switchCollectItemsSword.isChecked = origCollectItemsSword
+                    switchBreakPotsSword.isChecked = origBreakPotsSword
+                    switchMoreBombs.isChecked = origMoreBombs
+                    switchMoreRupees.isChecked = origMoreRupees
+                    switchCancelBird.isChecked = origCancelBird
+                    switchYellowItems.isChecked = origYellowItems
+                    switchMiscBugs.isChecked = origMiscBugs
+                    switchGameplayBugs.isChecked = origGameplayBugs
+                    switchPokemode.isChecked = origPokemode
+                    switchZeldaHelps.isChecked = origZeldaHelps
+
+                    // Create dialog
+                    val dialog = MaterialAlertDialogBuilder(this@MainActivity)
+                        .setTitle("Gameplay settings")
+                        .setView(dialogView)
+                        .setNegativeButton("Done") { _, _ ->
+                            Thread {
+                                // Get all new values
+                                val newAutosave = switchAutosave.isChecked
+                                val newItemSwitchLR = switchItemSwitchLR.isChecked
+                                val newItemSwitchLRLimit = switchItemSwitchLRLimit.isChecked
+                                val newTurnWhileDashing = switchTurnWhileDashing.isChecked
+                                val newSkipIntro = switchSkipIntro.isChecked
+                                val newMirrorToDarkworld = switchMirrorToDarkworld.isChecked
+                                val newCollectItemsSword = switchCollectItemsSword.isChecked
+                                val newBreakPotsSword = switchBreakPotsSword.isChecked
+                                val newMoreBombs = switchMoreBombs.isChecked
+                                val newMoreRupees = switchMoreRupees.isChecked
+                                val newCancelBird = switchCancelBird.isChecked
+                                val newYellowItems = switchYellowItems.isChecked
+                                val newMiscBugs = switchMiscBugs.isChecked
+                                val newGameplayBugs = switchGameplayBugs.isChecked
+                                val newPokemode = switchPokemode.isChecked
+                                val newZeldaHelps = switchZeldaHelps.isChecked
+
+                                // Check if any setting changed
+                                val anyChanged = (newAutosave != origAutosave) ||
+                                        (newItemSwitchLR != origItemSwitchLR) ||
+                                        (newItemSwitchLRLimit != origItemSwitchLRLimit) ||
+                                        (newTurnWhileDashing != origTurnWhileDashing) ||
+                                        (newSkipIntro != origSkipIntro) ||
+                                        (newMirrorToDarkworld != origMirrorToDarkworld) ||
+                                        (newCollectItemsSword != origCollectItemsSword) ||
+                                        (newBreakPotsSword != origBreakPotsSword) ||
+                                        (newMoreBombs != origMoreBombs) ||
+                                        (newMoreRupees != origMoreRupees) ||
+                                        (newCancelBird != origCancelBird) ||
+                                        (newYellowItems != origYellowItems) ||
+                                        (newMiscBugs != origMiscBugs) ||
+                                        (newGameplayBugs != origGameplayBugs) ||
+                                        (newPokemode != origPokemode) ||
+                                        (newZeldaHelps != origZeldaHelps)
+
+                                Log.d(TAG, "showGameplaySettingsDialog: anyChanged=$anyChanged")
+
+                                if (anyChanged) {
+                                    kotlinx.coroutines.runBlocking {
+                                        // Save changed settings
+                                        if (newAutosave != origAutosave) {
+                                            ConfigManager.writeBool(this@MainActivity, "General", "Autosave", newAutosave)
+                                        }
+                                        if (newItemSwitchLR != origItemSwitchLR) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "ItemSwitchLR", newItemSwitchLR)
+                                        }
+                                        if (newItemSwitchLRLimit != origItemSwitchLRLimit) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "ItemSwitchLRLimit", newItemSwitchLRLimit)
+                                        }
+                                        if (newTurnWhileDashing != origTurnWhileDashing) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "TurnWhileDashing", newTurnWhileDashing)
+                                        }
+                                        if (newSkipIntro != origSkipIntro) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "SkipIntroOnKeypress", newSkipIntro)
+                                        }
+                                        if (newMirrorToDarkworld != origMirrorToDarkworld) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "MirrorToDarkworld", newMirrorToDarkworld)
+                                        }
+                                        if (newCollectItemsSword != origCollectItemsSword) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "CollectItemsWithSword", newCollectItemsSword)
+                                        }
+                                        if (newBreakPotsSword != origBreakPotsSword) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "BreakPotsWithSword", newBreakPotsSword)
+                                        }
+                                        if (newMoreBombs != origMoreBombs) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "MoreActiveBombs", newMoreBombs)
+                                        }
+                                        if (newMoreRupees != origMoreRupees) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "CarryMoreRupees", newMoreRupees)
+                                        }
+                                        if (newCancelBird != origCancelBird) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "CancelBirdTravel", newCancelBird)
+                                        }
+                                        if (newYellowItems != origYellowItems) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "ShowMaxItemsInYellow", newYellowItems)
+                                        }
+                                        if (newMiscBugs != origMiscBugs) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "MiscBugFixes", newMiscBugs)
+                                        }
+                                        if (newGameplayBugs != origGameplayBugs) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "GameChangingBugFixes", newGameplayBugs)
+                                        }
+                                        if (newPokemode != origPokemode) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "Pokemode", newPokemode)
+                                        }
+                                        if (newZeldaHelps != origZeldaHelps) {
+                                            ConfigManager.writeBool(this@MainActivity, "Features", "PrincessZeldaHelps", newZeldaHelps)
+                                        }
+                                    }
+
+                                    // Show restart dialog
+                                    runOnUiThread {
+                                        showRendererRestartDialog()
+                                    }
+                                } else {
+                                    Log.d(TAG, "No gameplay settings changed, no restart needed")
+                                }
+
+                                // Return to drawer
+                                runOnUiThread {
+                                    drawerLayout.openDrawer(Gravity.START)
+                                }
+                            }.start()
+                        }
+                        .create()
+
+                    Log.d(TAG, "Showing gameplay settings dialog")
+                    dialog.show()
+                    Log.d(TAG, "Gameplay settings dialog shown successfully")
+                }
+            }.start()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing gameplay settings dialog", e)
+            showToast("Error: ${e.message}", Toast.LENGTH_LONG)
         }
     }
 
@@ -2252,6 +2572,133 @@ class MainActivity : SDLActivity() {
 
         } catch (e: Exception) {
             Log.e(TAG, "Error updating renderer setting: ${e::class.simpleName}: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Data class for ExtendedAspectRatio settings.
+     */
+    data class AspectRatioSettings(
+        val aspectRatio: String = "16:9",
+        val extendY: Boolean = true
+    )
+
+    /**
+     * Reads ExtendedAspectRatio setting from zelda3.ini [General] section.
+     * Parses composite format like "extend_y, 16:9" or just "16:9".
+     */
+    private suspend fun readExtendedAspectRatio(): AspectRatioSettings = withContext(Dispatchers.IO) {
+        val externalDir = getExternalFilesDir(null) ?: return@withContext AspectRatioSettings()
+        val configFile = File(externalDir, "zelda3.ini")
+
+        if (!configFile.exists()) return@withContext AspectRatioSettings()
+
+        var aspectRatio = "16:9"
+        var extendY = true
+
+        try {
+            var inGeneralSection = false
+            configFile.readLines().forEach { line ->
+                val trimmed = line.trim()
+
+                when {
+                    trimmed == "[General]" -> inGeneralSection = true
+                    trimmed.startsWith("[") && trimmed.endsWith("]") -> inGeneralSection = false
+                    inGeneralSection && trimmed.startsWith("ExtendedAspectRatio", ignoreCase = true) -> {
+                        val value = trimmed.substringAfter("=").trim()
+                        Log.d(TAG, "readExtendedAspectRatio: raw value = '$value'")
+
+                        // Parse composite value like "extend_y, 16:9" or just "16:9"
+                        extendY = value.contains("extend_y", ignoreCase = true)
+
+                        // Extract aspect ratio (look for pattern like "16:9", "4:3", etc.)
+                        val ratioPattern = Regex("""\d+:\d+""")
+                        val match = ratioPattern.find(value)
+                        if (match != null) {
+                            aspectRatio = match.value
+                        } else if (value.isEmpty() || value == "0") {
+                            aspectRatio = "4:3"
+                            extendY = false
+                        }
+
+                        Log.d(TAG, "readExtendedAspectRatio: parsed aspectRatio=$aspectRatio, extendY=$extendY")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reading ExtendedAspectRatio setting", e)
+        }
+
+        AspectRatioSettings(aspectRatio, extendY)
+    }
+
+    /**
+     * Writes ExtendedAspectRatio setting to zelda3.ini [General] section.
+     * Writes composite format like "extend_y, 16:9" or just "16:9".
+     */
+    private suspend fun writeExtendedAspectRatio(aspectRatio: String, extendY: Boolean) = withContext(Dispatchers.IO) {
+        val externalDir = getExternalFilesDir(null) ?: return@withContext
+        val configFile = File(externalDir, "zelda3.ini")
+
+        if (!configFile.exists()) {
+            Log.e(TAG, "writeExtendedAspectRatio: Config file does not exist!")
+            return@withContext
+        }
+
+        // Build the composite value
+        val newValue = if (extendY) {
+            "extend_y, $aspectRatio"
+        } else {
+            aspectRatio
+        }
+
+        Log.d(TAG, "writeExtendedAspectRatio: Writing value '$newValue'")
+
+        try {
+            val lines = configFile.readLines()
+            var inGeneralSection = false
+            var settingUpdated = false
+
+            val updatedLines = lines.map { line ->
+                val trimmed = line.trim()
+
+                when {
+                    trimmed == "[General]" -> {
+                        inGeneralSection = true
+                        line
+                    }
+                    trimmed.startsWith("[") && trimmed.endsWith("]") -> {
+                        inGeneralSection = false
+                        line
+                    }
+                    inGeneralSection && trimmed.startsWith("ExtendedAspectRatio", ignoreCase = true) -> {
+                        settingUpdated = true
+                        "ExtendedAspectRatio = $newValue"
+                    }
+                    else -> line
+                }
+            }
+
+            if (!settingUpdated) {
+                Log.w(TAG, "writeExtendedAspectRatio: ExtendedAspectRatio not found, adding to [General] section")
+                // Add the setting to [General] section
+                val newLines = mutableListOf<String>()
+                var addedSetting = false
+                lines.forEach { line ->
+                    newLines.add(line)
+                    if (line.trim() == "[General]" && !addedSetting) {
+                        newLines.add("ExtendedAspectRatio = $newValue")
+                        addedSetting = true
+                    }
+                }
+                configFile.writeText(newLines.joinToString("\n"))
+            } else {
+                configFile.writeText(updatedLines.joinToString("\n"))
+            }
+
+            Log.d(TAG, "writeExtendedAspectRatio: Successfully wrote config file")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error writing ExtendedAspectRatio setting", e)
         }
     }
 

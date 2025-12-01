@@ -92,6 +92,87 @@
         android:textSize="12sp"
         android:textColor="?android:attr/textColorSecondary" />
 
+    <!-- Aspect Ratio Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="ASPECT RATIO"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textStyle="bold" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/layout_aspect_ratio"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginBottom="16dp"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu">
+
+        <com.google.android.material.textfield.MaterialAutoCompleteTextView
+            android:id="@+id/dropdown_aspect_ratio"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="none"
+            android:hint="Aspect ratio" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- Display Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="DISPLAY"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:textSize="12sp"
+        android:textColor="?android:attr/textColorSecondary"
+        android:textStyle="bold" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_extend_y"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Extended height (240 lines)"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_disable_frame_delay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Disable frame delay (60hz only)"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_new_renderer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Optimized SNES PPU renderer"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_enhanced_mode7"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="High resolution world map"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_dim_flashes"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Dim flashing effects"
+        android:paddingHorizontal="24dp"
+        android:paddingVertical="12dp" />
+
 </LinearLayout>
 
 </ScrollView>
