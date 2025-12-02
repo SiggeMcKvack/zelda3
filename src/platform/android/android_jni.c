@@ -573,7 +573,7 @@ JNIEXPORT jint JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeCompile
 // Language Settings JNI (for Audio Options)
 // ============================================================================
 
-#include "launcher/dat_reader.h"
+#include "restool/restool_lib.h"
 
 /**
  * Gets the available languages from the zelda3_assets.dat file.
@@ -595,7 +595,7 @@ JNIEXPORT jobjectArray JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetAvai
     LOGD("nativeGetAvailableLanguages: Checking path: %s", path);
 
     char languages[16][16];
-    int count = DatReader_GetLanguages(path, languages, 16);
+    int count = Restool_GetDatLanguages(path, languages, 16);
 
     (*env)->ReleaseStringUTFChars(env, jpath, path);
 

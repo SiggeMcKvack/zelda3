@@ -78,3 +78,4 @@ test_decomp.py
 test_gfx
 tools/RESTOOL_MIGRATION.md
 translations/check_rom_sha.sh
+architecture-review.md

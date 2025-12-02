@@ -32,11 +32,6 @@ set(ANDROID_SOURCES
     ${ZELDA3_SRC_DIR}/platform/android/jni_helpers.c
 )
 
-# Launcher sources for settings/language detection
-set(LAUNCHER_SOURCES
-    ${ZELDA3_SRC_DIR}/launcher/dat_reader.c
-)
-
 # Restool sources for asset extraction
 # Note: main.c included but RESTOOL_NO_MAIN disables CLI entry point
 set(RESTOOL_SOURCES
@@ -78,7 +73,6 @@ add_custom_command(
 add_library(main SHARED
     ${GAME_SOURCES}
     ${ANDROID_SOURCES}
-    ${LAUNCHER_SOURCES}
     ${RESTOOL_SOURCES}
     ${EMBEDDED_ASSETS_C}
     ${ZELDA3_THIRD_PARTY_DIR}/gl_core/gl_core_3_1.c
