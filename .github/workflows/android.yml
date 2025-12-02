@@ -25,7 +25,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        build_type: [debug, release]
+        include:
+          - build_type: debug
+            gradle_task: assembleDebug
+          - build_type: release
+            gradle_task: assembleRelease
 
     steps:
     - uses: actions/checkout@v4
@@ -43,12 +47,11 @@ jobs:
       run: |
         cd android
         chmod +x ./gradlew
-        ./gradlew assemble${{ matrix.build_type == 'debug' && 'Debug' || 'Release' }}
+        ./gradlew ${{ matrix.gradle_task }}
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: zelda3-android-${{ matrix.build_type }}
-        path: |
-          android/app/build/outputs/apk/${{ matrix.build_type }}/app-${{ matrix.build_type }}*.apk
+        path: android/app/build/outputs/apk/${{ matrix.build_type }}/app-${{ matrix.build_type }}*.apk
         if-no-files-found: error
