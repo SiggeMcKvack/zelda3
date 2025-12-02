@@ -28,10 +28,10 @@ cmake --build . -j$(nproc)
 cp /path/to/your/rom.sfc ../zelda3.sfc
 
 # 3. Extract assets and compile
-./src/restool/zelda3_restool --extract-from-rom ../zelda3.sfc --compile
+./zelda3_restool --extract-from-rom ../zelda3.sfc
 
 # 4. Verify output
-ls -lh ../zelda3_assets.dat  # Should be ~680KB
+ls -lh zelda3_assets.dat  # Should be ~680KB
 ```
 
 ## Command-Line Parameters
@@ -566,8 +566,15 @@ SNES $10:8000 → ROM offset 0x080000 (512KB into ROM)
 
 - **Compiler:** GCC, Clang, or MSVC
 - **Build system:** CMake 3.10+
-- **Dependencies:** libyaml (for YAML parsing)
+- **Dependencies:** libyaml (for YAML parsing), Python 3 (for embedded asset generation)
 - **Platforms:** Windows, Linux, macOS, Android
+
+### Build Output
+
+The CMake build produces:
+- `librestool_lib.a` (or `.lib` on Windows) - Static library (~2.4MB)
+- `zelda3_restool` - CLI executable (~2.3MB)
+- `zelda3-launcher` - GTK3 GUI launcher (~2.3MB, if GTK3 available)
 
 ### System Requirements
 
@@ -576,7 +583,27 @@ SNES $10:8000 → ROM offset 0x080000 (512KB into ROM)
 
 ## Library API (Embedding)
 
-The restool functionality is available as a C library for embedding in other applications (e.g., Android app). The library API is defined in `src/restool/restool_lib.h`.
+The restool functionality is available as a C static library (`restool_lib`) for embedding in other applications. The library is used by both the CLI tool (`zelda3_restool`) and the GTK3 launcher (`zelda3-launcher`).
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     restool_lib.a                           │
+│  Static library containing all extraction functionality     │
+│  - ROM loading and validation                              │
+│  - Asset extraction (graphics, dialogue, maps)             │
+│  - DAT file compilation and reading                        │
+│  - Embedded assets (YAML, PNG, audio)                      │
+└─────────────────────────────────────────────────────────────┘
+        │                                    │
+        ▼                                    ▼
+┌───────────────────┐              ┌───────────────────┐
+│  zelda3_restool   │              │  zelda3-launcher  │
+│  CLI executable   │              │  GTK3 GUI app     │
+│  (cli.c)          │              │  (launcher_ui.c)  │
+└───────────────────┘              └───────────────────┘
+```
 
 ### Header File
 
@@ -667,6 +694,44 @@ Simplified wrapper for backward compatibility.
 ```c
 int Restool_CompileAssets(const char *us_rom_path, const char *output_path,
                           const char *languages, const char *dialogue_dir);
+```
+
+#### Restool_DatFileExists
+
+Check if a zelda3_assets.dat file exists in a directory.
+
+```c
+bool Restool_DatFileExists(const char *dir);
+```
+
+**Parameters:**
+- `dir` - Directory to check for `zelda3_assets.dat`
+
+**Returns:** `true` if the DAT file exists, `false` otherwise
+
+#### Restool_GetDatLanguages
+
+Get the list of available languages from an existing DAT file.
+
+```c
+int Restool_GetDatLanguages(const char *dir, char languages[][16], int max_languages);
+```
+
+**Parameters:**
+- `dir` - Directory containing `zelda3_assets.dat`
+- `languages` - Output array of language code strings
+- `max_languages` - Maximum number of languages to return
+
+**Returns:** Number of languages found (0 if DAT file not found or invalid)
+
+**Example:**
+```c
+char languages[16][16];
+int count = Restool_GetDatLanguages(".", languages, 16);
+for (int i = 0; i < count; i++) {
+    printf("Language: %s\n", languages[i]);
+}
+// Output: "us", "de", "fr" (depending on what was compiled)
 ```
 
 ### Android Integration Example

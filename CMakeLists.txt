@@ -52,6 +52,15 @@ option(BUILD_LAUNCHER "Build GTK3 launcher" ON)
 # Option to build asset extraction tool
 option(BUILD_RESTOOL "Build asset extraction tool" ON)
 
+# Find libyaml (required for restool integration in launcher)
+find_package(YAML REQUIRED)
+if(YAML_FOUND)
+    message(STATUS "Found libyaml: ${YAML_LIBRARIES}")
+endif()
+
+# Find Python3 (required for embedded assets generation)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
 # Find GTK3 (optional, for settings launcher)
 if(BUILD_LAUNCHER)
     find_package(PkgConfig QUIET)
@@ -219,21 +228,26 @@ const char* kDefaultConfigIni =
 message(STATUS "Generated config defaults header from zelda3.ini")
 
 # ==============================================================================
+# Asset extraction tool (restool library and CLI)
+# ==============================================================================
+# Build restool first so launcher can link against restool_lib
+if(BUILD_RESTOOL)
+    add_subdirectory(src/restool)
+    message(STATUS "Asset extraction tool will be built: zelda3_restool")
+endif()
+
+# ==============================================================================
 # Launcher target (optional, requires GTK3)
 # ==============================================================================
 
 if(HAVE_GTK3)
-    # Launcher source files (will add more as we implement)
+    # Launcher source files (launcher-specific code only)
     set(LAUNCHER_SOURCES
         src/launcher/launcher_main.c
         src/launcher/launcher_ui.c
         src/launcher/launcher_gamepad.c
         src/launcher/config_writer.c
         src/launcher/config_reader.c
-        src/launcher/dat_reader.c
-        src/platform.c
-        src/logging.c
-        src/rom_sha1.c
     )
 
     # Add macOS-specific source
@@ -244,7 +258,15 @@ if(HAVE_GTK3)
     # Create launcher executable
     add_executable(zelda3-launcher ${LAUNCHER_SOURCES})
 
-    # Include directories for launcher
+    # Link against restool_lib (provides all extraction functionality)
+    # The restool_lib target provides all include directories and dependencies via PUBLIC
+    if(BUILD_RESTOOL AND TARGET restool_lib)
+        target_link_libraries(zelda3-launcher PRIVATE restool_lib)
+    else()
+        message(FATAL_ERROR "Launcher requires BUILD_RESTOOL=ON to link against restool_lib")
+    endif()
+
+    # Include directories for launcher (launcher-specific only, restool headers come from restool_lib)
     target_include_directories(zelda3-launcher PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/launcher
@@ -272,7 +294,7 @@ if(HAVE_GTK3)
         )
     endif()
 
-    # Link GTK3 and SDL2 for launcher
+    # Link GTK3 and SDL2 for launcher (libyaml comes from restool_lib)
     target_link_libraries(zelda3-launcher PRIVATE
         ${SDL2_LIBRARIES}
         ${GTK3_LIBRARIES}
@@ -287,10 +309,6 @@ if(HAVE_GTK3)
     target_compile_options(zelda3-launcher PRIVATE ${GTK3_CFLAGS_OTHER})
 
     # Platform-specific settings for launcher
-    if(UNIX AND NOT APPLE)
-        target_link_libraries(zelda3-launcher PRIVATE m)
-    endif()
-
     if(APPLE)
         target_compile_definitions(zelda3-launcher PRIVATE _THREAD_SAFE)
         target_link_libraries(zelda3-launcher PRIVATE "-framework Cocoa")
@@ -300,12 +318,6 @@ if(HAVE_GTK3)
     install(TARGETS zelda3-launcher DESTINATION bin)
 
     message(STATUS "Launcher target will be built: zelda3-launcher")
-endif()
-
-# Asset extraction tool (optional)
-if(BUILD_RESTOOL)
-    add_subdirectory(src/restool)
-    message(STATUS "Asset extraction tool will be built: zelda3_restool")
 endif()
 
 # Print configuration summary

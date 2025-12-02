@@ -61,11 +61,11 @@ add_custom_target(generate_embedded_assets
 )
 
 # ============================================================================
-# Source Files
+# Static Library (shared between CLI and launcher)
 # ============================================================================
 
-# Source files (in this directory)
-set(RESTOOL_SOURCES
+# Library source files (everything except CLI entry point)
+set(RESTOOL_LIB_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/main.c
   ${CMAKE_CURRENT_SOURCE_DIR}/restool_lib.c
   ${CMAKE_CURRENT_SOURCE_DIR}/restool_util.c
@@ -96,16 +96,15 @@ set(SHARED_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/../rom_sha1.c
 )
 
-# Create executable
-add_executable(zelda3_restool ${RESTOOL_SOURCES} ${THIRD_PARTY_SOURCES} ${SHARED_SOURCES})
-
-# Output to main build directory (same as zelda3 and zelda3-launcher)
-set_target_properties(zelda3_restool PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+# Create static library
+add_library(restool_lib STATIC
+  ${RESTOOL_LIB_SOURCES}
+  ${THIRD_PARTY_SOURCES}
+  ${SHARED_SOURCES}
 )
 
-# Include directories
-target_include_directories(zelda3_restool PRIVATE
+# Include directories for the library
+target_include_directories(restool_lib PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}              # For restool headers
   ${CMAKE_CURRENT_BINARY_DIR}              # For generated embedded_assets.h
   ${CMAKE_SOURCE_DIR}/third_party/stb      # For stb_image.h, stb_image_write.h
@@ -114,15 +113,47 @@ target_include_directories(zelda3_restool PRIVATE
   ${YAML_INCLUDE_DIRS}                     # For yaml.h
 )
 
-# Link libraries
-target_link_libraries(zelda3_restool PRIVATE
+# Link libraries for the static lib
+target_link_libraries(restool_lib PUBLIC
   ${YAML_LIBRARIES}
 )
 
 # Link math library on Unix
 if(UNIX)
-  target_link_libraries(zelda3_restool PRIVATE m)
+  target_link_libraries(restool_lib PUBLIC m)
 endif()
+
+# Export variables for parent CMakeLists.txt to use
+set(RESTOOL_LIB_TARGET restool_lib PARENT_SCOPE)
+set(RESTOOL_INCLUDE_DIRS
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_BINARY_DIR}
+  ${CMAKE_SOURCE_DIR}/third_party/stb
+  ${CMAKE_SOURCE_DIR}/third_party/sha256
+  ${CMAKE_SOURCE_DIR}/third_party/lodepng
+  ${YAML_INCLUDE_DIRS}
+  PARENT_SCOPE
+)
+
+# ============================================================================
+# CLI Executable
+# ============================================================================
+
+# CLI source file (entry point)
+set(CLI_SOURCES
+  ${CMAKE_CURRENT_SOURCE_DIR}/cli.c
+)
+
+# Create executable linking against the library
+add_executable(zelda3_restool ${CLI_SOURCES})
+
+# Link against the static library
+target_link_libraries(zelda3_restool PRIVATE restool_lib)
+
+# Output to main build directory (same as zelda3 and zelda3-launcher)
+set_target_properties(zelda3_restool PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
 
 # Install target
 install(TARGETS zelda3_restool

@@ -1,10 +1,9 @@
 #include "launcher_ui.h"
-#include "dat_reader.h"
 #include "../config.h"
 #include "../features.h"
 #include "launcher_gamepad.h"
 #include "../logging.h"
-#include "../rom_sha1.h"
+#include "restool_lib.h"
 #include <gtk/gtk.h>
 #include <SDL.h>
 #include <stdio.h>
@@ -15,7 +14,6 @@
 // Language ROM entry for multi-language support
 typedef struct {
     char path[512];
-    char sha1[41];
     char lang_code[16];
     char lang_name[64];
     bool valid;
@@ -599,7 +597,7 @@ static void update_dat_status(void) {
     char exe_dir[512];
     LauncherUI_GetExecutableDir(exe_dir, sizeof(exe_dir));
 
-    bool dat_exists = DatReader_Exists(exe_dir);
+    bool dat_exists = Restool_DatFileExists(exe_dir);
 
     if (dat_exists) {
         gtk_label_set_markup(GTK_LABEL(g_widgets.dat_status_label),
@@ -620,7 +618,7 @@ void LauncherUI_SetLaunchButton(GtkWidget *button) {
     // Update sensitivity immediately
     char exe_dir[512];
     LauncherUI_GetExecutableDir(exe_dir, sizeof(exe_dir));
-    gtk_widget_set_sensitive(button, DatReader_Exists(exe_dir));
+    gtk_widget_set_sensitive(button, Restool_DatFileExists(exe_dir));
 }
 
 // ============================================================================
@@ -637,15 +635,15 @@ static void add_language_rom(const char *path) {
         return;
     }
 
-    // Validate ROM
-    RomIdentification id;
-    if (!RomSha1_ValidateFile(path, &id)) {
+    // Validate ROM using restool library
+    RestoolRomInfo info;
+    if (!Restool_IdentifyRom(path, &info)) {
         LogWarn("Failed to read ROM: %s", path);
         return;
     }
 
     // Check for US ROM (should use base ROM field instead)
-    if (id.valid && strcmp(id.lang_code, "us") == 0) {
+    if (info.valid && strcmp(info.lang_code, "us") == 0) {
         GtkWidget *dialog = gtk_message_dialog_new(NULL,
             GTK_DIALOG_MODAL, GTK_MESSAGE_INFO, GTK_BUTTONS_OK,
             "US ROM detected.\n\nPlease use the 'ROM File' field above for the base USA ROM.");
@@ -656,13 +654,12 @@ static void add_language_rom(const char *path) {
 
     // Check for duplicate language (replace if found)
     for (int i = 0; i < g_lang_rom_count; i++) {
-        if (strcmp(g_lang_roms[i].lang_code, id.lang_code) == 0) {
+        if (strcmp(g_lang_roms[i].lang_code, info.lang_code) == 0) {
             // Replace existing entry
             strncpy(g_lang_roms[i].path, path, sizeof(g_lang_roms[i].path) - 1);
-            strncpy(g_lang_roms[i].sha1, id.sha1, sizeof(g_lang_roms[i].sha1) - 1);
-            strncpy(g_lang_roms[i].lang_code, id.lang_code, sizeof(g_lang_roms[i].lang_code) - 1);
-            strncpy(g_lang_roms[i].lang_name, id.lang_name, sizeof(g_lang_roms[i].lang_name) - 1);
-            g_lang_roms[i].valid = id.valid;
+            strncpy(g_lang_roms[i].lang_code, info.lang_code, sizeof(g_lang_roms[i].lang_code) - 1);
+            strncpy(g_lang_roms[i].lang_name, info.lang_name, sizeof(g_lang_roms[i].lang_name) - 1);
+            g_lang_roms[i].valid = info.valid;
             refresh_lang_roms_list();
             return;
         }
@@ -671,10 +668,9 @@ static void add_language_rom(const char *path) {
     // Add new entry
     LanguageRomEntry *entry = &g_lang_roms[g_lang_rom_count++];
     strncpy(entry->path, path, sizeof(entry->path) - 1);
-    strncpy(entry->sha1, id.sha1, sizeof(entry->sha1) - 1);
-    strncpy(entry->lang_code, id.lang_code, sizeof(entry->lang_code) - 1);
-    strncpy(entry->lang_name, id.lang_name, sizeof(entry->lang_name) - 1);
-    entry->valid = id.valid;
+    strncpy(entry->lang_code, info.lang_code, sizeof(entry->lang_code) - 1);
+    strncpy(entry->lang_name, info.lang_name, sizeof(entry->lang_name) - 1);
+    entry->valid = info.valid;
 
     refresh_lang_roms_list();
 }
@@ -981,6 +977,21 @@ static void cleanup_dialogue_files(const char *exe_dir) {
     }
 }
 
+// Helper function to get error message from restool error code
+static const char *get_restool_error_message(int result) {
+    switch (result) {
+        case RESTOOL_OK:              return NULL;
+        case RESTOOL_ERR_ROM_LOAD:    return "Error: Failed to read ROM file";
+        case RESTOOL_ERR_ROM_INVALID: return "Error: Unrecognized ROM (SHA1 mismatch)";
+        case RESTOOL_ERR_ROM_NOT_US:  return "Error: Base ROM must be USA version";
+        case RESTOOL_ERR_EXTRACT:     return "Error: Asset extraction failed";
+        case RESTOOL_ERR_WRITE:       return "Error: Failed to write output file";
+        case RESTOOL_ERR_DIALOGUE:    return "Error: Dialogue processing failed";
+        case RESTOOL_ERR_MEMORY:      return "Error: Out of memory";
+        default:                      return "Error: Unknown error";
+    }
+}
+
 // Signal handler for Create DAT button
 static void on_make_dat_clicked(GtkButton *button, gpointer user_data) {
     (void)user_data;
@@ -997,11 +1008,10 @@ static void on_make_dat_clicked(GtkButton *button, gpointer user_data) {
 
     gtk_widget_set_sensitive(GTK_WIDGET(button), FALSE);
 
-    // Get directory where launcher (and restool) live
+    // Get directory where launcher lives (output directory for assets)
     char exe_dir[512];
     LauncherUI_GetExecutableDir(exe_dir, sizeof(exe_dir));
     LogInfo("MakeDat: Executable directory: %s", exe_dir);
-    LogInfo("MakeDat: Restool path: %s/zelda3_restool", exe_dir);
     LogInfo("MakeDat: Language ROMs count: %d", g_lang_rom_count);
     for (int i = 0; i < g_lang_rom_count; i++) {
         LogInfo("MakeDat: Lang ROM %d: %s (%s) valid=%d path=%s",
@@ -1009,15 +1019,10 @@ static void on_make_dat_clicked(GtkButton *button, gpointer user_data) {
                 g_lang_roms[i].valid, g_lang_roms[i].path);
     }
 
-    char cmd[2048];
-    char output[4096];
-    char buf[256];
-    FILE *pipe;
-    size_t total;
     int result;
     bool extraction_failed = false;
 
-    // Step 1: Extract dialogue from each valid language ROM
+    // Step 1: Extract dialogue from each valid language ROM using restool library
     for (int i = 0; i < g_lang_rom_count && !extraction_failed; i++) {
         if (!g_lang_roms[i].valid) continue;
         if (strcmp(g_lang_roms[i].lang_code, "us") == 0) continue;
@@ -1029,38 +1034,11 @@ static void on_make_dat_clicked(GtkButton *button, gpointer user_data) {
         gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status), status);
         while (gtk_events_pending()) gtk_main_iteration();
 
-        // Run dialogue extraction
-        snprintf(cmd, sizeof(cmd),
-            "\"%s/zelda3_restool\" --extract-from-rom \"%s\" --extract-dialogue --output \"%s\" 2>&1",
-            exe_dir, g_lang_roms[i].path, exe_dir);
-
-        LogInfo("MakeDat: Running dialogue extraction command: %s", cmd);
-
-        pipe = popen(cmd, "r");
-        if (!pipe) {
-            LogError("MakeDat: Failed to run popen for dialogue extraction");
-            gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status),
-                "Error: Failed to run restool");
-            gtk_widget_set_sensitive(GTK_WIDGET(button), TRUE);
-            return;
-        }
-
-        output[0] = '\0';
-        total = 0;
-        while (fgets(buf, sizeof(buf), pipe) && total < sizeof(output) - 1) {
-            size_t len = strlen(buf);
-            memcpy(output + total, buf, len);
-            total += len;
-        }
-        output[total] = '\0';
-        result = pclose(pipe);
-
+        LogInfo("MakeDat: Extracting dialogue from %s", g_lang_roms[i].path);
+        result = Restool_ExtractDialogue(g_lang_roms[i].path, exe_dir);
         LogInfo("MakeDat: Dialogue extraction result: %d", result);
-        if (total > 0) {
-            LogInfo("MakeDat: Dialogue extraction output:\n%s", output);
-        }
 
-        if (result != 0) {
+        if (result != RESTOOL_OK) {
             LogError("MakeDat: Dialogue extraction failed for %s (result=%d)",
                      g_lang_roms[i].lang_name, result);
             char error[256];
@@ -1077,7 +1055,7 @@ static void on_make_dat_clicked(GtkButton *button, gpointer user_data) {
         return;
     }
 
-    // Step 2: Build language list for --languages argument
+    // Step 2: Build language list for compilation
     char languages[256] = "";
     for (int i = 0; i < g_lang_rom_count; i++) {
         if (!g_lang_roms[i].valid) continue;
@@ -1087,56 +1065,32 @@ static void on_make_dat_clicked(GtkButton *button, gpointer user_data) {
         strcat(languages, g_lang_roms[i].lang_code);
     }
 
-    // Step 3: Final compilation with all languages
-    LogInfo("MakeDat: Languages argument: '%s'", languages[0] ? languages : "(empty - US only)");
+    // Step 3: Compile assets using restool library
+    LogInfo("MakeDat: Languages: '%s'", languages[0] ? languages : "(US only)");
     gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status), "Compiling assets...");
     while (gtk_events_pending()) gtk_main_iteration();
 
-    if (languages[0] != '\0') {
-        snprintf(cmd, sizeof(cmd),
-            "\"%s/zelda3_restool\" --extract-from-rom \"%s\" --languages %s --output \"%s\" --compile 2>&1",
-            exe_dir, rom_path, languages, exe_dir);
-    } else {
-        snprintf(cmd, sizeof(cmd),
-            "\"%s/zelda3_restool\" --extract-from-rom \"%s\" --output \"%s\" --compile 2>&1",
-            exe_dir, rom_path, exe_dir);
-    }
+    char output_path[600];
+    snprintf(output_path, sizeof(output_path), "%s/zelda3_assets.dat", exe_dir);
 
-    LogInfo("MakeDat: Running compile command: %s", cmd);
+    RestoolCompileOptions options = {
+        .us_rom_path = rom_path,
+        .output_path = output_path,
+        .languages = languages[0] ? languages : NULL,
+        .dialogue_dir = exe_dir,
+        .sprites_from_png = false
+    };
 
-    pipe = popen(cmd, "r");
-    if (!pipe) {
-        LogError("MakeDat: Failed to run popen for compilation");
-        gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status),
-            "Error: Failed to run restool");
-        cleanup_dialogue_files(exe_dir);
-        gtk_widget_set_sensitive(GTK_WIDGET(button), TRUE);
-        return;
-    }
-
-    output[0] = '\0';
-    total = 0;
-    while (fgets(buf, sizeof(buf), pipe) && total < sizeof(output) - 1) {
-        size_t len = strlen(buf);
-        memcpy(output + total, buf, len);
-        total += len;
-    }
-    output[total] = '\0';
-    result = pclose(pipe);
-
+    LogInfo("MakeDat: Compiling assets from %s to %s", rom_path, output_path);
+    result = Restool_CompileAssetsEx(&options);
     LogInfo("MakeDat: Compile result: %d", result);
-    if (total > 0) {
-        LogInfo("MakeDat: Compile output:\n%s", output);
-    }
 
     // Step 4: Cleanup temporary dialogue files
     cleanup_dialogue_files(exe_dir);
 
-    if (result == 0) {
+    if (result == RESTOOL_OK) {
         // Verify created DAT file
-        char dat_path[600];
-        snprintf(dat_path, sizeof(dat_path), "%s/zelda3_assets.dat", exe_dir);
-        FILE *dat_check = fopen(dat_path, "rb");
+        FILE *dat_check = fopen(output_path, "rb");
         if (dat_check) {
             fseek(dat_check, 0, SEEK_END);
             long dat_size = ftell(dat_check);
@@ -1145,9 +1099,9 @@ static void on_make_dat_clicked(GtkButton *button, gpointer user_data) {
             fread(&num_assets, 4, 1, dat_check);
             fclose(dat_check);
             LogInfo("MakeDat: Created DAT file: %s (size=%ld, assets=%u)",
-                    dat_path, dat_size, num_assets);
+                    output_path, dat_size, num_assets);
         } else {
-            LogWarn("MakeDat: Could not verify created DAT file at %s", dat_path);
+            LogWarn("MakeDat: Could not verify created DAT file at %s", output_path);
         }
 
         if (languages[0] != '\0') {
@@ -1163,48 +1117,7 @@ static void on_make_dat_clicked(GtkButton *button, gpointer user_data) {
         LogInfo("MakeDat: DAT creation successful, refreshing UI");
     } else {
         LogError("MakeDat: DAT creation failed (result=%d)", result);
-        // Parse output for specific error patterns
-        char error_msg[256] = "Error: Extraction failed.";
-
-        // Check for known ROM detection (e.g., "Detected ROM: de - ...")
-        char *detected = strstr(output, "Detected ROM:");
-        if (detected) {
-            char *dash = strchr(detected + 13, '-');
-            if (dash) {
-                char region[8] = {0};
-                char *region_start = detected + 13;
-                while (*region_start == ' ') region_start++;
-                int i = 0;
-                while (region_start < dash && *region_start != ' ' && i < 7) {
-                    region[i++] = *region_start++;
-                }
-                region[i] = '\0';
-
-                if (strcmp(region, "de") == 0) {
-                    snprintf(error_msg, sizeof(error_msg),
-                        "Error: Detected German ROM. Only USA ROM is supported for base ROM.");
-                } else if (strcmp(region, "fr") == 0 || strcmp(region, "fr_c") == 0) {
-                    snprintf(error_msg, sizeof(error_msg),
-                        "Error: Detected French ROM. Only USA ROM is supported for base ROM.");
-                } else if (strcmp(region, "en") == 0) {
-                    snprintf(error_msg, sizeof(error_msg),
-                        "Error: Detected European ROM. Only USA ROM is supported for base ROM.");
-                } else if (strcmp(region, "es") == 0) {
-                    snprintf(error_msg, sizeof(error_msg),
-                        "Error: Detected Spanish ROM. Only USA ROM is supported for base ROM.");
-                } else if (region[0]) {
-                    snprintf(error_msg, sizeof(error_msg),
-                        "Error: Detected %s ROM. Only USA ROM is supported for base ROM.", region);
-                }
-            }
-        } else if (strstr(output, "not supported")) {
-            snprintf(error_msg, sizeof(error_msg),
-                "Error: Unrecognized ROM (SHA1 mismatch). Only USA ROM is supported for base ROM.");
-        } else if (strstr(output, "Failed to read") || strstr(output, "Cannot open")) {
-            snprintf(error_msg, sizeof(error_msg),
-                "Error: Failed to read ROM file.");
-        }
-
+        const char *error_msg = get_restool_error_message(result);
         gtk_label_set_text(GTK_LABEL(g_widgets.make_dat_status), error_msg);
     }
 
@@ -1222,7 +1135,7 @@ static void refresh_language_dropdown(const char *current_lang) {
     LogInfo("RefreshLang: Reading languages from %s", exe_dir);
 
     char available_langs[16][16];
-    int num_langs = DatReader_GetLanguages(exe_dir, available_langs, 16);
+    int num_langs = Restool_GetDatLanguages(exe_dir, available_langs, 16);
     LogInfo("RefreshLang: DatReader returned %d languages", num_langs);
 
     for (int i = 0; i < num_langs; i++) {

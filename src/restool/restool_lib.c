@@ -221,3 +221,212 @@ int Restool_CompileAssets(const char *us_rom_path, const char *output_path,
     };
     return Restool_CompileAssetsEx(&options);
 }
+
+// ===========================================================================
+// DAT File Access
+// ===========================================================================
+
+// DAT file signature (first 16 bytes - "Zelda3_v0     \n\0")
+static const uint8_t kDatSignature[] = {
+    90, 101, 108, 100, 97, 51, 95, 118, 48, 32, 32, 32, 32, 32, 10, 0
+};
+
+bool Restool_DatFileExists(const char *dir) {
+    char path[512];
+    snprintf(path, sizeof(path), "%s/zelda3_assets.dat", dir);
+
+    FILE *f = fopen(path, "rb");
+    if (f) {
+        fclose(f);
+        return true;
+    }
+    return false;
+}
+
+// Find indexed element within a packed array (replicates FindIndexInMemblk from assets.c)
+static const uint8_t* find_index_in_memblk(const uint8_t *data, size_t data_size,
+                                           size_t idx, size_t *out_size) {
+    if (data_size < 2) return NULL;
+
+    size_t end = data_size - 2;
+    uint16_t mx = *(uint16_t*)(data + end);
+
+    size_t left_off, right_off;
+
+    if (mx < 8192) {
+        // uint16 offsets
+        if (idx > mx || mx * 2 > end) return NULL;
+        left_off = (idx == 0) ? mx * 2 : mx * 2 + *(uint16_t*)(data + idx * 2 - 2);
+        right_off = (idx == mx) ? end : mx * 2 + *(uint16_t*)(data + idx * 2);
+    } else {
+        // uint32 offsets
+        mx -= 8192;
+        if (idx > mx || mx * 4 > end) return NULL;
+        left_off = (idx == 0) ? mx * 4 : mx * 4 + *(uint32_t*)(data + idx * 4 - 4);
+        right_off = (idx == mx) ? end : mx * 4 + *(uint32_t*)(data + idx * 4);
+    }
+
+    if (right_off <= left_off || right_off > data_size) return NULL;
+
+    *out_size = right_off - left_off;
+    return data + left_off;
+}
+
+int Restool_GetDatLanguages(const char *dir, char languages[][16], int max_languages) {
+    char path[512];
+    snprintf(path, sizeof(path), "%s/zelda3_assets.dat", dir);
+    LogInfo("DatReader: Checking path: %s", path);
+
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        LogWarn("DatReader: Cannot open file: %s", path);
+        return 0;
+    }
+
+    // Get file size
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    LogInfo("DatReader: File size: %ld bytes", file_size);
+
+    // Check minimum size for header
+    if (file_size < 88) {
+        LogWarn("DatReader: File too small (%ld < 88)", file_size);
+        fclose(f);
+        return 0;
+    }
+
+    // Read header (88 bytes)
+    uint8_t header[88];
+    if (fread(header, 1, 88, f) != 88) {
+        LogWarn("DatReader: Failed to read header");
+        fclose(f);
+        return 0;
+    }
+
+    // Validate signature (only first 16 bytes - the text portion)
+    if (memcmp(header, kDatSignature, sizeof(kDatSignature)) != 0) {
+        LogWarn("DatReader: Invalid signature. Got: %.16s", header);
+        fclose(f);
+        return 0;
+    }
+    LogInfo("DatReader: Signature valid");
+
+    uint32_t num_assets = *(uint32_t*)(header + 80);
+    uint32_t key_sig_size = *(uint32_t*)(header + 84);
+    LogInfo("DatReader: num_assets=%u, key_sig_size=%u", num_assets, key_sig_size);
+
+    if (num_assets == 0 || num_assets > 1000) {
+        LogWarn("DatReader: Invalid asset count: %u", num_assets);
+        fclose(f);
+        return 0;
+    }
+
+    // Read asset sizes
+    uint32_t *sizes = malloc(num_assets * 4);
+    if (!sizes || fread(sizes, 4, num_assets, f) != num_assets) {
+        LogWarn("DatReader: Failed to read asset sizes");
+        free(sizes);
+        fclose(f);
+        return 0;
+    }
+
+    // Read key signature (asset names, null-separated)
+    char *key_sig = malloc(key_sig_size + 1);
+    if (!key_sig || fread(key_sig, 1, key_sig_size, f) != key_sig_size) {
+        LogWarn("DatReader: Failed to read key signature");
+        free(sizes);
+        free(key_sig);
+        fclose(f);
+        return 0;
+    }
+    key_sig[key_sig_size] = '\0';
+
+    // Find kDialogueMap asset by name
+    int dialogue_map_index = -1;
+    const char *name_ptr = key_sig;
+    for (uint32_t i = 0; i < num_assets && name_ptr < key_sig + key_sig_size; i++) {
+        if (strcmp(name_ptr, "kDialogueMap") == 0) {
+            dialogue_map_index = (int)i;
+            LogInfo("DatReader: Found kDialogueMap at index %d", i);
+            break;
+        }
+        name_ptr += strlen(name_ptr) + 1;
+    }
+    free(key_sig);
+
+    if (dialogue_map_index < 0) {
+        LogWarn("DatReader: kDialogueMap asset not found in DAT file");
+        free(sizes);
+        fclose(f);
+        return 0;
+    }
+
+    // Calculate offset to kDialogueMap asset
+    uint32_t data_offset = 88 + num_assets * 4 + key_sig_size;
+
+    // Skip to the dialogue map asset
+    for (int i = 0; i < dialogue_map_index; i++) {
+        data_offset = (data_offset + 3) & ~3;  // 4-byte align
+        if (data_offset > UINT32_MAX - sizes[i]) {
+            LogWarn("DatReader: Overflow at asset %d", i);
+            free(sizes);
+            fclose(f);
+            return 0;
+        }
+        data_offset += sizes[i];
+    }
+    data_offset = (data_offset + 3) & ~3;  // Align for target asset
+
+    uint32_t dialogue_map_size = sizes[dialogue_map_index];
+    free(sizes);
+
+    LogInfo("DatReader: dialogue_map offset=%u size=%u", data_offset, dialogue_map_size);
+
+    if (dialogue_map_size == 0 || data_offset + dialogue_map_size > (size_t)file_size) {
+        LogWarn("DatReader: Invalid dialogue_map bounds (offset=%u size=%u file=%ld)",
+                data_offset, dialogue_map_size, file_size);
+        fclose(f);
+        return 0;
+    }
+
+    // Read kDialogueMap asset
+    uint8_t *dialogue_map = malloc(dialogue_map_size);
+    if (!dialogue_map) {
+        LogWarn("DatReader: Failed to allocate dialogue_map buffer");
+        fclose(f);
+        return 0;
+    }
+
+    fseek(f, data_offset, SEEK_SET);
+    if (fread(dialogue_map, 1, dialogue_map_size, f) != dialogue_map_size) {
+        LogWarn("DatReader: Failed to read dialogue_map data");
+        free(dialogue_map);
+        fclose(f);
+        return 0;
+    }
+    fclose(f);
+
+    // Parse language entries from kDialogueMap
+    int count = 0;
+    for (int i = 0; i < max_languages; i++) {
+        size_t entry_size;
+        const uint8_t *entry = find_index_in_memblk(dialogue_map, dialogue_map_size, i, &entry_size);
+        if (!entry) break;
+
+        // Get first element (language code) from this entry
+        size_t name_size;
+        const uint8_t *name = find_index_in_memblk(entry, entry_size, 0, &name_size);
+        if (!name || name_size == 0 || name_size >= 16) continue;
+
+        if (count >= max_languages) break;
+        memcpy(languages[count], name, name_size);
+        languages[count][name_size] = '\0';
+        LogInfo("DatReader: Found language: '%s'", languages[count]);
+        count++;
+    }
+
+    free(dialogue_map);
+    LogInfo("DatReader: Returning %d languages", count);
+    return count;
+}
