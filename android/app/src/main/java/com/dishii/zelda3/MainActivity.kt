@@ -1256,7 +1256,7 @@ class MainActivity : SDLActivity() {
             Thread {
                 val disableLowHealthBeep = kotlinx.coroutines.runBlocking { readLowHealthBeepSetting() }
                 val settings = kotlinx.coroutines.runBlocking { readMsuSettings() }
-                val msuFileCount = kotlinx.coroutines.runBlocking { scanMsuFiles() }
+                val msuScanResult = kotlinx.coroutines.runBlocking { scanMsuFiles() }
                 val format = kotlinx.coroutines.runBlocking { detectMsuFormat() }
 
                 // Store originals for restart detection
@@ -1264,18 +1264,22 @@ class MainActivity : SDLActivity() {
                 val originalSettings = settings.copy()
 
                 Log.d(TAG, "showAudioOptionsDialog: settings from readMsuSettings: $settings")
-                Log.d(TAG, "showAudioOptionsDialog: msuFileCount = $msuFileCount, format = $format")
+                Log.d(TAG, "showAudioOptionsDialog: msuScanResult = $msuScanResult, format = $format")
 
                 // Update UI on main thread
                 runOnUiThread {
                     // Update MSU info text
-                    textMsuInfo.text = if (msuFileCount > 0) {
-                        val formatName = when (format) {
-                            "MSU1" -> "PCM"
-                            "OPUZ" -> "Opus"
+                    textMsuInfo.text = if (msuScanResult.fileCount > 0) {
+                        // Detect Deluxe if max track > 47 (original game has tracks 1-47)
+                        val isDeluxe = msuScanResult.maxTrackNumber > 47
+                        val formatName = when {
+                            format == "MSU1" && isDeluxe -> "PCM Deluxe"
+                            format == "MSU1" -> "PCM"
+                            format == "OPUZ" && isDeluxe -> "Opuz Deluxe"
+                            format == "OPUZ" -> "Opuz"
                             else -> "Unknown"
                         }
-                        "$msuFileCount MSU track${if (msuFileCount != 1) "s" else ""} detected ($formatName format)"
+                        "${msuScanResult.fileCount} MSU track${if (msuScanResult.fileCount != 1) "s" else ""} detected ($formatName)"
                     } else {
                         "No MSU files detected"
                     }
@@ -1283,7 +1287,7 @@ class MainActivity : SDLActivity() {
                     // Set initial states
                     switchDisableLowHealthBeep.isChecked = disableLowHealthBeep
                     switchEnableMsu.isChecked = settings.enableMsu
-                    switchEnableMsu.isEnabled = msuFileCount > 0
+                    switchEnableMsu.isEnabled = msuScanResult.fileCount > 0
                     switchResumeMsu.isChecked = settings.resumeMsu
                     sliderMsuVolume.value = settings.volume.toFloat()
                     textVolumeValue.text = "${settings.volume}%"
@@ -2096,13 +2100,19 @@ class MainActivity : SDLActivity() {
 
     // === MSU Audio Management Methods (using coroutines for I/O) ===
 
+    // Data class for MSU scan result (file count and max track number)
+    private data class MsuScanResult(
+        val fileCount: Int,
+        val maxTrackNumber: Int
+    )
+
     /**
-     * Scans MSU directory and counts valid MSU files.
+     * Scans MSU directory, counts valid MSU files, and finds max track number.
      */
-    private suspend fun scanMsuFiles(): Int = withContext(Dispatchers.IO) {
+    private suspend fun scanMsuFiles(): MsuScanResult = withContext(Dispatchers.IO) {
         val uriString = zelda3FolderUri ?: run {
             Log.e(TAG, "scanMsuFiles: No SAF Uri stored")
-            return@withContext 0
+            return@withContext MsuScanResult(0, 0)
         }
 
         val treeUri = Uri.parse(uriString)
@@ -2110,37 +2120,45 @@ class MainActivity : SDLActivity() {
 
         val rootDir = DocumentFile.fromTreeUri(this@MainActivity, treeUri) ?: run {
             Log.e(TAG, "scanMsuFiles: Failed to get DocumentFile from tree Uri")
-            return@withContext 0
+            return@withContext MsuScanResult(0, 0)
         }
 
         val msuDir = rootDir.findFile("MSU") ?: run {
             Log.e(TAG, "scanMsuFiles: MSU directory not found")
-            return@withContext 0
+            return@withContext MsuScanResult(0, 0)
         }
 
         if (!msuDir.isDirectory) {
             Log.e(TAG, "scanMsuFiles: MSU is not a directory")
-            return@withContext 0
+            return@withContext MsuScanResult(0, 0)
         }
 
         val files = msuDir.listFiles()
         Log.d(TAG, "scanMsuFiles: DocumentFile.listFiles() returned ${files.size} files")
 
-        val pattern = Regex("alttp[_-]msu[_-](?:deluxe[_-])?\\d+\\.(pcm|opuz)", RegexOption.IGNORE_CASE)
-        val count = files.count { file ->
-            val fileName = file.name ?: ""
-            val matches = fileName.matches(pattern)
-            if (files.size <= 5 || matches) {  // Log first 5 files or all matches to avoid spam
-                Log.d(TAG, "scanMsuFiles: $fileName matches=$matches")
+        // Pattern to match MSU files and capture track number
+        val pattern = Regex(".*?(\\d+)\\.(pcm|opuz)$", RegexOption.IGNORE_CASE)
+        var count = 0
+        var maxTrack = 0
+
+        for (file in files) {
+            val fileName = file.name ?: continue
+            val match = pattern.find(fileName)
+            if (match != null) {
+                count++
+                val trackNum = match.groupValues[1].toIntOrNull() ?: 0
+                if (trackNum > maxTrack) maxTrack = trackNum
+                if (files.size <= 5 || count <= 5) {
+                    Log.d(TAG, "scanMsuFiles: $fileName track=$trackNum")
+                }
             }
-            matches
         }
 
-        Log.d(TAG, "scanMsuFiles: Total files matched = $count out of ${files.size}")
-        count
+        Log.d(TAG, "scanMsuFiles: Total files matched = $count, maxTrack = $maxTrack")
+        MsuScanResult(count, maxTrack)
     }
 
-    // Data class for MSU detection result
+    // Data class for MSU format detection result
     private data class MsuDetectionResult(
         val format: String,  // "MSU1" or "OPUZ"
         val filePrefix: String  // e.g. "ALttP-msu-Deluxe-"

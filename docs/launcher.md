@@ -170,10 +170,15 @@ Adjust audio settings:
 - **MSU Audio Volume** (0-255) - CD-quality audio track volume (if using MSU-1 audio pack)
 - **Stereo** (on/off) - Enable stereo audio
 
+- **MSU** - MSU audio format dropdown (Disabled, PCM, PCM Deluxe, Opuz, Opuz Deluxe)
 - **MSU Folder** - Directory containing MSU audio tracks:
-  - Click "Browse..." to open folder chooser
-  - Select directory with MSU audio files
-  - Path automatically saved to zelda3.ini with `/alttp_msu-` suffix
+  - Click "Browse..." to select the MSU folder
+  - **Auto-detection:** The launcher automatically scans the folder and detects:
+    - Format (PCM or Opuz) by reading file headers
+    - Deluxe status by checking for track numbers > 47
+    - Filename prefix pattern
+  - The dropdown and path are updated automatically based on detected format
+  - Info label shows: "115 MSU tracks detected (PCM Deluxe)"
 
 **Note:** MSU Audio is an enhanced audio pack with CD-quality music tracks. See the main documentation for details on obtaining MSU audio files.
 

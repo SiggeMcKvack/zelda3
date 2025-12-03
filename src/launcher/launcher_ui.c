@@ -10,6 +10,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <dirent.h>
 
 // Language ROM entry for multi-language support
 typedef struct {
@@ -206,6 +207,7 @@ static struct {
 
     // Path selection widgets
     GtkWidget *msu_path_entry;
+    GtkWidget *msu_info_label;
     GtkWidget *shader_path_entry;
 } g_widgets;
 
@@ -527,6 +529,147 @@ static void on_link_graphics_browse_clicked(GtkButton *button, gpointer user_dat
     gtk_widget_destroy(dialog);
 }
 
+// MSU detection result
+typedef struct {
+    int format_flags;     // kMsuEnabled_* combination
+    int file_count;       // Number of MSU files found
+    char prefix[256];     // Detected prefix (e.g., "ALttP-msu-Deluxe-")
+} MsuScanResult;
+
+// Case-insensitive string suffix check
+static bool str_ends_with_ci(const char *str, const char *suffix) {
+    size_t str_len = strlen(str);
+    size_t suffix_len = strlen(suffix);
+    if (suffix_len > str_len) return false;
+    const char *str_suffix = str + str_len - suffix_len;
+    for (size_t i = 0; i < suffix_len; i++) {
+        if (tolower((unsigned char)str_suffix[i]) != tolower((unsigned char)suffix[i]))
+            return false;
+    }
+    return true;
+}
+
+// Extract track number from filename like "alttp_msu-42.pcm" -> 42
+// Returns 0 if no track number found
+static int extract_track_number(const char *filename) {
+    // Find the last digit sequence before the extension
+    const char *ext = strrchr(filename, '.');
+    if (!ext) return 0;
+
+    // Walk backwards from extension to find digits
+    const char *p = ext - 1;
+    while (p >= filename && *p >= '0' && *p <= '9') p--;
+    p++;  // Point to first digit
+
+    if (p >= ext) return 0;  // No digits found
+    return atoi(p);
+}
+
+// Extract prefix from filename like "alttp_msu-42.pcm" -> "alttp_msu-"
+static void extract_prefix(const char *filename, char *out, size_t out_size) {
+    const char *ext = strrchr(filename, '.');
+    if (!ext) {
+        out[0] = '\0';
+        return;
+    }
+
+    // Find where digits start (walk backwards from extension)
+    const char *p = ext - 1;
+    while (p >= filename && *p >= '0' && *p <= '9') p--;
+    p++;  // Point to first digit
+
+    size_t prefix_len = p - filename;
+    if (prefix_len >= out_size) prefix_len = out_size - 1;
+    memcpy(out, filename, prefix_len);
+    out[prefix_len] = '\0';
+}
+
+// Get format name for display
+static const char* get_msu_format_name(int flags) {
+    bool is_opuz = (flags & kMsuEnabled_Opuz) != 0;
+    bool is_deluxe = (flags & kMsuEnabled_MsuDeluxe) != 0;
+
+    if (is_opuz && is_deluxe) return "Opuz Deluxe";
+    if (is_opuz) return "Opuz";
+    if (is_deluxe) return "PCM Deluxe";
+    return "PCM";
+}
+
+// Convert format flags to dropdown index
+static int flags_to_dropdown_index(int flags) {
+    bool is_opuz = (flags & kMsuEnabled_Opuz) != 0;
+    bool is_deluxe = (flags & kMsuEnabled_MsuDeluxe) != 0;
+
+    if (is_opuz && is_deluxe) return 4;  // Opuz Deluxe
+    if (is_opuz) return 3;               // Opuz
+    if (is_deluxe) return 2;             // PCM Deluxe
+    return 1;                            // PCM
+}
+
+// Scan MSU folder and detect format, deluxe status, and file count
+static MsuScanResult scan_msu_folder(const char *folder_path) {
+    MsuScanResult result = {0, 0, ""};
+    DIR *dir = opendir(folder_path);
+    if (!dir) return result;
+
+    int max_track = 0;
+    bool format_detected = false;
+    bool is_opuz = false;
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        const char *name = entry->d_name;
+
+        // Check for .pcm or .opuz extension
+        bool is_pcm_file = str_ends_with_ci(name, ".pcm");
+        bool is_opuz_file = str_ends_with_ci(name, ".opuz");
+        if (!is_pcm_file && !is_opuz_file) continue;
+
+        // Extract track number
+        int track = extract_track_number(name);
+        if (track <= 0) continue;
+
+        // Count this file
+        result.file_count++;
+
+        // Track highest track number for Deluxe detection
+        if (track > max_track) max_track = track;
+
+        // On first valid file, extract prefix and detect format
+        if (!format_detected) {
+            extract_prefix(name, result.prefix, sizeof(result.prefix));
+
+            // Read file header to verify format
+            char filepath[1024];
+            snprintf(filepath, sizeof(filepath), "%s/%s", folder_path, name);
+            FILE *f = fopen(filepath, "rb");
+            if (f) {
+                uint8_t header[4];
+                if (fread(header, 1, 4, f) == 4) {
+                    // Check for OPUZ magic (0x4F50555A)
+                    if (header[0] == 'O' && header[1] == 'P' &&
+                        header[2] == 'U' && header[3] == 'Z') {
+                        is_opuz = true;
+                    }
+                    // MSU1 magic (0x4D535531) is PCM - default
+                }
+                fclose(f);
+            }
+            format_detected = true;
+        }
+    }
+    closedir(dir);
+
+    // Build format flags
+    if (result.file_count > 0) {
+        result.format_flags = kMsuEnabled_Msu;
+        if (is_opuz) result.format_flags |= kMsuEnabled_Opuz;
+        if (max_track > 47) result.format_flags |= kMsuEnabled_MsuDeluxe;
+    }
+
+    return result;
+}
+
 // Signal handler for MSU path browse button
 static void on_msu_path_browse_clicked(GtkButton *button, gpointer user_data) {
     (void)button;
@@ -554,11 +697,33 @@ static void on_msu_path_browse_clicked(GtkButton *button, gpointer user_data) {
     if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
         char *folder = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
 
-        // Append "/alttp_msu-" to the folder path
-        char full_path[1024];
-        snprintf(full_path, sizeof(full_path), "%s/alttp_msu-", folder);
+        // Scan the folder for MSU files
+        MsuScanResult result = scan_msu_folder(folder);
 
-        gtk_entry_set_text(GTK_ENTRY(g_widgets.msu_path_entry), full_path);
+        char full_path[1024];
+        if (result.file_count > 0 && result.prefix[0]) {
+            // Build full path with detected prefix
+            snprintf(full_path, sizeof(full_path), "%s/%s", folder, result.prefix);
+            gtk_entry_set_text(GTK_ENTRY(g_widgets.msu_path_entry), full_path);
+
+            // Update dropdown to detected format
+            int msu_idx = flags_to_dropdown_index(result.format_flags);
+            gtk_combo_box_set_active(GTK_COMBO_BOX(g_widgets.enable_msu), msu_idx);
+
+            // Update info label
+            char info_msg[256];
+            snprintf(info_msg, sizeof(info_msg), "%d MSU track%s detected (%s)",
+                     result.file_count,
+                     result.file_count != 1 ? "s" : "",
+                     get_msu_format_name(result.format_flags));
+            gtk_label_set_text(GTK_LABEL(g_widgets.msu_info_label), info_msg);
+        } else {
+            // Fallback to default prefix
+            snprintf(full_path, sizeof(full_path), "%s/alttp_msu-", folder);
+            gtk_entry_set_text(GTK_ENTRY(g_widgets.msu_path_entry), full_path);
+            gtk_label_set_text(GTK_LABEL(g_widgets.msu_info_label), "No MSU files detected");
+        }
+
         g_free(folder);
     }
 
@@ -1649,6 +1814,13 @@ static GtkWidget* create_sound_tab(const Config *config) {
     gtk_box_pack_start(GTK_BOX(msu_path_hbox), msu_path_browse_btn, FALSE, FALSE, 0);
 
     gtk_grid_attach(GTK_GRID(grid), msu_path_hbox, 1, row, 1, 1);
+    row++;
+
+    // MSU info label (shows detection results)
+    g_widgets.msu_info_label = gtk_label_new("");
+    gtk_widget_set_halign(g_widgets.msu_info_label, GTK_ALIGN_START);
+    gtk_label_set_xalign(GTK_LABEL(g_widgets.msu_info_label), 0.0);
+    gtk_grid_attach(GTK_GRID(grid), g_widgets.msu_info_label, 1, row, 1, 1);
     row++;
 
     return grid;
