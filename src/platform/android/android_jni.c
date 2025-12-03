@@ -72,14 +72,15 @@ JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeReloadAudioConf
 // JNI environment and method calling helpers are now in jni_helpers.c
 
 /**
- * Opens an MSU file using Android SAF (Storage Access Framework).
- * Called from audio.c when loading MSU files on Android 13+.
+ * Opens an external file using Android SAF (Storage Access Framework).
+ * Called from platform.c for files in user-selected Zelda3 folder.
  *
- * @param filename Relative filename like "ALttP-msu-Deluxe-1.pcm" or "alttp_msu-1.opuz"
+ * @param path Path like "MSU/track-1.pcm" or "shaders/crt.glsl"
+ * @param mode File mode - "r" for read, "w" for write
  * @return File descriptor (>= 0) on success, -1 on failure
  */
-int Android_OpenMsuFileDescriptor(const char *filename) {
-    return JniHelper_CallStaticIntMethod_1S("openMsuFile", filename);
+int Android_OpenExternalFile(const char *path, const char *mode) {
+    return JniHelper_CallStaticIntMethod_2S("openExternalFile", path, mode);
 }
 
 /**

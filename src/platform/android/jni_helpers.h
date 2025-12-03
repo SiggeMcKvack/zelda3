@@ -31,6 +31,10 @@ bool JniHelper_CallStaticBoolMethod_1S(const char *method_name, const char *arg)
 bool JniHelper_CallStaticBoolMethod_2S(const char *method_name,
                                         const char *arg1, const char *arg2);
 
+// Call static int method(String, String) - returns -1 on failure
+int JniHelper_CallStaticIntMethod_2S(const char *method_name,
+                                      const char *arg1, const char *arg2);
+
 // Call static void method(String)
 void JniHelper_CallStaticVoidMethod_1S(const char *method_name, const char *arg);
 

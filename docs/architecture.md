@@ -193,6 +193,13 @@ uint8_t *Platform_ReadWholeFile(const char *filename, size_t *length_out);
 char *Platform_FindFileWithCaseInsensitivity(const char *path);
 ```
 
+On Android, `Platform_OpenFile()` automatically routes external storage paths through
+SAF (Storage Access Framework). Paths with these prefixes are handled via JNI:
+- `MSU/` - MSU audio files (e.g., `MSU/alttp_msu-1.pcm`)
+- `shaders/` - Custom shader files (future)
+
+Internal files (assets, config) use standard `fopen()` in app-specific storage.
+
 **Platform Detection** (`src/platform_detect.h`):
 ```c
 #ifdef PLATFORM_ANDROID

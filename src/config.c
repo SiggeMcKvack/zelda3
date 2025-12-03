@@ -454,12 +454,12 @@ static bool HandleSoundConfig(const char *key, char *value) {
     g_config.audio_samples = (uint16)strtol(value, (char**)NULL, 10);
     return true;
   } else if (StringEqualsNoCase(key, "EnableMSU")) {
-      if (StringEqualsNoCase(value, "opuz"))
-      g_config.enable_msu = kMsuEnabled_Opuz;
+    if (StringEqualsNoCase(value, "opuz"))
+      g_config.enable_msu = kMsuEnabled_Msu | kMsuEnabled_Opuz;
     else if (StringEqualsNoCase(value, "deluxe"))
-      g_config.enable_msu = kMsuEnabled_MsuDeluxe;
+      g_config.enable_msu = kMsuEnabled_Msu | kMsuEnabled_MsuDeluxe;
     else if (StringEqualsNoCase(value, "deluxe-opuz"))
-      g_config.enable_msu = kMsuEnabled_MsuDeluxe | kMsuEnabled_Opuz;
+      g_config.enable_msu = kMsuEnabled_Msu | kMsuEnabled_MsuDeluxe | kMsuEnabled_Opuz;
     else
       return ParseBool(value, (bool*)&g_config.enable_msu);
     return true;

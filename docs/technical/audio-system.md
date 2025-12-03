@@ -266,11 +266,17 @@ typedef struct MsuPlayer {
 
 ```c
 static void MsuPlayer_Open(MsuPlayer *mp, int track_num, bool resume) {
-  // Build file path: "music/<track>.opus"
+  // Build file path
+  // Desktop: full path from config (e.g., "msu/alttp_msu-1.pcm")
+  // Android: "MSU/" prefix triggers SAF routing (e.g., "MSU/alttp_msu-1.pcm")
   char path[256];
-  snprintf(path, sizeof(path), "music/%d.opus", track_num);
+#ifdef PLATFORM_ANDROID
+  snprintf(path, sizeof(path), "MSU/%s%d.pcm", g_config.msu_path, track_num);
+#else
+  snprintf(path, sizeof(path), "%s%d.pcm", g_config.msu_path, track_num);
+#endif
 
-  // Open file
+  // Open file (Platform_OpenFile handles SAF on Android automatically)
   mp->f = Platform_OpenFile(path, "rb");
   if (!mp->f) {
     LogWarn("MSU audio track %d not found", track_num);

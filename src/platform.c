@@ -14,6 +14,15 @@
 
 #ifdef PLATFORM_ANDROID
 #include <android/log.h>
+#include <unistd.h>
+#include "platform/android/android_jni.h"
+
+// Check if path is for external storage (needs SAF)
+static bool IsExternalPath(const char *path) {
+  return strncmp(path, "MSU/", 4) == 0 ||
+         strncmp(path, "shaders/", 8) == 0;
+  // Note: saves use Platform_OpenSaveFile(), not Platform_OpenFile()
+}
 #endif
 
 // Default implementation using standard C FILE*
@@ -32,6 +41,30 @@ void Platform_Shutdown(void) {
 }
 
 PlatformFile *Platform_OpenFile(const char *filename, const char *mode) {
+#ifdef PLATFORM_ANDROID
+  // External paths route through SAF (Storage Access Framework)
+  if (IsExternalPath(filename)) {
+    int fd = Android_OpenExternalFile(filename, mode);
+    if (fd < 0)
+      return NULL;
+
+    FILE *fp = fdopen(fd, mode);
+    if (!fp) {
+      close(fd);
+      return NULL;
+    }
+
+    PlatformFile *pf = (PlatformFile *)malloc(sizeof(PlatformFile));
+    if (!pf) {
+      fclose(fp);
+      return NULL;
+    }
+    pf->fp = fp;
+    return pf;
+  }
+#endif
+
+  // Regular file (app-internal or desktop)
   FILE *fp = fopen(filename, mode);
   if (!fp)
     return NULL;

@@ -5,13 +5,14 @@
 #ifdef __ANDROID__
 
 /**
- * Opens an MSU file using Android SAF (Storage Access Framework).
- * Called from audio.c when loading MSU files on Android 13+.
+ * Opens an external file using Android SAF (Storage Access Framework).
+ * Called from platform.c for files in user-selected Zelda3 folder.
  *
- * @param filename Relative filename like "ALttP-msu-Deluxe-1.pcm" or "alttp_msu-1.opuz"
+ * @param path Path like "MSU/track-1.pcm" or "shaders/crt.glsl"
+ * @param mode File mode - "r" for read, "w" for write
  * @return File descriptor (>= 0) on success, -1 on failure
  */
-int Android_OpenMsuFileDescriptor(const char *filename);
+int Android_OpenExternalFile(const char *path, const char *mode);
 
 /**
  * Loads an asset file from the APK using Android AssetManager.

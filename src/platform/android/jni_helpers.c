@@ -178,6 +178,48 @@ bool JniHelper_CallStaticBoolMethod_2S(const char *method_name,
     return result ? true : false;
 }
 
+int JniHelper_CallStaticIntMethod_2S(const char *method_name,
+                                      const char *arg1, const char *arg2) {
+    JNIEnv *env = JniHelper_GetEnv();
+    if (!env) {
+        LOGD("%s: Failed to get JNIEnv", method_name);
+        return -1;
+    }
+
+    jclass cls = (*env)->FindClass(env, MAIN_ACTIVITY_CLASS);
+    if (!cls) {
+        LOGD("%s: Failed to find MainActivity class", method_name);
+        return -1;
+    }
+
+    jmethodID method = (*env)->GetStaticMethodID(env, cls, method_name,
+                                                  "(Ljava/lang/String;Ljava/lang/String;)I");
+    if (!method) {
+        LOGD("%s: Failed to find method", method_name);
+        (*env)->DeleteLocalRef(env, cls);
+        return -1;
+    }
+
+    jstring jarg1 = (*env)->NewStringUTF(env, arg1);
+    jstring jarg2 = (*env)->NewStringUTF(env, arg2);
+    if (!jarg1 || !jarg2) {
+        LOGD("%s: Failed to create Java strings", method_name);
+        if (jarg1) (*env)->DeleteLocalRef(env, jarg1);
+        if (jarg2) (*env)->DeleteLocalRef(env, jarg2);
+        (*env)->DeleteLocalRef(env, cls);
+        return -1;
+    }
+
+    jint result = (*env)->CallStaticIntMethod(env, cls, method, jarg1, jarg2);
+
+    (*env)->DeleteLocalRef(env, jarg1);
+    (*env)->DeleteLocalRef(env, jarg2);
+    (*env)->DeleteLocalRef(env, cls);
+
+    LOGD("%s: arg1='%s', arg2='%s', result=%d", method_name, arg1, arg2, result);
+    return (int)result;
+}
+
 void JniHelper_CallStaticVoidMethod_1S(const char *method_name, const char *arg) {
     JNIEnv *env = JniHelper_GetEnv();
     if (!env) {

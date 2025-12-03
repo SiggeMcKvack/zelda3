@@ -8,6 +8,7 @@
 #include "config.h"
 #include "assets.h"
 #include "platform.h"
+#include "platform_detect.h"
 #include "logging.h"
 
 // This needs to hold a lot more things than with just PCM
@@ -143,7 +144,9 @@ static float kVolumeTransitionTargetFloat[4];
 
 void ZeldaPlayMsuAudioTrack(uint8 music_ctrl) {
   MsuPlayer *mp = &g_msu_player;
+  LogInfo("ZeldaPlayMsuAudioTrack: music_ctrl=0x%02X, enabled=%d", music_ctrl, mp->enabled);
   if (!mp->enabled) {
+    LogInfo("ZeldaPlayMsuAudioTrack: MSU disabled, using APU");
     mp->resume_info.tag = 0;
     zelda_apu_write(APUI00, music_ctrl);
     return;
@@ -176,8 +179,11 @@ static void MsuPlayer_CloseFile(MsuPlayer *mp) {
 }
 
 static void MsuPlayer_Open(MsuPlayer *mp, int orig_track, bool resume_from_snapshot) {
+  LogInfo("MsuPlayer_Open called: orig_track=%d, enabled=%d, resume=%d",
+          orig_track, mp->enabled, resume_from_snapshot);
   MsuPlayerResumeInfo resume;
   int actual_track = RemapMsuDeluxeTrack(mp, orig_track);
+  LogInfo("MsuPlayer_Open: actual_track=%d (after remap)", actual_track);
 
   if (!resume_from_snapshot) {
     resume.tag = 0;
@@ -200,7 +206,20 @@ static void MsuPlayer_Open(MsuPlayer *mp, int orig_track, bool resume_from_snaps
   if (actual_track == 0)
     return;
   char fname[256], buf[8];
-  snprintf(fname, sizeof(fname), "%s%d.%s", g_config.msu_path ? g_config.msu_path : "", actual_track, mp->enabled & kMsuEnabled_Opuz ? "opuz" : "pcm");
+#ifdef PLATFORM_ANDROID
+  // On Android, MSUPath contains just filename prefix (e.g., "ALttP-msu-Deluxe-")
+  // Prepend "MSU/" for SAF routing through Platform_OpenFile
+  snprintf(fname, sizeof(fname), "MSU/%s%d.%s",
+           g_config.msu_path ? g_config.msu_path : "alttp_msu-",
+           actual_track,
+           mp->enabled & kMsuEnabled_Opuz ? "opuz" : "pcm");
+#else
+  // On desktop, MSUPath contains full path prefix (e.g., "/path/to/msu/alttp_msu-")
+  snprintf(fname, sizeof(fname), "%s%d.%s",
+           g_config.msu_path ? g_config.msu_path : "msu/alttp_msu-",
+           actual_track,
+           mp->enabled & kMsuEnabled_Opuz ? "opuz" : "pcm");
+#endif
   LogInfo("Loading MSU %s", fname);
   mp->f = Platform_OpenFile(fname, "rb");
   if (mp->f == NULL)
@@ -526,6 +545,10 @@ void ZeldaSaveMusicStateToRam_Locked() {
 }
 
 void ZeldaEnableMsu(uint8 enable) {
+  LogInfo("ZeldaEnableMsu called with enable=%d (Msu=%d, Deluxe=%d, Opuz=%d)",
+          enable, (enable & kMsuEnabled_Msu) != 0,
+          (enable & kMsuEnabled_MsuDeluxe) != 0, (enable & kMsuEnabled_Opuz) != 0);
+  LogInfo("MSU path: %s", g_config.msu_path ? g_config.msu_path : "(null)");
   g_msu_player.volume = 1.0f;
   g_msu_player.enabled = enable;
   if (enable & kMsuEnabled_Opuz) {

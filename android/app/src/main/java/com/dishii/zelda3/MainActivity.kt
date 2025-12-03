@@ -71,16 +71,38 @@ class MainActivity : SDLActivity() {
         }
 
         /**
-         * Opens an MSU file using SAF and returns a file descriptor.
-         * Called from native C code via JNI.
+         * Opens an external file using SAF and returns a file descriptor.
+         * Called from native C code via JNI (from Platform_OpenFile on Android).
          *
-         * @param filename Filename like "ALttP-msu-Deluxe-1.pcm" or "alttp_msu-1.opuz"
+         * Path format: "subdir/filename" (e.g., "MSU/track-1.pcm", "shaders/crt.glsl")
+         *
+         * @param path Path with subdirectory and filename
+         * @param mode File mode - "r" for read, "w" for write
          * @return File descriptor (>= 0) on success, -1 on failure
          */
         @JvmStatic
-        fun openMsuFile(filename: String): Int {
-            Log.d(TAG, "openMsuFile: filename='$filename'")
-            return getActivityInstance()?.openFileInSubdir("MSU", filename, "r") ?: -1
+        fun openExternalFile(path: String, mode: String): Int {
+            Log.d(TAG, "openExternalFile: path='$path', mode='$mode'")
+            // Split path into subdir and filename
+            val slashIndex = path.indexOf('/')
+            if (slashIndex < 0) {
+                Log.e(TAG, "openExternalFile: Invalid path format (no slash): $path")
+                return -1
+            }
+            val subdir = path.substring(0, slashIndex)
+            val filename = path.substring(slashIndex + 1)
+            // Convert C file mode to Android ContentResolver mode
+            // C modes: "r", "rb", "w", "wb", "r+", "w+", etc.
+            // Android modes: "r", "w", "rw", "rwt"
+            val androidMode = when {
+                mode.contains('w') && mode.contains('r') -> "rw"
+                mode.contains('w') -> "w"
+                mode.contains('r') -> "r"
+                else -> "r"
+            }
+            val createIfMissing = mode.contains('w')
+            Log.d(TAG, "openExternalFile: subdir='$subdir', filename='$filename', androidMode='$androidMode', create=$createIfMissing")
+            return getActivityInstance()?.openFileInSubdir(subdir, filename, androidMode, createIfMissing) ?: -1
         }
 
         /**
@@ -1311,14 +1333,26 @@ class MainActivity : SDLActivity() {
                                 val newVolume = sliderMsuVolume.value.toInt()
                                 val newResumeMsu = switchResumeMsu.isChecked
 
-                                // Determine AudioFreq based on format
+                                // Determine AudioFreq and MSU flags based on format
                                 var newAudioFreq = settings.audioFreq
                                 var currentFormat: String? = null
+                                var msuFlags = 0  // 0=disabled, 1=PCM, 3=PCM Deluxe, 5=Opuz, 7=Opuz Deluxe
                                 if (newEnableMsu) {
                                     currentFormat = kotlinx.coroutines.runBlocking { detectMsuFormat() }
+                                    val msuScan = kotlinx.coroutines.runBlocking { scanMsuFiles() }
+                                    val isDeluxe = msuScan.maxTrackNumber > 47
+                                    val isOpuz = currentFormat == "OPUZ"
+
                                     currentFormat?.let {
                                         newAudioFreq = if (it == "MSU1") 44100 else 48000
                                     }
+
+                                    // Build flags: kMsuEnabled_Msu=1, kMsuEnabled_MsuDeluxe=2, kMsuEnabled_Opuz=4
+                                    msuFlags = 1  // kMsuEnabled_Msu
+                                    if (isDeluxe) msuFlags = msuFlags or 2  // kMsuEnabled_MsuDeluxe
+                                    if (isOpuz) msuFlags = msuFlags or 4    // kMsuEnabled_Opuz
+
+                                    Log.d(TAG, "MSU flags: $msuFlags (isDeluxe=$isDeluxe, isOpuz=$isOpuz)")
                                 }
 
                                 kotlinx.coroutines.runBlocking {
@@ -1338,16 +1372,16 @@ class MainActivity : SDLActivity() {
                                 // Debug logging
                                 Log.d(TAG, "=== HOT RELOAD DEBUG ===")
                                 Log.d(TAG, "Original: enableMsu=${originalSettings.enableMsu}, volume=${originalSettings.volume}, resumeMsu=${originalSettings.resumeMsu}, audioFreq=${originalSettings.audioFreq}, beep=$originalDisableLowHealthBeep")
-                                Log.d(TAG, "New: enableMsu=$newEnableMsu, volume=$newVolume, resumeMsu=$newResumeMsu, audioFreq=$newAudioFreq, beep=$newDisableLowHealthBeep")
+                                Log.d(TAG, "New: enableMsu=$newEnableMsu, volume=$newVolume, resumeMsu=$newResumeMsu, audioFreq=$newAudioFreq, msuFlags=$msuFlags, beep=$newDisableLowHealthBeep")
                                 Log.d(TAG, "audioFreqChanged=$audioFreqChanged, hotReloadableChanged=$hotReloadableChanged")
 
                                 runOnUiThread {
                                     if (hotReloadableChanged && !audioFreqChanged) {
                                         // Hot-reload settings immediately (no restart needed)
-                                        // Pass settings directly to avoid file flush race condition
-                                        Log.d(TAG, ">>> CALLING HOT RELOAD <<<")
+                                        // Pass MSU flags directly (not just 0/1)
+                                        Log.d(TAG, ">>> CALLING HOT RELOAD with msuFlags=$msuFlags <<<")
                                         nativeReloadAudioConfig(
-                                            enableMsu = if (newEnableMsu) 1 else 0,
+                                            enableMsu = msuFlags,
                                             msuVolume = newVolume,
                                             disableLowHealthBeep = if (newDisableLowHealthBeep) 1 else 0
                                         )
@@ -2174,11 +2208,6 @@ class MainActivity : SDLActivity() {
             return@withContext null
         }
 
-        val folderPath = zelda3FolderPath ?: run {
-            Log.e(TAG, "detectMsuInfo: No folder path stored")
-            return@withContext null
-        }
-
         val treeUri = Uri.parse(uriString)
         Log.d(TAG, "detectMsuInfo: Using SAF Uri = $uriString")
 
@@ -2223,9 +2252,9 @@ class MainActivity : SDLActivity() {
                                 // Extract prefix from filename (remove track number and extension)
                                 // e.g. "ALttP-msu-Deluxe-1.pcm" -> "ALttP-msu-Deluxe-"
                                 val prefix = fileName.replaceFirst(Regex("\\d+\\.(pcm|opuz)$", RegexOption.IGNORE_CASE), "")
-                                val msuPath = "$folderPath/MSU/$prefix"
-                                Log.d(TAG, "detectMsuInfo: Detected prefix='$prefix', full path='$msuPath'")
-                                return@withContext MsuDetectionResult(format, msuPath)
+                                Log.d(TAG, "detectMsuInfo: Detected prefix='$prefix'")
+                                // Return just the prefix - Platform_OpenFile prepends "MSU/" on Android
+                                return@withContext MsuDetectionResult(format, prefix)
                             }
                         }
                     }
@@ -2322,11 +2351,13 @@ class MainActivity : SDLActivity() {
         try {
             // Detect MSU info (format and file prefix path) if enabling
             val msuInfo = if (enableMsu) detectMsuInfo() else null
+            val msuScan = if (enableMsu) scanMsuFiles() else MsuScanResult(0, 0)
             val detectedFormat = msuInfo?.format ?: format
             val detectedPath = msuInfo?.filePrefix
+            val isDeluxe = msuScan.maxTrackNumber > 47
 
             if (enableMsu && detectedPath != null) {
-                Log.d(TAG, "updateMsuSettings: Will update MSUPath to: $detectedPath")
+                Log.d(TAG, "updateMsuSettings: Will update MSUPath to: $detectedPath, isDeluxe=$isDeluxe")
             }
 
             val lines = configFile.readLines()
@@ -2346,11 +2377,16 @@ class MainActivity : SDLActivity() {
                     }
                     inSoundSection && trimmed.startsWith("EnableMSU") -> {
                         val newValue = if (enableMsu) {
-                            if (detectedFormat == "OPUZ") "EnableMSU = opuz" else "EnableMSU = true"
+                            when {
+                                detectedFormat == "OPUZ" && isDeluxe -> "EnableMSU = deluxe-opuz"
+                                detectedFormat == "OPUZ" -> "EnableMSU = opuz"
+                                isDeluxe -> "EnableMSU = deluxe"
+                                else -> "EnableMSU = true"
+                            }
                         } else {
                             "EnableMSU = false"
                         }
-                        Log.d(TAG, "Updated config line: $newValue (format: $detectedFormat)")
+                        Log.d(TAG, "Updated config line: $newValue (format: $detectedFormat, isDeluxe: $isDeluxe)")
                         newValue
                     }
                     inSoundSection && trimmed.startsWith("MSUPath") -> {
