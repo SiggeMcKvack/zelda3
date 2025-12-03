@@ -476,21 +476,55 @@ Offset   Size   Description
 0x10100  128    DSP registers
 ```
 
-### MSU Audio (Opus)
+### MSU Audio (OPUZ Format)
 
-MSU audio uses Ogg Opus for compression:
+MSU audio uses the OPUZ format - a custom container with Opus-encoded audio optimized for game playback:
 
 ```
-File: music/<track>.opus
-Format: Ogg container, Opus codec
+File: msu/<prefix><track>.opuz
+Format: OPUZ container (custom), Opus codec
 Sample rate: 48000 Hz
 Channels: 2 (stereo)
-Bitrate: Variable (typically 96-128 kbps)
+Bitrate: Variable (default 128 kbps)
 
-Loop points stored in Ogg comment tags:
-  LOOP_START=<sample>
-  LOOP_END=<sample>
+OPUZ File Structure:
+  Offset  Size  Description
+  0x0000  4     Magic "OPUZ"
+  0x0004  4     Version (0)
+  0x0008  N×10  Range entries (10 bytes each):
+                  - file_offset (4 bytes) - where Opus packets start
+                  - samples_to_play (4 bytes) - number of samples in range
+                  - preskip_flags (2 bytes) - preskip in bits 0-13,
+                    repeat flag (0x4000), final flag (0x8000)
+  ...     ...   Opus packets:
+                  - size (2 bytes) - bit 15 set if 0xfc prefix stripped
+                  - data (variable) - raw Opus packet
 ```
+
+### PCM to OPUZ Conversion
+
+The `zelda3_opus_encoder` tool converts MSU1 PCM files to OPUZ format:
+
+```bash
+# Single file conversion
+zelda3_opus_encoder track-1.pcm track-1.opuz
+
+# Batch conversion (all MSU Deluxe tracks 1-114)
+zelda3_opus_encoder --batch msu/alttp_msu- --output opuz/
+
+# Custom bitrate
+zelda3_opus_encoder --bitrate 192000 track-1.pcm
+```
+
+Encoding parameters (matching original Python encoder):
+- Sample rate conversion: 44.1kHz → 48kHz (sinc_best quality)
+- Opus application: OPUS_APPLICATION_AUDIO
+- VBR: enabled
+- Complexity: 10 (maximum)
+- Mode: CELT-only (forced)
+- Default bitrate: 128 kbps
+
+Typical compression: ~10-11x (1.8GB PCM → 170MB OPUZ)
 
 ## Performance Considerations
 
@@ -518,6 +552,7 @@ Loop points stored in Ogg comment tags:
 - **Code References:**
   - `src/audio.c` - MSU audio implementation
   - `src/spc_player.c` - SPC player
+  - `src/opus_encoder/` - PCM to OPUZ encoder
   - `snes/spc.c` - SPC-700 CPU emulation
   - `snes/dsp.c` - DSP emulation
   - `snes/apu.c` - APU registers

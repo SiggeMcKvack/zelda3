@@ -135,6 +135,9 @@ cmake .. -DENABLE_WERROR=ON
 |--------|--------|---------|-------------|
 | `CMAKE_BUILD_TYPE` | Release, Debug | Release | Optimization level |
 | `ENABLE_WERROR` | ON, OFF | OFF | Treat warnings as errors |
+| `BUILD_RESTOOL` | ON, OFF | ON | Build asset extraction tool |
+| `BUILD_OPUS_ENCODER` | ON, OFF | ON | Build PCM to OPUZ encoder |
+| `BUILD_LAUNCHER` | ON, OFF | ON | Build GTK3 launcher |
 | `CMAKE_C_COMPILER` | clang, gcc, etc | System default | C compiler |
 | `CMAKE_INSTALL_PREFIX` | path | `/usr/local` | Installation prefix |
 

@@ -57,6 +57,8 @@ Flags at unused RAM 0x648+. Must be toggleable via zelda3.ini.
 
 **Restool:** `src/restool/` (C asset extraction, library API)
 
+**Opus Encoder:** `src/opus_encoder/` (PCM to OPUZ converter, library + CLI)
+
 See [docs/architecture.md](docs/architecture.md) for details.
 
 ## Development Patterns

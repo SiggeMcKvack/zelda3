@@ -52,6 +52,9 @@ option(BUILD_LAUNCHER "Build GTK3 launcher" ON)
 # Option to build asset extraction tool
 option(BUILD_RESTOOL "Build asset extraction tool" ON)
 
+# Option to build PCM to OPUZ encoder
+option(BUILD_OPUS_ENCODER "Build PCM to OPUZ encoder" ON)
+
 # Find libyaml (required for restool integration in launcher)
 find_package(YAML REQUIRED)
 if(YAML_FOUND)
@@ -234,6 +237,21 @@ message(STATUS "Generated config defaults header from zelda3.ini")
 if(BUILD_RESTOOL)
     add_subdirectory(src/restool)
     message(STATUS "Asset extraction tool will be built: zelda3_restool")
+endif()
+
+# ==============================================================================
+# PCM to OPUZ encoder tool
+# ==============================================================================
+if(BUILD_OPUS_ENCODER)
+    # Find libsamplerate (required for resampling)
+    find_package(SampleRate)
+    if(SAMPLERATE_FOUND)
+        add_subdirectory(src/opus_encoder)
+        message(STATUS "OPUZ encoder tool will be built: zelda3_opus_encoder")
+    else()
+        message(STATUS "libsamplerate not found - opus_encoder will not be built")
+        message(STATUS "Install libsamplerate-dev or use: brew install libsamplerate")
+    endif()
 endif()
 
 # ==============================================================================
