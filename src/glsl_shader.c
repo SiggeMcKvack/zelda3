@@ -36,9 +36,11 @@ static uint8 ParseScaleType(const char *s) {
 }
 
 static uint ParseWrapMode(const char *s) {
+  // Note: GL_CLAMP is deprecated/removed in Core Profile and ES.
+  // Map "clamp" to GL_CLAMP_TO_EDGE as the closest supported alternative.
   return StringEqualsNoCase(s, "repeat") ? GL_REPEAT :
          StringEqualsNoCase(s, "clamp_to_edge") ? GL_CLAMP_TO_EDGE :
-         StringEqualsNoCase(s, "clamp") ? GL_CLAMP : GL_CLAMP_TO_BORDER;
+         StringEqualsNoCase(s, "clamp") ? GL_CLAMP_TO_EDGE : GL_CLAMP_TO_BORDER;
 }
 
 static void GlslPass_Initialize(GlslPass *pass) {
@@ -401,6 +403,7 @@ GlslShader *GlslShader_CreateFromFile(const char *filename, bool opengl_es) {
   GlslShader *gs = (GlslShader *)calloc(sizeof(GlslShader), 1);
   if (!gs)
     return gs;
+  gs->opengl_es = opengl_es;
 
   if (IsGlslFilename(filename)) {
     if (!GlslShader_InitializePasses(gs, 1))
@@ -629,14 +632,16 @@ void GlslShader_Render(GlslShader *gs, GlTextureWithSize *tex, int viewport_x, i
 
     if (!last_pass) {
       // output to a texture
+      // Note: GL_UNSIGNED_INT_8_8_8_8 is not valid in ES 3.0, use GL_UNSIGNED_BYTE instead
+      GLenum pixel_type = gs->opengl_es ? GL_UNSIGNED_BYTE : GL_UNSIGNED_INT_8_8_8_8;
       glBindTexture(GL_TEXTURE_2D, p->gl_texture);
       if (p->srgb_framebuffer) {
         glEnable(GL_FRAMEBUFFER_SRGB);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, p->width, p->height, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, p->width, p->height, 0, GL_RGBA, pixel_type, NULL);
       } else {
         glTexImage2D(GL_TEXTURE_2D, 0, p->float_framebuffer ? GL_RGBA32F : GL_RGBA,
                      p->width, p->height, 0, GL_RGBA,
-                     p->float_framebuffer ? GL_FLOAT : GL_UNSIGNED_INT_8_8_8_8, NULL);
+                     p->float_framebuffer ? GL_FLOAT : pixel_type, NULL);
       }
       glViewport(0, 0, p->width, p->height);
       glBindFramebuffer(GL_FRAMEBUFFER, p->gl_fbo);

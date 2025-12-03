@@ -19,6 +19,8 @@ static unsigned int g_program, g_VAO;
 static GlTextureWithSize g_texture;
 static GlslShader *g_glsl_shader;
 static bool g_opengl_es;
+static unsigned int g_vbo;
+static bool g_has_bgra_ext;  // True if GL_EXT_texture_format_BGRA8888 is available on ES
 
 static void GL_APIENTRY MessageCallback(GLenum source,
                 GLenum type,
@@ -52,13 +54,17 @@ static bool OpenGLRenderer_Init(SDL_Window *window) {
   if (!g_opengl_es) {
     if (!ogl_IsVersionGEQ(3, 3))
       Die("You need OpenGL 3.3");
+    g_has_bgra_ext = true;  // Desktop GL always supports GL_BGRA
   } else {
     int majorVersion = 0, minorVersion = 0;
     SDL_GL_GetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, &majorVersion);
     SDL_GL_GetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, &minorVersion);
     if (majorVersion < 3)
       Die("You need OpenGL ES 3.0");
-
+    // Check for GL_EXT_texture_format_BGRA8888 extension on ES
+    g_has_bgra_ext = SDL_GL_ExtensionSupported("GL_EXT_texture_format_BGRA8888");
+    if (!g_has_bgra_ext)
+      LogInfo("GL_EXT_texture_format_BGRA8888 not available, colors may be incorrect");
   }
 
   if (kDebugFlag && glDebugMessageCallback) {
@@ -89,15 +95,14 @@ static bool OpenGLRenderer_Init(SDL_Window *window) {
   };
 
   // create a vertex buffer object
-  unsigned int vbo;
-  glGenBuffers(1, &vbo);
+  glGenBuffers(1, &g_vbo);
 
   // vertex array object
   glGenVertexArrays(1, &g_VAO);
   // 1. bind Vertex Array Object
   glBindVertexArray(g_VAO);
   // 2. copy our vertices array in a buffer for OpenGL to use
-  glBindBuffer(GL_ARRAY_BUFFER, vbo);
+  glBindBuffer(GL_ARRAY_BUFFER, g_vbo);
   glBufferData(GL_ARRAY_BUFFER, sizeof(kVertices), kVertices, GL_STATIC_DRAW);
   // position attribute
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
@@ -186,6 +191,10 @@ static bool OpenGLRenderer_Init(SDL_Window *window) {
     LogError("Shader program linking failed: %s", infolog);
   }
 
+  // Delete shader objects after linking - OpenGL keeps them alive until program is deleted
+  glDeleteShader(vs);
+  glDeleteShader(fs);
+
   if (g_config.shader)
     g_glsl_shader = GlslShader_CreateFromFile(g_config.shader, g_opengl_es);
   
@@ -204,6 +213,10 @@ static void OpenGLRenderer_Destroy() {
   if (g_VAO) {
     glDeleteVertexArrays(1, &g_VAO);
     g_VAO = 0;
+  }
+  if (g_vbo) {
+    glDeleteBuffers(1, &g_vbo);
+    g_vbo = 0;
   }
   if (g_program) {
     glDeleteProgram(g_program);
@@ -271,18 +284,22 @@ static void OpenGLRenderer_EndDraw() {
   int viewport_y = (drawable_height - viewport_height) >> 1;
 
   glBindTexture(GL_TEXTURE_2D, g_texture.gl_texture);
+  // Buffer format is BGRA. Desktop GL uses GL_BGRA + GL_UNSIGNED_INT_8_8_8_8_REV.
+  // ES requires GL_EXT_texture_format_BGRA8888 for GL_BGRA format.
+  // If extension is missing, we use GL_RGBA but colors will be swapped (R<->B).
+  GLenum format = g_has_bgra_ext ? GL_BGRA : GL_RGBA;
   if (g_draw_width == g_texture.width && g_draw_height == g_texture.height) {
     if (!g_opengl_es)
       glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g_draw_width, g_draw_height, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, g_screen_buffer);
     else
-      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g_draw_width, g_draw_height, GL_BGRA, GL_UNSIGNED_BYTE, g_screen_buffer);
+      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g_draw_width, g_draw_height, format, GL_UNSIGNED_BYTE, g_screen_buffer);
   } else {
     g_texture.width = g_draw_width;
     g_texture.height = g_draw_height;
     if (!g_opengl_es)
       glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, g_draw_width, g_draw_height, 0, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, g_screen_buffer);
     else
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, g_draw_width, g_draw_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, g_screen_buffer);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, g_draw_width, g_draw_height, 0, format, GL_UNSIGNED_BYTE, g_screen_buffer);
   }
 
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);

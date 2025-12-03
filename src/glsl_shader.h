@@ -89,6 +89,7 @@ typedef struct GlslShader {
   uint frame_count;
   int max_prev_frame;
   GlTextureWithSize prev_frame[8];
+  bool opengl_es;  // True if using OpenGL ES (affects texture formats)
 } GlslShader;
 
 GlslShader *GlslShader_CreateFromFile(const char *filename, bool opengl_es);
