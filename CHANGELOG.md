@@ -4,6 +4,30 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## December 2025
 
+### Launcher: PCM to Opus Encoding
+
+Added a button in the launcher's Sound tab to encode MSU PCM audio files to Opus format directly from the UI.
+
+**Features:**
+- "Encode PCM files to Opus..." button appears after selecting an MSU folder with PCM files
+- Button is only enabled when PCM files are detected (disabled for Opus files)
+- Confirmation dialog asks whether to keep or remove PCM files after encoding
+- Progress dialog shows encoding progress with cancel option
+- If keeping PCM files, they are moved to a `pcm_original/` subdirectory after successful encoding
+- Files are only moved/deleted after all tracks encode successfully
+- MSU dropdown auto-switches to Opus/Opus Deluxe format on completion
+
+**Opus Encoder Library:**
+- Added progress callback support via `OpusEncoder_EncodeFileEx()` function
+- New `OpusEncoderOptionsEx` struct with callback and user data fields
+- Progress reported every 10 frames during encoding
+
+**Files Modified:**
+- `src/opus_encoder/opus_encoder_lib.h` - Added progress callback types and `OpusEncoder_EncodeFileEx()`
+- `src/opus_encoder/opus_encoder_lib.c` - Implemented progress callback support
+- `src/launcher/launcher_ui.c` - Added encode button, dialogs, and encoding logic
+- `CMakeLists.txt` - Link opus_encoder_lib to launcher
+
 ### Break Pots with Sword - Configurable Minimum Sword Level
 
 The `BreakPotsWithSword` setting now accepts values 0-4 instead of boolean 0/1:

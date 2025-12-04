@@ -4,6 +4,9 @@
 #include "launcher_gamepad.h"
 #include "../logging.h"
 #include "restool_lib.h"
+#ifdef HAVE_OPUS_ENCODER
+#include "opus_encoder_lib.h"
+#endif
 #include <gtk/gtk.h>
 #include <SDL.h>
 #include <stdio.h>
@@ -11,6 +14,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <dirent.h>
+#include <sys/stat.h>
 
 // Language ROM entry for multi-language support
 typedef struct {
@@ -209,6 +213,9 @@ static struct {
     GtkWidget *msu_path_entry;
     GtkWidget *msu_info_label;
     GtkWidget *shader_path_entry;
+#ifdef HAVE_OPUS_ENCODER
+    GtkWidget *encode_opus_btn;
+#endif
 } g_widgets;
 
 // Helper: Create labeled combo box
@@ -606,6 +613,373 @@ static int flags_to_dropdown_index(int flags) {
     return 1;                            // PCM
 }
 
+#ifdef HAVE_OPUS_ENCODER
+// Encoding state for progress tracking
+typedef struct {
+    GtkWidget *dialog;
+    GtkWidget *progress_bar;
+    GtkWidget *status_label;
+    bool keep_pcm_files;
+    bool cancelled;
+    int current_file;
+    int total_files;
+    int success_count;
+    char folder_path[512];
+    char prefix[256];
+} EncodingState;
+
+static EncodingState g_encoding_state;
+
+// Progress callback for opus encoder
+static bool on_encoding_progress(float progress, void *user_data) {
+    EncodingState *state = (EncodingState *)user_data;
+
+    // Calculate overall progress: file progress within total files
+    float overall = ((float)(state->current_file - 1) + progress) / (float)state->total_files;
+    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(state->progress_bar), overall);
+
+    // Process GTK events to keep UI responsive
+    while (gtk_events_pending()) gtk_main_iteration();
+
+    return !state->cancelled;
+}
+
+// Progress dialog cancel handler
+static void on_progress_dialog_response(GtkDialog *dialog, gint response_id, gpointer user_data) {
+    (void)dialog;
+    (void)user_data;
+    if (response_id == GTK_RESPONSE_CANCEL || response_id == GTK_RESPONSE_DELETE_EVENT) {
+        g_encoding_state.cancelled = true;
+    }
+}
+
+// Get list of PCM track numbers in folder
+static int* get_pcm_track_numbers(const char *folder_path, const char *prefix, int *count) {
+    DIR *dir = opendir(folder_path);
+    if (!dir) {
+        *count = 0;
+        return NULL;
+    }
+
+    // First pass: count PCM files
+    int file_count = 0;
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (!str_ends_with_ci(entry->d_name, ".pcm")) continue;
+        if (strncmp(entry->d_name, prefix, strlen(prefix)) != 0) continue;
+        file_count++;
+    }
+
+    if (file_count == 0) {
+        closedir(dir);
+        *count = 0;
+        return NULL;
+    }
+
+    int *tracks = malloc(file_count * sizeof(int));
+    if (!tracks) {
+        closedir(dir);
+        *count = 0;
+        return NULL;
+    }
+
+    // Second pass: collect track numbers
+    rewinddir(dir);
+    int idx = 0;
+    while ((entry = readdir(dir)) != NULL && idx < file_count) {
+        if (!str_ends_with_ci(entry->d_name, ".pcm")) continue;
+        if (strncmp(entry->d_name, prefix, strlen(prefix)) != 0) continue;
+        int track = extract_track_number(entry->d_name);
+        if (track > 0) {
+            tracks[idx++] = track;
+        }
+    }
+    closedir(dir);
+
+    *count = idx;
+    return tracks;
+}
+
+// Move PCM files to pcm_original subdirectory
+static bool move_pcm_files_to_backup(const char *folder_path, const char *prefix) {
+    char backup_dir[600];
+    snprintf(backup_dir, sizeof(backup_dir), "%s/pcm_original", folder_path);
+
+    // Create backup directory
+#ifdef _WIN32
+    _mkdir(backup_dir);
+#else
+    mkdir(backup_dir, 0755);
+#endif
+
+    DIR *dir = opendir(folder_path);
+    if (!dir) return false;
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (!str_ends_with_ci(entry->d_name, ".pcm")) continue;
+        if (strncmp(entry->d_name, prefix, strlen(prefix)) != 0) continue;
+
+        char src_path[1024], dst_path[1024];
+        snprintf(src_path, sizeof(src_path), "%s/%s", folder_path, entry->d_name);
+        snprintf(dst_path, sizeof(dst_path), "%s/%s", backup_dir, entry->d_name);
+
+        rename(src_path, dst_path);
+    }
+    closedir(dir);
+    return true;
+}
+
+// Delete PCM files from folder
+static bool delete_pcm_files(const char *folder_path, const char *prefix) {
+    DIR *dir = opendir(folder_path);
+    if (!dir) return false;
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (!str_ends_with_ci(entry->d_name, ".pcm")) continue;
+        if (strncmp(entry->d_name, prefix, strlen(prefix)) != 0) continue;
+
+        char path[1024];
+        snprintf(path, sizeof(path), "%s/%s", folder_path, entry->d_name);
+        remove(path);
+    }
+    closedir(dir);
+    return true;
+}
+
+// Forward declaration
+static MsuScanResult scan_msu_folder(const char *folder_path);
+
+// Encode PCM files to Opus
+// Returns the list of track numbers that were encoded (caller must free)
+static int* encode_pcm_files(const char *folder_path, const char *prefix, int *out_track_count) {
+    // Get list of track numbers from the original folder
+    int track_count;
+    int *tracks = get_pcm_track_numbers(folder_path, prefix, &track_count);
+
+    if (!tracks || track_count == 0) {
+        free(tracks);
+        *out_track_count = 0;
+        return NULL;
+    }
+
+    g_encoding_state.total_files = track_count;
+    g_encoding_state.current_file = 0;
+    g_encoding_state.success_count = 0;
+
+    // Encode each track from the original folder
+    for (int i = 0; i < track_count && !g_encoding_state.cancelled; i++) {
+        g_encoding_state.current_file = i + 1;
+
+        // Update status label
+        char status[128];
+        snprintf(status, sizeof(status), "Encoding track %d of %d...", i + 1, track_count);
+        gtk_label_set_text(GTK_LABEL(g_encoding_state.status_label), status);
+        while (gtk_events_pending()) gtk_main_iteration();
+
+        // Build paths - read from original folder, write to same folder
+        char input_path[1024], output_path[1024];
+        snprintf(input_path, sizeof(input_path), "%s/%s%d.pcm", folder_path, prefix, tracks[i]);
+        snprintf(output_path, sizeof(output_path), "%s/%s%d.opuz", folder_path, prefix, tracks[i]);
+
+        // Encode with progress callback
+        OpusEncoderOptionsEx opts = {
+            .bitrate = 128000,
+            .has_repeat = OpusEncoder_TrackHasRepeat(tracks[i]),
+            .callback = on_encoding_progress,
+            .callback_data = &g_encoding_state
+        };
+
+        int result = OpusEncoder_EncodeFileEx(input_path, output_path, &opts);
+        if (result == OPUS_ENC_OK) {
+            g_encoding_state.success_count++;
+        } else if (result == OPUS_ENC_ERR_CANCELLED) {
+            break;
+        }
+    }
+
+    *out_track_count = track_count;
+    return tracks;
+}
+
+// Signal handler for "Encode PCM to Opus" button
+static void on_encode_opus_clicked(GtkButton *button, gpointer user_data) {
+    (void)button;
+    (void)user_data;
+
+    // Get MSU path and extract folder/prefix
+    const char *msu_path = gtk_entry_get_text(GTK_ENTRY(g_widgets.msu_path_entry));
+    if (!msu_path || !*msu_path) return;
+
+    // Parse folder and prefix from full path (e.g., "/path/to/folder/alttp_msu-")
+    char folder_path[512];
+    char prefix[256];
+    strncpy(folder_path, msu_path, sizeof(folder_path) - 1);
+    folder_path[sizeof(folder_path) - 1] = '\0';
+
+    char *last_slash = strrchr(folder_path, '/');
+    if (last_slash) {
+        strncpy(prefix, last_slash + 1, sizeof(prefix) - 1);
+        prefix[sizeof(prefix) - 1] = '\0';
+        *last_slash = '\0';
+    } else {
+        // No slash found, use current directory
+        strncpy(prefix, folder_path, sizeof(prefix) - 1);
+        prefix[sizeof(prefix) - 1] = '\0';
+        strcpy(folder_path, ".");
+    }
+
+    // Re-scan to verify PCM files exist
+    MsuScanResult scan = scan_msu_folder(folder_path);
+    if (!(scan.format_flags & kMsuEnabled_Msu) || (scan.format_flags & kMsuEnabled_Opuz)) {
+        // No PCM files or already Opus
+        return;
+    }
+
+    // Show confirmation dialog
+    GtkWidget *dialog = gtk_message_dialog_new(
+        NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
+        "The encoding will take a couple of minutes.\n\n"
+        "Do you want to keep the PCM files after encoding has finished?");
+    gtk_dialog_add_button(GTK_DIALOG(dialog), "Cancel", GTK_RESPONSE_CANCEL);
+    gtk_dialog_add_button(GTK_DIALOG(dialog), "Keep PCM files", GTK_RESPONSE_YES);
+    gtk_dialog_add_button(GTK_DIALOG(dialog), "Remove PCM files", GTK_RESPONSE_NO);
+
+    int response = gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
+    if (response == GTK_RESPONSE_CANCEL || response == GTK_RESPONSE_DELETE_EVENT) return;
+
+    bool keep_pcm = (response == GTK_RESPONSE_YES);
+
+    // Store state
+    strncpy(g_encoding_state.folder_path, folder_path, sizeof(g_encoding_state.folder_path) - 1);
+    g_encoding_state.folder_path[sizeof(g_encoding_state.folder_path) - 1] = '\0';
+    strncpy(g_encoding_state.prefix, prefix, sizeof(g_encoding_state.prefix) - 1);
+    g_encoding_state.prefix[sizeof(g_encoding_state.prefix) - 1] = '\0';
+    g_encoding_state.keep_pcm_files = keep_pcm;
+    g_encoding_state.cancelled = false;
+
+    // Create progress dialog
+    GtkWidget *progress_dialog = gtk_dialog_new_with_buttons(
+        "Encoding PCM to Opus", NULL, GTK_DIALOG_MODAL,
+        "Cancel", GTK_RESPONSE_CANCEL, NULL);
+    g_signal_connect(progress_dialog, "response",
+                     G_CALLBACK(on_progress_dialog_response), NULL);
+
+    GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(progress_dialog));
+    gtk_container_set_border_width(GTK_CONTAINER(content), 10);
+
+    GtkWidget *status_label = gtk_label_new("Starting encoding...");
+    gtk_box_pack_start(GTK_BOX(content), status_label, FALSE, FALSE, 10);
+
+    GtkWidget *progress_bar = gtk_progress_bar_new();
+    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(progress_bar), 0.0);
+    gtk_widget_set_size_request(progress_bar, 300, -1);
+    gtk_box_pack_start(GTK_BOX(content), progress_bar, FALSE, FALSE, 10);
+
+    gtk_widget_show_all(progress_dialog);
+
+    // Store dialog widgets
+    g_encoding_state.dialog = progress_dialog;
+    g_encoding_state.progress_bar = progress_bar;
+    g_encoding_state.status_label = status_label;
+
+    // Run encoding (returns list of track numbers for cleanup)
+    int track_count;
+    int *tracks = encode_pcm_files(folder_path, prefix, &track_count);
+
+    // Only handle PCM files if encoding completed successfully (all files encoded, not cancelled)
+    bool encoding_complete = !g_encoding_state.cancelled &&
+                             g_encoding_state.success_count == track_count &&
+                             track_count > 0;
+
+    if (encoding_complete) {
+        if (keep_pcm) {
+            // Move PCM files to backup folder
+            move_pcm_files_to_backup(folder_path, prefix);
+        } else {
+            // Delete PCM files
+            delete_pcm_files(folder_path, prefix);
+        }
+    }
+
+    free(tracks);
+
+    // Update dialog to show completion status
+    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(progress_bar), 1.0);
+
+    // Update status label with result
+    char completion_msg[256];
+    if (g_encoding_state.cancelled) {
+        snprintf(completion_msg, sizeof(completion_msg),
+                 "Encoding cancelled.\n%d of %d tracks were encoded.",
+                 g_encoding_state.success_count, track_count);
+    } else if (g_encoding_state.success_count == track_count) {
+        snprintf(completion_msg, sizeof(completion_msg),
+                 "Encoding complete!\n%d tracks successfully encoded to Opus.",
+                 g_encoding_state.success_count);
+    } else {
+        snprintf(completion_msg, sizeof(completion_msg),
+                 "Encoding finished with errors.\n%d of %d tracks encoded.",
+                 g_encoding_state.success_count, track_count);
+    }
+    gtk_label_set_text(GTK_LABEL(status_label), completion_msg);
+
+    // Change Cancel button to OK
+    GtkWidget *cancel_btn = gtk_dialog_get_widget_for_response(GTK_DIALOG(progress_dialog),
+                                                                GTK_RESPONSE_CANCEL);
+    if (cancel_btn) {
+        gtk_button_set_label(GTK_BUTTON(cancel_btn), "OK");
+    }
+
+    // Disconnect the cancel handler so clicking OK just closes
+    g_signal_handlers_disconnect_by_func(progress_dialog,
+                                         G_CALLBACK(on_progress_dialog_response), NULL);
+
+    // Wait for user to click OK
+    gtk_dialog_run(GTK_DIALOG(progress_dialog));
+
+    // Cleanup progress dialog
+    gtk_widget_destroy(progress_dialog);
+
+    // Re-scan and update UI
+    MsuScanResult result = scan_msu_folder(folder_path);
+
+    // Update MSU path entry with new prefix if format detected
+    if (result.file_count > 0 && result.prefix[0]) {
+        char full_path[1024];
+        snprintf(full_path, sizeof(full_path), "%s/%s", folder_path, result.prefix);
+        gtk_entry_set_text(GTK_ENTRY(g_widgets.msu_path_entry), full_path);
+    }
+
+    // Update dropdown to detected format
+    if (result.format_flags & kMsuEnabled_Opuz) {
+        int msu_idx = flags_to_dropdown_index(result.format_flags);
+        gtk_combo_box_set_active(GTK_COMBO_BOX(g_widgets.enable_msu), msu_idx);
+    }
+
+    // Update info label
+    char info_msg[256];
+    if (g_encoding_state.cancelled) {
+        snprintf(info_msg, sizeof(info_msg), "Encoding cancelled. %d of %d tracks encoded.",
+                 g_encoding_state.success_count, track_count);
+    } else if (g_encoding_state.success_count == track_count) {
+        snprintf(info_msg, sizeof(info_msg), "%d tracks encoded to Opus",
+                 g_encoding_state.success_count);
+    } else {
+        snprintf(info_msg, sizeof(info_msg), "%d of %d tracks encoded (some failed)",
+                 g_encoding_state.success_count, track_count);
+    }
+    gtk_label_set_text(GTK_LABEL(g_widgets.msu_info_label), info_msg);
+
+    // Disable encode button only if all files were successfully encoded
+    if (encoding_complete) {
+        gtk_widget_set_sensitive(g_widgets.encode_opus_btn, FALSE);
+    }
+}
+#endif // HAVE_OPUS_ENCODER
+
 // Scan MSU folder and detect format, deluxe status, and file count
 static MsuScanResult scan_msu_folder(const char *folder_path) {
     MsuScanResult result = {0, 0, ""};
@@ -717,11 +1091,21 @@ static void on_msu_path_browse_clicked(GtkButton *button, gpointer user_data) {
                      result.file_count != 1 ? "s" : "",
                      get_msu_format_name(result.format_flags));
             gtk_label_set_text(GTK_LABEL(g_widgets.msu_info_label), info_msg);
+
+#ifdef HAVE_OPUS_ENCODER
+            // Enable encode button only if PCM files detected (not already Opus)
+            bool has_pcm = (result.format_flags & kMsuEnabled_Msu) &&
+                           !(result.format_flags & kMsuEnabled_Opuz);
+            gtk_widget_set_sensitive(g_widgets.encode_opus_btn, has_pcm);
+#endif
         } else {
             // Fallback to default prefix
             snprintf(full_path, sizeof(full_path), "%s/alttp_msu-", folder);
             gtk_entry_set_text(GTK_ENTRY(g_widgets.msu_path_entry), full_path);
             gtk_label_set_text(GTK_LABEL(g_widgets.msu_info_label), "No MSU files detected");
+#ifdef HAVE_OPUS_ENCODER
+            gtk_widget_set_sensitive(g_widgets.encode_opus_btn, FALSE);
+#endif
         }
 
         g_free(folder);
@@ -1822,6 +2206,17 @@ static GtkWidget* create_sound_tab(const Config *config) {
     gtk_label_set_xalign(GTK_LABEL(g_widgets.msu_info_label), 0.0);
     gtk_grid_attach(GTK_GRID(grid), g_widgets.msu_info_label, 1, row, 1, 1);
     row++;
+
+#ifdef HAVE_OPUS_ENCODER
+    // Encode PCM to Opus button
+    g_widgets.encode_opus_btn = gtk_button_new_with_label("Encode PCM files to Opus...");
+    g_signal_connect(g_widgets.encode_opus_btn, "clicked",
+                     G_CALLBACK(on_encode_opus_clicked), NULL);
+    gtk_widget_set_halign(g_widgets.encode_opus_btn, GTK_ALIGN_START);
+    gtk_widget_set_sensitive(g_widgets.encode_opus_btn, FALSE);  // Disabled until PCM detected
+    gtk_grid_attach(GTK_GRID(grid), g_widgets.encode_opus_btn, 1, row, 1, 1);
+    row++;
+#endif
 
     return grid;
 }

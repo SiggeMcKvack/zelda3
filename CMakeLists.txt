@@ -284,10 +284,18 @@ if(HAVE_GTK3)
         message(FATAL_ERROR "Launcher requires BUILD_RESTOOL=ON to link against restool_lib")
     endif()
 
+    # Link opus encoder for PCM-to-Opus conversion in launcher
+    if(BUILD_OPUS_ENCODER AND TARGET opus_encoder_lib)
+        target_link_libraries(zelda3-launcher PRIVATE opus_encoder_lib)
+        target_compile_definitions(zelda3-launcher PRIVATE HAVE_OPUS_ENCODER)
+        message(STATUS "Launcher will have PCM-to-Opus encoding support")
+    endif()
+
     # Include directories for launcher (launcher-specific only, restool headers come from restool_lib)
     target_include_directories(zelda3-launcher PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/src/launcher
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/opus_encoder
         ${SDL2_INCLUDE_DIRS}
         ${GTK3_INCLUDE_DIRS}
     )
