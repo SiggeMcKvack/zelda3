@@ -1,7 +1,7 @@
 #include "audio.h"
 #include "zelda_rtl.h"
 #include "variables.h"
-#include "features.h"
+#include "game_features.h"
 #include "snes/snes_regs.h"
 #include "spc_player.h"
 #include <opus/opus.h>

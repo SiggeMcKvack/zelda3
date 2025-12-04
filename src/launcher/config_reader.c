@@ -2,7 +2,7 @@
 #include "config_writer.h"
 #include "launcher_ui.h"
 #include "../config.h"
-#include "../features.h"
+#include "../game_features.h"
 #include "../logging.h"
 #include "../platform.h"
 #include <stdio.h>

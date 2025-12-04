@@ -1,6 +1,8 @@
 // This file declares extensions to the base game
-#ifndef ZELDA3_FEATURES_H_
-#define ZELDA3_FEATURES_H_
+// NOTE: This file is named game_features.h (not features.h) to avoid
+// conflicts with the glibc system header <features.h> on Linux.
+#ifndef ZELDA3_GAME_FEATURES_H_
+#define ZELDA3_GAME_FEATURES_H_
 
 #include "types.h"
 
@@ -66,4 +68,4 @@ enum {
 extern uint32 g_wanted_zelda_features;
 
 
-#endif  // ZELDA3_FEATURES_H_
+#endif  // ZELDA3_GAME_FEATURES_H_

@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <SDL.h>
-#include "features.h"
+#include "game_features.h"
 #include "util.h"
 #include "logging.h"
 #include "platform.h"

@@ -1,6 +1,6 @@
 #include "launcher_ui.h"
 #include "../config.h"
-#include "../features.h"
+#include "../game_features.h"
 #include "launcher_gamepad.h"
 #include "../logging.h"
 #include "restool_lib.h"

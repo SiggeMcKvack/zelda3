@@ -8,7 +8,7 @@
 #include <SDL.h>
 #include "jni_helpers.h"
 #include "config.h"
-#include "features.h"
+#include "game_features.h"
 #include "zelda_rtl.h"
 #include "snes/ppu.h"
 #include "logging.h"

@@ -363,7 +363,7 @@ typedef struct LoadFuncState {
 
 void loadFunc(void *ctx, void *data, size_t data_size) {
   LoadFuncState *st = (LoadFuncState *)ctx;
-  assert(st->pend - st->p >= data_size);
+  assert((size_t)(st->pend - st->p) >= data_size);
   memcpy(data, st->p, data_size);
   st->p += data_size;
 }
@@ -607,7 +607,7 @@ void StateRecorder_ClearKeyLog(StateRecorder *sr) {
 uint16 StateRecorder_ReadNextReplayState(StateRecorder *sr) {
   assert(sr->replay_mode);
   while (sr->frames_since_last >= sr->replay_next_cmd_at) {
-    int replay_pos = sr->replay_pos;
+    uint32 replay_pos = sr->replay_pos;
     if (replay_pos != sr->replay_pos_last_complete) {
       // Apply next command
       sr->frames_since_last = 0;
