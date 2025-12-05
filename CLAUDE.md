@@ -20,7 +20,7 @@ Zelda3: Reverse-engineered C reimplementation of The Legend of Zelda: A Link to 
 mkdir build && cd build && cmake .. && cmake --build . -j$(nproc)
 
 # Extract assets (required before running)
-./src/restool/zelda3_restool --extract-from-rom ../zelda3.sfc --compile
+./zelda3-restool --extract-from-rom ../zelda3.sfc --compile
 
 # Android
 cd android && ./gradlew assembleDebug

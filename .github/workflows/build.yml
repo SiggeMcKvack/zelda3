@@ -37,7 +37,8 @@ jobs:
           python3 \
           python3-pip \
           libopenal-dev \
-          libyaml-dev
+          libyaml-dev \
+          libgtk-3-dev
 
     - name: Extract assets
       run: |
@@ -57,6 +58,7 @@ jobs:
         name: zelda3-ubuntu-${{ matrix.build_type }}
         path: |
           build/zelda3
+          build/zelda3-launcher
           build/*.so
         if-no-files-found: ignore
 
@@ -81,7 +83,8 @@ jobs:
           opus \
           python \
           openal \
-          libyaml
+          libyaml \
+          gtk3
 
     - name: Configure CMake
       run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
@@ -95,6 +98,7 @@ jobs:
         name: zelda3-arch-${{ matrix.build_type }}
         path: |
           build/zelda3
+          build/zelda3-launcher
           build/*.so
         if-no-files-found: ignore
 
@@ -115,10 +119,12 @@ jobs:
 
     - name: Install dependencies
       run: |
-        vcpkg install sdl2:x64-windows opus:x64-windows openal-soft:x64-windows libyaml:x64-windows
+        vcpkg install sdl2:x64-windows opus:x64-windows openal-soft:x64-windows libyaml:x64-windows gtk3:x64-windows pkgconf:x64-windows
 
     - name: Configure CMake
       run: |
+        $env:PKG_CONFIG = "$env:VCPKG_ROOT/installed/x64-windows/tools/pkgconf/pkgconf.exe"
+        $env:PKG_CONFIG_PATH = "$env:VCPKG_ROOT/installed/x64-windows/lib/pkgconfig"
         cmake -B build `
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
           -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
@@ -132,6 +138,7 @@ jobs:
         name: zelda3-windows-${{ matrix.build_type }}
         path: |
           build/${{ matrix.build_type }}/zelda3.exe
+          build/${{ matrix.build_type }}/zelda3-launcher.exe
           build/${{ matrix.build_type }}/*.dll
         if-no-files-found: ignore
 
@@ -147,7 +154,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install sdl2 opus openal-soft cmake libyaml
+        brew install sdl2 opus openal-soft cmake libyaml gtk+3
 
     - name: Configure CMake
       run: |
@@ -164,6 +171,7 @@ jobs:
         name: zelda3-macos-arm64-${{ matrix.build_type }}
         path: |
           build/zelda3
+          build/zelda3-launcher
           build/*.dylib
         if-no-files-found: ignore
 
@@ -179,7 +187,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install sdl2 opus openal-soft cmake libyaml
+        brew install sdl2 opus openal-soft cmake libyaml gtk+3
 
     - name: Configure CMake
       run: |
@@ -196,5 +204,6 @@ jobs:
         name: zelda3-macos-x86_64-${{ matrix.build_type }}
         path: |
           build/zelda3
+          build/zelda3-launcher
           build/*.dylib
         if-no-files-found: ignore

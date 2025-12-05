@@ -4,7 +4,7 @@ Developer documentation for the C-based asset extraction tool.
 
 ## Overview
 
-`zelda3_restool` is a standalone command-line tool for extracting assets from The Legend of Zelda: A Link to the Past ROM files. It replaces the Python-based extraction toolchain with a single binary that has zero runtime dependencies.
+`zelda3-restool` is a standalone command-line tool for extracting assets from The Legend of Zelda: A Link to the Past ROM files. It replaces the Python-based extraction toolchain with a single binary that has zero runtime dependencies.
 
 **Key Features:**
 - ROM loading with SMC header auto-detection
@@ -25,13 +25,13 @@ mkdir build && cd build
 cmake .. && cmake --build .
 
 # Extract Link sprites (4bpp, 128x448px)
-./src/restool/zelda3_restool --extract-from-rom zelda3.sfc --extract-graphics
+./src/restool/zelda3-restool --extract-from-rom zelda3.sfc --extract-graphics
 
 # Extract enemy sprite tileset 0 (3bpp, 128x32px)
-./src/restool/zelda3_restool --extract-from-rom zelda3.sfc --extract-enemy-sheet 0
+./src/restool/zelda3-restool --extract-from-rom zelda3.sfc --extract-enemy-sheet 0
 
 # Show help
-./src/restool/zelda3_restool --help
+./src/restool/zelda3-restool --help
 ```
 
 **Supported Features:**
@@ -88,7 +88,7 @@ endif()
 ```bash
 mkdir build && cd build
 cmake .. -DBUILD_RESTOOL=ON  # ON by default
-cmake --build . --target zelda3_restool
+cmake --build . --target zelda3-restool
 ```
 
 The resulting binary is self-contained and can be distributed separately from the main game.
@@ -354,9 +354,9 @@ Update validation logic in `main.c` to check new hash and display appropriate ve
 
 **Manual Testing:**
 ```bash
-./zelda3_restool --help
-./zelda3_restool --version
-./zelda3_restool --verbose --extract-from-rom zelda3.sfc
+./zelda3-restool --help
+./zelda3-restool --version
+./zelda3-restool --verbose --extract-from-rom zelda3.sfc
 ```
 
 **Verification:**

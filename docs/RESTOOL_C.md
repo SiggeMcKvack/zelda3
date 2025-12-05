@@ -1,6 +1,6 @@
 # C Restool Usage Guide
 
-This guide documents the C-based asset extraction tool (`zelda3_restool`) for Zelda3. This tool extracts game assets from The Legend of Zelda: A Link to the Past ROM files and compiles them into `zelda3_assets.dat`, which is required to run the zelda3 engine.
+This guide documents the C-based asset extraction tool (`zelda3-restool`) for Zelda3. This tool extracts game assets from The Legend of Zelda: A Link to the Past ROM files and compiles them into `zelda3_assets.dat`, which is required to run the zelda3 engine.
 
 ## Table of Contents
 
@@ -28,7 +28,7 @@ cmake --build . -j$(nproc)
 cp /path/to/your/rom.sfc ../zelda3.sfc
 
 # 3. Extract assets and compile
-./zelda3_restool --extract-from-rom ../zelda3.sfc
+./zelda3-restool --extract-from-rom ../zelda3.sfc
 
 # 4. Verify output
 ls -lh zelda3_assets.dat  # Should be ~680KB
@@ -44,10 +44,10 @@ Extract all game assets from ROM and optionally compile them into `zelda3_assets
 
 ```bash
 # Extract assets
-./zelda3_restool --extract-from-rom zelda3.sfc
+./zelda3-restool --extract-from-rom zelda3.sfc
 
 # Extract and compile
-./zelda3_restool --extract-from-rom zelda3.sfc --compile
+./zelda3-restool --extract-from-rom zelda3.sfc --compile
 ```
 
 ### `--compile`
@@ -59,10 +59,10 @@ Compile extracted assets into `zelda3_assets.dat`.
 
 ```bash
 # Extract and compile in one step
-./zelda3_restool --extract-from-rom zelda3.sfc --compile
+./zelda3-restool --extract-from-rom zelda3.sfc --compile
 
 # Or compile after extraction
-./zelda3_restool --compile
+./zelda3-restool --compile
 ```
 
 ### `--output <PATH>`
@@ -73,7 +73,7 @@ Specify output directory for extracted assets.
 **Default:** `assets/` directory
 
 ```bash
-./zelda3_restool --extract-from-rom zelda3.sfc --output ./my_assets
+./zelda3-restool --extract-from-rom zelda3.sfc --output ./my_assets
 ```
 
 ### `--extract-dialogue`
@@ -97,10 +97,10 @@ Output files created in `assets/`:
 
 ```bash
 # Extract German dialogue
-./zelda3_restool --extract-from-rom german.sfc --extract-dialogue
+./zelda3-restool --extract-from-rom german.sfc --extract-dialogue
 
 # Extract Spanish dialogue
-./zelda3_restool --extract-from-rom spanish.sfc --extract-dialogue
+./zelda3-restool --extract-from-rom spanish.sfc --extract-dialogue
 ```
 
 ### `--extract-graphics`
@@ -111,7 +111,7 @@ Extract Link sprite graphics only.
 **Default:** False
 
 ```bash
-./zelda3_restool --extract-from-rom zelda3.sfc --extract-graphics
+./zelda3-restool --extract-from-rom zelda3.sfc --extract-graphics
 # Output: linksprite.png (128×448 pixels)
 ```
 
@@ -122,7 +122,7 @@ Extract a specific enemy sprite tileset.
 **Type:** Integer (tileset index 0-70)
 
 ```bash
-./zelda3_restool --extract-from-rom zelda3.sfc --extract-enemy-sheet 0
+./zelda3-restool --extract-from-rom zelda3.sfc --extract-enemy-sheet 0
 # Output: enemy_0.png (128×32 pixels)
 ```
 
@@ -143,7 +143,7 @@ This flag is useful for ROM hacking and sprite modifications. When enabled, the 
 
 ```bash
 # Extract with PNG sprites (for custom sprite modifications)
-./zelda3_restool --extract-from-rom zelda3.sfc --sprites-from-png --compile
+./zelda3-restool --extract-from-rom zelda3.sfc --sprites-from-png --compile
 
 # This produces identical output to Python's --sprites-from-png flag
 ```
@@ -162,7 +162,7 @@ Extract overworld data only.
 **Default:** False
 
 ```bash
-./zelda3_restool --extract-from-rom zelda3.sfc --extract-overworld
+./zelda3-restool --extract-from-rom zelda3.sfc --extract-overworld
 ```
 
 ### `--verbose`
@@ -173,7 +173,7 @@ Enable verbose output for debugging.
 **Default:** False
 
 ```bash
-./zelda3_restool --verbose --extract-from-rom zelda3.sfc
+./zelda3-restool --verbose --extract-from-rom zelda3.sfc
 ```
 
 ### `--help`
@@ -181,7 +181,7 @@ Enable verbose output for debugging.
 Display help message with all available options.
 
 ```bash
-./zelda3_restool --help
+./zelda3-restool --help
 ```
 
 ### `--version`
@@ -189,7 +189,7 @@ Display help message with all available options.
 Display version information.
 
 ```bash
-./zelda3_restool --version
+./zelda3-restool --version
 ```
 
 ## Supported ROM Versions
@@ -243,7 +243,7 @@ certutil -hashfile zelda3.sfc SHA1
 cp /path/to/zelda3.sfc .
 
 # Extract and compile
-./build/src/restool/zelda3_restool --extract-from-rom zelda3.sfc --compile
+./build/src/restool/zelda3-restool --extract-from-rom zelda3.sfc --compile
 
 # Output: zelda3_assets.dat (~680KB)
 ```
@@ -252,7 +252,7 @@ cp /path/to/zelda3.sfc .
 
 ```bash
 # Extract German dialogue
-./zelda3_restool --extract-from-rom german.sfc --extract-dialogue
+./zelda3-restool --extract-from-rom german.sfc --extract-dialogue
 
 # Creates: assets/dialogue_de.txt
 ```
@@ -261,7 +261,7 @@ cp /path/to/zelda3.sfc .
 
 ```bash
 # Extract without compiling
-./zelda3_restool --extract-from-rom zelda3.sfc
+./zelda3-restool --extract-from-rom zelda3.sfc
 
 # Examine YAML files
 cat assets/dungeon/dungeon-0.yaml
@@ -279,19 +279,19 @@ head -n 20 assets/dialogue.txt
 
 ```bash
 # Extract only Link sprites
-./zelda3_restool --extract-from-rom zelda3.sfc --extract-graphics
+./zelda3-restool --extract-from-rom zelda3.sfc --extract-graphics
 
 # Extract specific enemy tileset
-./zelda3_restool --extract-from-rom zelda3.sfc --extract-enemy-sheet 5
+./zelda3-restool --extract-from-rom zelda3.sfc --extract-enemy-sheet 5
 
 # Extract overworld data only
-./zelda3_restool --extract-from-rom zelda3.sfc --extract-overworld
+./zelda3-restool --extract-from-rom zelda3.sfc --extract-overworld
 ```
 
 ### Workflow 5: Verbose Debugging
 
 ```bash
-./zelda3_restool --verbose --extract-from-rom zelda3.sfc --compile
+./zelda3-restool --verbose --extract-from-rom zelda3.sfc --compile
 ```
 
 ## Output Files
@@ -380,14 +380,14 @@ All 11 languages produce byte-perfect output matching the Python tool:
 
 ```bash
 # Extract from each language ROM
-./zelda3_restool --extract-from-rom usa.sfc --extract-dialogue
-./zelda3_restool --extract-from-rom german.sfc --extract-dialogue
-./zelda3_restool --extract-from-rom french.sfc --extract-dialogue
-./zelda3_restool --extract-from-rom spanish.sfc --extract-dialogue
-./zelda3_restool --extract-from-rom polish.sfc --extract-dialogue
-./zelda3_restool --extract-from-rom portuguese.sfc --extract-dialogue
-./zelda3_restool --extract-from-rom dutch.sfc --extract-dialogue
-./zelda3_restool --extract-from-rom swedish.sfc --extract-dialogue
+./zelda3-restool --extract-from-rom usa.sfc --extract-dialogue
+./zelda3-restool --extract-from-rom german.sfc --extract-dialogue
+./zelda3-restool --extract-from-rom french.sfc --extract-dialogue
+./zelda3-restool --extract-from-rom spanish.sfc --extract-dialogue
+./zelda3-restool --extract-from-rom polish.sfc --extract-dialogue
+./zelda3-restool --extract-from-rom portuguese.sfc --extract-dialogue
+./zelda3-restool --extract-from-rom dutch.sfc --extract-dialogue
+./zelda3-restool --extract-from-rom swedish.sfc --extract-dialogue
 ```
 
 ### Language Selection at Runtime
@@ -410,7 +410,7 @@ Error: Could not open ROM file
 **Solution:** Verify the ROM path exists:
 
 ```bash
-./zelda3_restool --extract-from-rom /correct/path/to/zelda3.sfc
+./zelda3-restool --extract-from-rom /correct/path/to/zelda3.sfc
 ```
 
 ### Error: ROM Not Supported
@@ -457,7 +457,7 @@ Error: Permission denied: 'assets/dungeon/dungeon-0.yaml'
 
 ```bash
 chmod -R u+w assets/
-./zelda3_restool --extract-from-rom zelda3.sfc
+./zelda3-restool --extract-from-rom zelda3.sfc
 ```
 
 ### Incomplete Extraction
@@ -471,7 +471,7 @@ find assets/overworld -name "*.yaml" | wc -l  # Should be 160
 
 # If wrong, delete and re-extract
 rm -rf assets/dungeon assets/overworld
-./zelda3_restool --extract-from-rom zelda3.sfc
+./zelda3-restool --extract-from-rom zelda3.sfc
 ```
 
 ## Technical Details
@@ -573,7 +573,7 @@ SNES $10:8000 → ROM offset 0x080000 (512KB into ROM)
 
 The CMake build produces:
 - `librestool_lib.a` (or `.lib` on Windows) - Static library (~2.4MB)
-- `zelda3_restool` - CLI executable (~2.3MB)
+- `zelda3-restool` - CLI executable (~2.3MB)
 - `zelda3-launcher` - GTK3 GUI launcher (~2.3MB, if GTK3 available)
 
 ### System Requirements
@@ -583,7 +583,7 @@ The CMake build produces:
 
 ## Library API (Embedding)
 
-The restool functionality is available as a C static library (`restool_lib`) for embedding in other applications. The library is used by both the CLI tool (`zelda3_restool`) and the GTK3 launcher (`zelda3-launcher`).
+The restool functionality is available as a C static library (`restool_lib`) for embedding in other applications. The library is used by both the CLI tool (`zelda3-restool`) and the GTK3 launcher (`zelda3-launcher`).
 
 ### Architecture
 
@@ -599,7 +599,7 @@ The restool functionality is available as a C static library (`restool_lib`) for
         │                                    │
         ▼                                    ▼
 ┌───────────────────┐              ┌───────────────────┐
-│  zelda3_restool   │              │  zelda3-launcher  │
+│  zelda3-restool   │              │  zelda3-launcher  │
 │  CLI executable   │              │  GTK3 GUI app     │
 │  (cli.c)          │              │  (launcher_ui.c)  │
 └───────────────────┘              └───────────────────┘

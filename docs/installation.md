@@ -58,7 +58,7 @@ cmake ..
 cmake --build . -j$(nproc)
 
 # Extract and compile assets
-./src/restool/zelda3_restool --extract-from-rom ../zelda3.sfc --compile
+./zelda3-restool --extract-from-rom ../zelda3.sfc --compile
 ```
 
 This creates `zelda3_assets.dat` (~680KB) in the parent directory.

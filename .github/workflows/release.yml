@@ -49,10 +49,12 @@ jobs:
 
     - name: Install dependencies
       run: |
-        vcpkg install sdl2:x64-windows opus:x64-windows openal-soft:x64-windows
+        vcpkg install sdl2:x64-windows opus:x64-windows openal-soft:x64-windows gtk3:x64-windows pkgconf:x64-windows
 
     - name: Configure CMake
       run: |
+        $env:PKG_CONFIG = "$env:VCPKG_ROOT/installed/x64-windows/tools/pkgconf/pkgconf.exe"
+        $env:PKG_CONFIG_PATH = "$env:VCPKG_ROOT/installed/x64-windows/lib/pkgconfig"
         cmake -B build `
           -DCMAKE_BUILD_TYPE=Release `
           -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
@@ -60,14 +62,38 @@ jobs:
     - name: Build
       run: cmake --build build --config Release -j
 
+    - name: Download Adwaita icon theme
+      run: |
+        Invoke-WebRequest -Uri "https://download.gnome.org/sources/adwaita-icon-theme/46/adwaita-icon-theme-46.0.tar.xz" -OutFile adwaita.tar.xz
+        7z x adwaita.tar.xz
+        7z x adwaita.tar
+
+    - name: Download hicolor icon theme
+      run: |
+        Invoke-WebRequest -Uri "https://icon-theme.freedesktop.org/releases/hicolor-icon-theme-0.18.tar.xz" -OutFile hicolor.tar.xz
+        7z x hicolor.tar.xz
+        7z x hicolor.tar
+
     - name: Package
       run: |
         mkdir -p release/zelda3-windows-v${{ inputs.version }}
         cp build/Release/zelda3.exe release/zelda3-windows-v${{ inputs.version }}/
+        cp build/Release/zelda3-launcher.exe release/zelda3-windows-v${{ inputs.version }}/
         cp build/Release/*.dll release/zelda3-windows-v${{ inputs.version }}/ 2>$null || echo "No DLLs found"
         cp zelda3.ini release/zelda3-windows-v${{ inputs.version }}/
         cp README.md release/zelda3-windows-v${{ inputs.version }}/
         cp LICENSE.txt release/zelda3-windows-v${{ inputs.version }}/
+        # Copy GTK icon themes
+        mkdir -p release/zelda3-windows-v${{ inputs.version }}/share/icons
+        Copy-Item -Recurse adwaita-icon-theme-46.0/Adwaita release/zelda3-windows-v${{ inputs.version }}/share/icons/
+        Copy-Item -Recurse hicolor-icon-theme-0.18/hicolor release/zelda3-windows-v${{ inputs.version }}/share/icons/
+        # Create GTK settings
+        mkdir -p release/zelda3-windows-v${{ inputs.version }}/etc/gtk-3.0
+        @"
+        [Settings]
+        gtk-theme-name=Adwaita
+        gtk-icon-theme-name=Adwaita
+        "@ | Out-File -FilePath release/zelda3-windows-v${{ inputs.version }}/etc/gtk-3.0/settings.ini -Encoding utf8
         cd release
         Compress-Archive -Path zelda3-windows-v${{ inputs.version }} -DestinationPath zelda3-windows-v${{ inputs.version }}.zip
 
@@ -87,7 +113,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install sdl2 opus openal-soft cmake
+        brew install sdl2 opus openal-soft cmake gtk+3
 
     - name: Configure CMake
       run: |
@@ -102,6 +128,7 @@ jobs:
       run: |
         mkdir -p release/zelda3-macos-arm64-v${{ inputs.version }}
         cp build/zelda3 release/zelda3-macos-arm64-v${{ inputs.version }}/
+        cp build/zelda3-launcher release/zelda3-macos-arm64-v${{ inputs.version }}/ 2>/dev/null || echo "No launcher found"
         cp build/*.dylib release/zelda3-macos-arm64-v${{ inputs.version }}/ 2>/dev/null || echo "No dylibs found"
         cp zelda3.ini release/zelda3-macos-arm64-v${{ inputs.version }}/
         cp README.md release/zelda3-macos-arm64-v${{ inputs.version }}/
@@ -125,7 +152,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install sdl2 opus openal-soft cmake
+        brew install sdl2 opus openal-soft cmake gtk+3
 
     - name: Configure CMake
       run: |
@@ -140,6 +167,7 @@ jobs:
       run: |
         mkdir -p release/zelda3-macos-x86_64-v${{ inputs.version }}
         cp build/zelda3 release/zelda3-macos-x86_64-v${{ inputs.version }}/
+        cp build/zelda3-launcher release/zelda3-macos-x86_64-v${{ inputs.version }}/ 2>/dev/null || echo "No launcher found"
         cp build/*.dylib release/zelda3-macos-x86_64-v${{ inputs.version }}/ 2>/dev/null || echo "No dylibs found"
         cp zelda3.ini release/zelda3-macos-x86_64-v${{ inputs.version }}/
         cp README.md release/zelda3-macos-x86_64-v${{ inputs.version }}/
@@ -171,7 +199,8 @@ jobs:
           libopus-dev \
           python3 \
           python3-pip \
-          libopenal-dev
+          libopenal-dev \
+          libgtk-3-dev
 
     - name: Configure CMake
       run: cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -183,6 +212,7 @@ jobs:
       run: |
         mkdir -p release/zelda3-linux-v${{ inputs.version }}
         cp build/zelda3 release/zelda3-linux-v${{ inputs.version }}/
+        cp build/zelda3-launcher release/zelda3-linux-v${{ inputs.version }}/ 2>/dev/null || echo "No launcher found"
         cp build/*.so release/zelda3-linux-v${{ inputs.version }}/ 2>/dev/null || echo "No SOs found"
         cp zelda3.ini release/zelda3-linux-v${{ inputs.version }}/
         cp README.md release/zelda3-linux-v${{ inputs.version }}/

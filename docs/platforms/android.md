@@ -74,7 +74,7 @@ cmake ..
 cmake --build . -j$(nproc)
 
 # Extract and compile assets
-./src/restool/zelda3_restool --extract-from-rom ../zelda3.sfc --compile
+./src/restool/zelda3-restool --extract-from-rom ../zelda3.sfc --compile
 
 # Transfer to Android device
 adb push ../zelda3_assets.dat /sdcard/Android/data/com.dishii.zelda3/files/

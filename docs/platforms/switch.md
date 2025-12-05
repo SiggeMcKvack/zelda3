@@ -107,7 +107,7 @@ cmake ..
 cmake --build . -j$(nproc)
 
 # Extract and compile assets
-./src/restool/zelda3_restool --extract-from-rom ../zelda3.sfc --compile
+./src/restool/zelda3-restool --extract-from-rom ../zelda3.sfc --compile
 
 # Copy to SD card
 cp ../zelda3_assets.dat /path/to/sdcard/switch/zelda3/

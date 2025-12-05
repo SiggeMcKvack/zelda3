@@ -236,7 +236,7 @@ message(STATUS "Generated config defaults header from zelda3.ini")
 # Build restool first so launcher can link against restool_lib
 if(BUILD_RESTOOL)
     add_subdirectory(src/restool)
-    message(STATUS "Asset extraction tool will be built: zelda3_restool")
+    message(STATUS "Asset extraction tool will be built: zelda3-restool")
 endif()
 
 # ==============================================================================

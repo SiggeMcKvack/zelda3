@@ -44,8 +44,19 @@ sudo pacman -S gtk3
 ```
 
 **Windows:**
-- Download and install GTK3 from https://www.gtk.org/docs/installations/windows
-- Or use MSYS2: `pacman -S mingw-w64-x86_64-gtk3`
+
+Pre-built releases from GitHub include GTK3 and the Adwaita theme - no additional installation required.
+
+For building from source, use vcpkg:
+```powershell
+vcpkg install gtk3:x64-windows pkgconf:x64-windows
+```
+Then set environment variables before running CMake:
+```powershell
+$env:PKG_CONFIG = "$env:VCPKG_ROOT/installed/x64-windows/tools/pkgconf/pkgconf.exe"
+$env:PKG_CONFIG_PATH = "$env:VCPKG_ROOT/installed/x64-windows/lib/pkgconfig"
+cmake -B build -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+```
 
 ## Building the Launcher
 

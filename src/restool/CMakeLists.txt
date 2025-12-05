@@ -153,6 +153,7 @@ target_link_libraries(zelda3_restool PRIVATE restool_lib)
 # Output to main build directory (same as zelda3 and zelda3-launcher)
 set_target_properties(zelda3_restool PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+  OUTPUT_NAME "zelda3-restool"
 )
 
 # Install target

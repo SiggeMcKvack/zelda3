@@ -26,9 +26,9 @@ typedef struct {
 } CliArgs;
 
 static void PrintHelp(void) {
-    printf("zelda3_opus_encoder - PCM to OPUZ encoder v%s\n\n", VERSION);
+    printf("zelda3-opusencoder - PCM to OPUZ encoder v%s\n\n", VERSION);
     printf("USAGE:\n");
-    printf("  zelda3_opus_encoder [OPTIONS] <input.pcm> [output.opuz]\n\n");
+    printf("  zelda3-opusencoder [OPTIONS] <input.pcm> [output.opuz]\n\n");
     printf("OPTIONS:\n");
     printf("  --bitrate <N>       Bitrate in bps (default: 128000)\n");
     printf("  --no-repeat         Track doesn't loop\n");
@@ -43,17 +43,17 @@ static void PrintHelp(void) {
     printf("  --end <N>           End track number (default: 114)\n\n");
     printf("EXAMPLES:\n");
     printf("  # Encode single file\n");
-    printf("  zelda3_opus_encoder track-1.pcm track-1.opuz\n\n");
+    printf("  zelda3-opusencoder track-1.pcm track-1.opuz\n\n");
     printf("  # Encode with custom bitrate\n");
-    printf("  zelda3_opus_encoder --bitrate 192000 track-1.pcm\n\n");
+    printf("  zelda3-opusencoder --bitrate 192000 track-1.pcm\n\n");
     printf("  # Batch encode MSU pack\n");
-    printf("  zelda3_opus_encoder --batch msu/alttp_msu- --output opuz/\n\n");
+    printf("  zelda3-opusencoder --batch msu/alttp_msu- --output opuz/\n\n");
     printf("  # Batch encode specific range\n");
-    printf("  zelda3_opus_encoder --batch msu/track- --start 1 --end 48\n\n");
+    printf("  zelda3-opusencoder --batch msu/track- --start 1 --end 48\n\n");
 }
 
 static void PrintVersion(void) {
-    printf("zelda3_opus_encoder version %s\n", VERSION);
+    printf("zelda3-opusencoder version %s\n", VERSION);
     printf("Built: %s %s\n", __DATE__, __TIME__);
 }
 

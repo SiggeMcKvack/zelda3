@@ -503,17 +503,17 @@ OPUZ File Structure:
 
 ### PCM to OPUZ Conversion
 
-The `zelda3_opus_encoder` tool converts MSU1 PCM files to OPUZ format:
+The `zelda3-opusencoder` tool converts MSU1 PCM files to OPUZ format:
 
 ```bash
 # Single file conversion
-zelda3_opus_encoder track-1.pcm track-1.opuz
+zelda3-opusencoder track-1.pcm track-1.opuz
 
 # Batch conversion (all MSU Deluxe tracks 1-114)
-zelda3_opus_encoder --batch msu/alttp_msu- --output opuz/
+zelda3-opusencoder --batch msu/alttp_msu- --output opuz/
 
 # Custom bitrate
-zelda3_opus_encoder --bitrate 192000 track-1.pcm
+zelda3-opusencoder --bitrate 192000 track-1.pcm
 ```
 
 Encoding parameters (matching original Python encoder):

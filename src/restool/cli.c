@@ -66,9 +66,9 @@ extern void TestDungeonSprites(void);
 extern void TestYAMLLoading(void);
 
 static void PrintHelp(void) {
-  printf("zelda3_restool - Zelda3 Asset Extraction Tool v%s\n\n", RESTOOL_VERSION);
+  printf("zelda3-restool - Zelda3 Asset Extraction Tool v%s\n\n", RESTOOL_VERSION);
   printf("USAGE:\n");
-  printf("  zelda3_restool [OPTIONS]\n\n");
+  printf("  zelda3-restool [OPTIONS]\n\n");
   printf("OPTIONS:\n");
   printf("  --extract-from-rom <path>   Extract assets from ROM and compile\n");
   printf("  --languages <L1,L2,...>     Include additional languages (comma-separated)\n");
@@ -94,23 +94,23 @@ static void PrintHelp(void) {
   printf("  us (default), de, fr, fr-c, en, es, pl, pt, nl, sv, redux, retrans-kal\n\n");
   printf("EXAMPLES:\n");
   printf("  # Extract and compile assets (auto-compiles by default)\n");
-  printf("  zelda3_restool --extract-from-rom zelda3.sfc\n\n");
+  printf("  zelda3-restool --extract-from-rom zelda3.sfc\n\n");
   printf("  # Extract and compile with multiple languages\n");
-  printf("  zelda3_restool --extract-from-rom zelda3.sfc --languages de,fr\n\n");
+  printf("  zelda3-restool --extract-from-rom zelda3.sfc --languages de,fr\n\n");
   printf("  # Extract only, skip compilation\n");
-  printf("  zelda3_restool --extract-from-rom zelda3.sfc --no-compile\n\n");
+  printf("  zelda3-restool --extract-from-rom zelda3.sfc --no-compile\n\n");
   printf("  # Extract Link sprites from USA ROM\n");
-  printf("  zelda3_restool --extract-from-rom zelda3.sfc --extract-graphics\n\n");
+  printf("  zelda3-restool --extract-from-rom zelda3.sfc --extract-graphics\n\n");
   printf("  # Extract dialogue for German ROM\n");
-  printf("  zelda3_restool --extract-from-rom zelda3_de.sfc --extract-dialogue\n\n");
+  printf("  zelda3-restool --extract-from-rom zelda3_de.sfc --extract-dialogue\n\n");
   printf("  # Compile assets from existing extracted files\n");
-  printf("  zelda3_restool --compile\n\n");
+  printf("  zelda3-restool --compile\n\n");
   printf("  # Use modified sprite graphics from PNG files\n");
-  printf("  zelda3_restool --extract-from-rom zelda3.sfc --sprites-from-png\n\n");
+  printf("  zelda3-restool --extract-from-rom zelda3.sfc --sprites-from-png\n\n");
 }
 
 static void PrintVersion(void) {
-  printf("zelda3_restool version %s\n", RESTOOL_VERSION);
+  printf("zelda3-restool version %s\n", RESTOOL_VERSION);
   printf("Built: %s %s\n", __DATE__, __TIME__);
 }
 

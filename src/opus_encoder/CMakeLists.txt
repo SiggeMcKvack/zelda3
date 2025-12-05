@@ -74,6 +74,7 @@ target_link_libraries(zelda3_opus_encoder PRIVATE opus_encoder_lib)
 # Output to main build directory
 set_target_properties(zelda3_opus_encoder PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+  OUTPUT_NAME "zelda3-opusencoder"
 )
 
 # Install target

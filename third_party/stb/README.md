@@ -6,7 +6,7 @@
 **Date Added:** 2025-11-23
 
 ## Purpose
-Provides PNG image reading and writing support for the asset extraction tool (`zelda3_restool`). Used to extract sprite sheets and graphics from the SNES ROM and save them as PNG files for intermediate storage and inspection.
+Provides PNG image reading and writing support for the asset extraction tool (`zelda3-restool`). Used to extract sprite sheets and graphics from the SNES ROM and save them as PNG files for intermediate storage and inspection.
 
 ## Files
 - `stb_image.h` - Image loading library (PNG, JPG, BMP, TGA, etc.)

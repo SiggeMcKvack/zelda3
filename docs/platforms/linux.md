@@ -54,7 +54,7 @@ cmake ..
 cmake --build . -j$(nproc)
 
 # Extract and compile assets
-./src/restool/zelda3_restool --extract-from-rom ../zelda3.sfc --compile
+./src/restool/zelda3-restool --extract-from-rom ../zelda3.sfc --compile
 ```
 
 ### Method 2: Python Restool (Alternative)

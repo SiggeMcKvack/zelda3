@@ -10,7 +10,7 @@ Provides SHA-256 hashing for:
 1. ROM validation (verify correct ROM file via SHA-256 hash)
 2. Asset file checksums (`zelda3_assets.dat` integrity verification)
 
-Used by the asset extraction tool (`zelda3_restool`) to ensure data integrity.
+Used by the asset extraction tool (`zelda3-restool`) to ensure data integrity.
 
 ## Files
 - `sha256.h` - Header with SHA256_CTX structure and function declarations

@@ -4,6 +4,26 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## December 2025
 
+### Windows Launcher Support
+
+The GTK3 launcher is now included in Windows CI builds and releases.
+
+**Features:**
+- GTK3 and pkgconf installed via vcpkg for Windows builds
+- Adwaita icon theme bundled with releases for proper UI appearance
+- hicolor fallback icons included
+- GTK settings.ini configured for Adwaita theme
+
+**Building locally:**
+- Install `gtk3:x64-windows pkgconf:x64-windows` via vcpkg
+- Set `PKG_CONFIG` and `PKG_CONFIG_PATH` environment variables before CMake
+
+**Files Modified:**
+- `.github/workflows/build.yml` - Added GTK3/pkgconf deps for Windows, launcher artifact
+- `.github/workflows/release.yml` - Added GTK3/pkgconf deps, theme bundling, launcher packaging
+- `docs/launcher.md` - Updated Windows installation instructions
+- `docs/platforms/windows.md` - Added launcher build section
+
 ### Launcher: PCM to Opus Encoding
 
 Added a button in the launcher's Sound tab to encode MSU PCM audio files to Opus format directly from the UI.
@@ -106,7 +126,7 @@ The C restool now supports the `--sprites-from-png` flag, matching the Python im
 
 **Usage:**
 ```bash
-./zelda3_restool --extract-from-rom zelda3.sfc --sprites-from-png --compile
+./zelda3-restool --extract-from-rom zelda3.sfc --sprites-from-png --compile
 ```
 
 ### C Restool Completion
@@ -129,7 +149,7 @@ The Python-based asset extraction has been fully reimplemented in C, providing:
 
 **Usage:**
 ```bash
-./zelda3_restool --extract-from-rom zelda3.sfc --compile
+./zelda3-restool --extract-from-rom zelda3.sfc --compile
 ```
 
 See [C Restool Guide](docs/RESTOOL_C.md) for complete documentation.

@@ -102,7 +102,7 @@ python3 assets/restool.py --extract-from-rom
 
 **C:** Requires explicit `--compile` flag
 ```bash
-./zelda3_restool --extract-from-rom zelda3.sfc --compile
+./zelda3-restool --extract-from-rom zelda3.sfc --compile
 # Must explicitly request compilation
 ```
 
