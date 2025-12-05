@@ -43,8 +43,9 @@ static int g_lang_rom_count = 0;
 #define BUTTON_HEIGHT           35
 #define CLEAR_BUTTON_WIDTH      80
 
-#define LAUNCHER_DEFAULT_WIDTH  700
-#define LAUNCHER_DEFAULT_HEIGHT 550
+#define LAUNCHER_DEFAULT_WIDTH  500
+#define LAUNCHER_DEFAULT_HEIGHT 500
+#define LAUNCHER_MIN_HEIGHT     220
 
 // Control mappings (12 SNES controls)
 char *g_kbd_controls[12] = {NULL};
@@ -1882,7 +1883,11 @@ static GtkWidget* create_general_tab(const Config *config) {
     gtk_widget_set_halign(g_widgets.make_dat_status, GTK_ALIGN_START);
     gtk_grid_attach(GTK_GRID(grid), g_widgets.make_dat_status, 1, row++, 1, 1);
 
-    return grid;
+    // Wrap in scrolled window
+    GtkWidget *tab_scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(tab_scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_container_add(GTK_CONTAINER(tab_scrolled), grid);
+    return tab_scrolled;
 }
 
 // Create Graphics tab
@@ -2103,7 +2108,11 @@ static GtkWidget* create_graphics_tab(const Config *config) {
     gtk_grid_attach(GTK_GRID(grid), link_gfx_hbox, 1, row, 1, 1);
     row++;
 
-    return grid;
+    // Wrap in scrolled window
+    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_container_add(GTK_CONTAINER(scrolled), grid);
+    return scrolled;
 }
 
 // Create Sound tab
@@ -2218,7 +2227,11 @@ static GtkWidget* create_sound_tab(const Config *config) {
     row++;
 #endif
 
-    return grid;
+    // Wrap in scrolled window
+    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_container_add(GTK_CONTAINER(scrolled), grid);
+    return scrolled;
 }
 
 // Helper: Add a section header to the grid
@@ -2328,7 +2341,11 @@ static GtkWidget* create_features_tab(const Config *config) {
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_zelda_helps),
         features & kFeatures0_PrincessZeldaHelps);
 
-    return grid;
+    // Wrap in scrolled window
+    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_container_add(GTK_CONTAINER(scrolled), grid);
+    return scrolled;
 }
 
 // Keyboard capture: global state for dialog
@@ -3106,6 +3123,7 @@ GtkWidget* LauncherUI_CreateWindow(Config *config) {
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "Zelda3 Launcher");
     gtk_window_set_default_size(GTK_WINDOW(window), LAUNCHER_DEFAULT_WIDTH, LAUNCHER_DEFAULT_HEIGHT);
+    gtk_widget_set_size_request(window, -1, LAUNCHER_MIN_HEIGHT);
     gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_CENTER);
 
     // Set window type hint to ensure it appears on top (especially on macOS)
