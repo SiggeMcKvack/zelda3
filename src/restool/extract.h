@@ -116,4 +116,13 @@ void ExtractMap32toMap16(AssetBuilder *builder, Rom *rom);
 // Extract sound banks - uses ROM data directly if embedded assets unavailable
 bool ExtractSoundBanks(AssetBuilder *builder, Rom *rom);
 
+// ============================================================================
+// Font Extraction (in main.c)
+// ============================================================================
+
+// Extract font data from ROM and save to binary files
+// Creates: font_{lang}.bin (4096 bytes) and fontwidth_{lang}.bin (width_count bytes)
+// Used by CLI and library API for non-US language ROMs
+bool ExtractFontFromRom(Rom *rom, const char *lang_code, const char *output_dir);
+
 #endif // RESTOOL_EXTRACT_H

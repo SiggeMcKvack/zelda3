@@ -88,6 +88,14 @@ int Restool_ExtractDialogue(const char *rom_path, const char *output_dir) {
     }
 
     TextDecode_FreeStrings(strings);
+
+    // Extract font data from ROM (needed for non-US languages)
+    // This creates font_{lang}.bin and fontwidth_{lang}.bin
+    if (!ExtractFontFromRom(rom, lang_code, output_dir)) {
+        LogWarn("Failed to extract font for '%s' - may not be critical", lang_code);
+        // Don't fail - some languages may use US fonts
+    }
+
     Rom_Free(rom);
     return RESTOOL_OK;
 }
