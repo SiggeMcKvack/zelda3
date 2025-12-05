@@ -16,9 +16,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-ubuntu:
-    name: Ubuntu Latest (${{ matrix.build_type }})
-    runs-on: ubuntu-latest
+  build-linux:
+    name: Linux (${{ matrix.build_type }})
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         build_type: [Debug, Release]
@@ -55,47 +55,7 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: zelda3-ubuntu-${{ matrix.build_type }}
-        path: |
-          build/zelda3
-          build/zelda3-launcher
-          build/*.so
-        if-no-files-found: ignore
-
-  build-arch:
-    name: Arch Linux (${{ matrix.build_type }})
-    runs-on: ubuntu-latest
-    container: archlinux:latest
-    strategy:
-      matrix:
-        build_type: [Debug, Release]
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install dependencies
-      run: |
-        pacman -Syu --noconfirm
-        pacman -S --noconfirm \
-          base-devel \
-          cmake \
-          sdl2 \
-          opus \
-          python \
-          openal \
-          libyaml \
-          gtk3
-
-    - name: Configure CMake
-      run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-
-    - name: Build
-      run: cmake --build build -j$(nproc)
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: zelda3-arch-${{ matrix.build_type }}
+        name: zelda3-linux-${{ matrix.build_type }}
         path: |
           build/zelda3
           build/zelda3-launcher
