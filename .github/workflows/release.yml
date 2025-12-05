@@ -48,6 +48,8 @@ jobs:
         vcpkgGitCommitId: '74e6536215718009aae747d86d84b78376bf9e09'
 
     - name: Install dependencies
+      env:
+        VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/vcpkg-overlay
       run: |
         vcpkg install sdl2:x64-windows opus:x64-windows openal-soft:x64-windows gtk3:x64-windows pkgconf:x64-windows
 
