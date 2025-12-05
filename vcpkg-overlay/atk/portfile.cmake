@@ -4,9 +4,9 @@ vcpkg_from_gitlab(
     REPO GNOME/atk
     REF "${VERSION}"
     HEAD_REF master
-    # Fixed hash - GitLab regenerated tarball after vcpkg 2025.10.17 release
+    # Fixed hash - GitLab keeps regenerating tarballs
     # https://github.com/microsoft/vcpkg/issues/47992
-    SHA512 b9a822c97143d07cf21c2cebb9fed3a495aefb12b5a267434862183b87c5a6d3595fb60b9ffba92ce791391565ad0a04790467d2b693d108e0c35541ea9c9f69
+    SHA512 79d8764f9c46b58c9dd6c3c9ec9189f69b726e2ead8b9a4cd4aa2d5f5fbb226053e5b108b23af4c1565aaf2e9dfd6f27d9200bd466a41782938336dcff51f1ac
 )
 
 if("introspection" IN_LIST FEATURES)
