@@ -11,7 +11,6 @@ This guide covers building Zelda3 on macOS for both Intel (x86_64) and Apple Sil
 - **libyaml** development library (required for building C restool)
 - **CMake 3.10+**
 - **Xcode Command Line Tools**
-- **Python 3.x** with pip (optional - only needed for Python restool)
 
 ## Installing Xcode Command Line Tools
 
@@ -28,10 +27,7 @@ xcode-select --install
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
 # Install dependencies
-brew install sdl2 opus libyaml cmake python3
-
-# Install Python requirements
-python3 -m pip install -r requirements.txt
+brew install sdl2 opus libyaml cmake
 ```
 
 ## Asset Extraction

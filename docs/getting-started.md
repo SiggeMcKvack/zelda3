@@ -14,9 +14,9 @@ Zelda3 is a reverse-engineered C reimplementation of The Legend of Zelda: A Link
 
 - **ROM:** US version of The Legend of Zelda: A Link to the Past (`zelda3.sfc`)
   - SHA256: `66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb`
-- **Python 3.x** (for asset extraction)
 - **SDL2** (for graphics/audio/input)
 - **Build tools:** CMake 3.10+, C compiler (GCC, Clang, or MSVC)
+- **libyaml** (for asset extraction)
 
 ## Quick Installation
 
@@ -42,16 +42,16 @@ See the [Installation Guide](installation.md) for complete build instructions fo
 
 Before running Zelda3, you need to extract game assets from your ROM:
 
-1. **Install Python dependencies:**
+1. **Build the project** (includes the asset extraction tool):
    ```sh
-   python3 -m pip install -r requirements.txt
+   mkdir build && cd build
+   cmake ..
+   cmake --build . -j$(nproc)
    ```
 
-2. **Place your ROM:** Copy your US ROM file as `zelda3.sfc` in the project root
-
-3. **Extract assets:**
+2. **Extract assets from ROM:**
    ```sh
-   python3 assets/restool.py --extract-from-rom
+   ./zelda3-restool --extract-from-rom ../zelda3.sfc --compile
    ```
 
    This creates `zelda3_assets.dat` containing all game resources (levels, graphics, sounds).

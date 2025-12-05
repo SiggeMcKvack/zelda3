@@ -447,107 +447,59 @@ static inline void PackMap32Quad(const uint16_t *a, uint8_t *res) {
   res[5] = ((a[2] >> 8) << 4) | (a[3] >> 8);
 }
 
-void ExtractMap32toMap16(AssetBuilder *builder) {
-  printf("  Extracting kMap32ToMap16 (4 assets from text file)...\n");
+// ROM addresses for Map32-to-Map16 tables (SNES addresses)
+// Each table has 2218 entries × 6 bytes = 13,308 bytes
+static const uint32_t kMap32RomAddresses[] = {
+  0x838000,  // Table 0
+  0x83B400,  // Table 1
+  0x848000,  // Table 2
+  0x84B400,  // Table 3
+};
 
-  // Load file from embedded assets or filesystem
-  size_t file_size;
-  char *file_data = (char *)LoadAssetData("assets/map32_to_map16.txt", &file_size);
-  if (!file_data) {
-    LogError("Failed to open assets/map32_to_map16.txt");
-    return;
-  }
+// 2218 entries per table, 6 bytes per entry
+#define MAP32_ENTRIES 2218
+#define MAP32_SIZE (MAP32_ENTRIES * 6)  // 13308 bytes
 
-  // Allocate table on heap (8872 * 4 * 2 = 71KB - too large for stack)
-  uint16_t (*tab)[4] = malloc(8872 * sizeof(*tab));
-  if (!tab) {
-    LogError("Failed to allocate map32 table");
-    AssetReader_Free((uint8_t *)file_data);
-    return;
-  }
-  int line_count = 0;
+// Extract Map32-to-Map16 data directly from ROM
+static bool ExtractMap32toMap16FromROM(AssetBuilder *builder, Rom *rom) {
+  printf("  Extracting kMap32ToMap16 (4 assets from ROM)...\n");
 
-  const char *ptr = file_data;
-  const char *end = file_data + file_size;
-  char line_buf[256];
+  const char *names[] = {
+    "kMap32ToMap16_0",
+    "kMap32ToMap16_1",
+    "kMap32ToMap16_2",
+    "kMap32ToMap16_3"
+  };
 
-  while (ptr < end && line_count < 8872) {
-    // Read one line
-    const char *line_end = ptr;
-    while (line_end < end && *line_end != '\n' && *line_end != '\r')
-      line_end++;
-
-    size_t line_len = line_end - ptr;
-    if (line_len >= sizeof(line_buf)) line_len = sizeof(line_buf) - 1;
-    memcpy(line_buf, ptr, line_len);
-    line_buf[line_len] = 0;
-
-    // Skip newlines
-    ptr = line_end;
-    while (ptr < end && (*ptr == '\n' || *ptr == '\r'))
-      ptr++;
-
-    // Parse: "INDEX: v0, v1, v2, v3"
-    int index;
-    int v0, v1, v2, v3;
-    if (sscanf(line_buf, "%d: %d, %d, %d, %d", &index, &v0, &v1, &v2, &v3) == 5) {
-      if (index >= 0 && index < 8872) {
-        tab[index][0] = v0;
-        tab[index][1] = v1;
-        tab[index][2] = v2;
-        tab[index][3] = v3;
-        line_count++;
-      }
-    }
-  }
-  AssetReader_Free((uint8_t *)file_data);
-
-  if (line_count != 8872) {
-    LogError("Expected 8872 lines in map32_to_map16.txt, got %d", line_count);
-    free(tab);
-    return;
-  }
-
-  // Allocate result arrays (8872 / 4 = 2218 groups × 6 bytes = 13308 bytes each)
-  #define MAP32_SIZE 13308
-  uint8_t *res[4];
-  for (int j = 0; j < 4; j++) {
-    res[j] = malloc(MAP32_SIZE);
-    if (!res[j]) {
+  for (int i = 0; i < 4; i++) {
+    uint8_t *data = malloc(MAP32_SIZE);
+    if (!data) {
       LogError("Failed to allocate Map32toMap16 buffer");
-      for (int k = 0; k < j; k++) free(res[k]);
-      free(tab);
-      return;
+      return false;
     }
+
+    // ROM data is already in packed format - just copy it
+    const uint8_t *src = Rom_ReadPtr(rom, kMap32RomAddresses[i], MAP32_SIZE);
+    if (!src) {
+      LogError("Failed to read Map32toMap16 table %d from ROM", i);
+      free(data);
+      return false;
+    }
+    memcpy(data, src, MAP32_SIZE);
+
+    AssetBuilder_AddAsset(builder, names[i], ASSET_TYPE_UINT8, data, MAP32_SIZE);
+    free(data);
   }
 
-  // Process in groups of 4 lines, distributing columns to 4 quadrants
-  int out_pos = 0;
-  for (int i = 0; i < 8872; i += 4) {
-    for (int j = 0; j < 4; j++) {
-      // Extract column j from lines i, i+1, i+2, i+3
-      uint16_t quad[4] = {
-        tab[i][j],
-        tab[i+1][j],
-        tab[i+2][j],
-        tab[i+3][j]
-      };
-      PackMap32Quad(quad, &res[j][out_pos]);
-    }
-    out_pos += 6;
+  printf("    Added kMap32ToMap16_0-3 (%d bytes each) from ROM\n", MAP32_SIZE);
+  return true;
+}
+
+void ExtractMap32toMap16(AssetBuilder *builder, Rom *rom) {
+  // Extract directly from ROM - this is the only supported method
+  if (!ExtractMap32toMap16FromROM(builder, rom)) {
+    LogError("Failed to extract kMap32ToMap16 from ROM");
   }
-
-  // Add assets
-  AssetBuilder_AddAsset(builder, "kMap32ToMap16_0", ASSET_TYPE_UINT8, res[0], MAP32_SIZE);
-  AssetBuilder_AddAsset(builder, "kMap32ToMap16_1", ASSET_TYPE_UINT8, res[1], MAP32_SIZE);
-  AssetBuilder_AddAsset(builder, "kMap32ToMap16_2", ASSET_TYPE_UINT8, res[2], MAP32_SIZE);
-  AssetBuilder_AddAsset(builder, "kMap32ToMap16_3", ASSET_TYPE_UINT8, res[3], MAP32_SIZE);
-
-  printf("    Added kMap32ToMap16_0-3 (%d bytes each)\n", MAP32_SIZE);
-
-  // Cleanup
-  for (int j = 0; j < 4; j++) free(res[j]);
-  free(tab);
 }
 
 void TestMap32ToMap16(void) {
@@ -711,14 +663,38 @@ static void Encode2bppSprite(const uint8_t *data, int offset, int pitch, uint8_t
   }
 }
 
-void ExtractLinkGraphics(AssetBuilder *builder) {
-  printf("  Extracting kLinkGraphics from linksprite.png...\n");
+// ROM address for Link graphics (4bpp SNES tiles, 128x448 pixels)
+#define ROM_LINK_GFX 0x908000  // SNES $10:8000
 
-  // Load PNG file from embedded assets or filesystem
+void ExtractLinkGraphics(AssetBuilder *builder, Rom *rom, bool use_custom_png) {
+  printf("  Extracting kLinkGraphics...\n");
+
+  // Default: Extract from ROM (use_custom_png = false)
+  // Custom sprites: Load from PNG (use_custom_png = true)
+  if (!use_custom_png) {
+    // Extract directly from ROM - this is the default behavior
+    // Link graphics are already in SNES 4bpp tile format at ROM_LINK_GFX
+    // Size: 16 tiles/row × 56 rows × 32 bytes/tile = 28,672 bytes
+    const int total_size = 16 * 56 * 32;
+
+    uint8_t *output = Rom_ReadPtr(rom, ROM_LINK_GFX, total_size);
+    if (!output) {
+      LogError("Failed to read Link graphics from ROM at 0x%X", ROM_LINK_GFX);
+      return;
+    }
+
+    AssetBuilder_AddAsset(builder, "kLinkGraphics", ASSET_TYPE_UINT8, output, total_size);
+    printf("    Added kLinkGraphics from ROM (%d bytes, 896 tiles)\n", total_size);
+    return;
+  }
+
+  // Custom sprites mode: Load from linksprite.png
+  printf("    Using custom linksprite.png...\n");
+
   size_t png_size;
   unsigned char *png_data = LoadAssetData("assets/linksprite.png", &png_size);
   if (!png_data) {
-    LogError("Failed to read assets/linksprite.png");
+    LogError("--custom-sprites specified but assets/linksprite.png not found");
     return;
   }
 
@@ -815,10 +791,154 @@ void ExtractLinkGraphics(AssetBuilder *builder) {
   lodepng_state_cleanup(&state);
 }
 
+// ROM addresses for font data (2bpp SNES tiles, 256 characters × 16 bytes each)
+#define ROM_FONT_US       0x8E8000   // US font
+#define ROM_FONT_WIDTH_US 0x8ECADF   // US font width table (99 entries)
+#define ROM_FONT_SIZE     4096       // 256 chars × 16 bytes
+
+// Extract font directly from US ROM (works for US-based fonts)
+// Non-US languages (de, fr, en) need their font extracted via --extract-dialogue
+// Returns: font_data (256*16 bytes), font_width (width_count bytes)
+// Caller must free both returned pointers
+static bool ExtractDialogueFontFromROM(Rom *rom, const char *lang,
+                                       uint8_t **out_font_data,
+                                       uint8_t **out_font_width, size_t *out_width_count) {
+  // Only US-based font extraction from US ROM is supported
+  // These languages use the same font layout as US ROM
+  if (strcmp(lang, "us") != 0 && strcmp(lang, "redux") != 0 &&
+      strcmp(lang, "retrans-kal") != 0 && strcmp(lang, "es") != 0 &&
+      strcmp(lang, "pl") != 0 && strcmp(lang, "nl") != 0 &&
+      strcmp(lang, "sv") != 0 && strcmp(lang, "pt") != 0) {
+    // Non-US languages (de, fr, en, fr-c) have different character sets
+    // They require font extraction from their respective ROMs
+    return false;  // Silently fail - caller will try other sources
+  }
+
+  // All US-based languages use the same font from US ROM
+  int width_count = 99;
+  if (strcmp(lang, "pt") == 0) width_count = 121;
+
+  // Read font tile data from ROM (Rom_ReadPtr returns ptr to ROM buffer, so we copy)
+  const uint8_t *rom_font = Rom_ReadPtr(rom, ROM_FONT_US, ROM_FONT_SIZE);
+  if (!rom_font) {
+    LogError("Failed to read font data from ROM at 0x%X", ROM_FONT_US);
+    return false;
+  }
+
+  // Read width table from ROM
+  const uint8_t *rom_width = Rom_ReadPtr(rom, ROM_FONT_WIDTH_US, width_count);
+  if (!rom_width) {
+    LogError("Failed to read font width table from ROM at 0x%X", ROM_FONT_WIDTH_US);
+    return false;
+  }
+
+  // Allocate and copy (caller will free these)
+  uint8_t *font_data = malloc(ROM_FONT_SIZE);
+  uint8_t *font_width = malloc(width_count);
+  if (!font_data || !font_width) {
+    free(font_data);
+    free(font_width);
+    LogError("Failed to allocate memory for font data");
+    return false;
+  }
+  memcpy(font_data, rom_font, ROM_FONT_SIZE);
+  memcpy(font_width, rom_width, width_count);
+
+  *out_font_data = font_data;
+  *out_font_width = font_width;
+  *out_width_count = width_count;
+  return true;
+}
+
+// Load font from extracted binary files (font_{lang}.bin + fontwidth_{lang}.bin)
+// These files are created by --extract-dialogue from language ROMs
+// Returns: font_data (4096 bytes), font_width (width_count bytes)
+static bool ExtractDialogueFontFromBin(const char *lang, uint8_t **out_font_data,
+                                       uint8_t **out_font_width, size_t *out_width_count) {
+  // Get dialogue directory (where extracted files are stored)
+  const char *dir = Restool_GetDialogueDir();
+  if (!dir) dir = ".";
+
+  // Replace '-' with '_' in language code for filename
+  char lang_clean[16];
+  strncpy(lang_clean, lang, sizeof(lang_clean) - 1);
+  lang_clean[sizeof(lang_clean) - 1] = '\0';
+  for (char *p = lang_clean; *p; p++) {
+    if (*p == '-') *p = '_';
+  }
+
+  // Build filenames
+  char font_path[512], width_path[512];
+  snprintf(font_path, sizeof(font_path), "%s/font_%s.bin", dir, lang_clean);
+  snprintf(width_path, sizeof(width_path), "%s/fontwidth_%s.bin", dir, lang_clean);
+
+  // Try to load font data
+  FILE *f = fopen(font_path, "rb");
+  if (!f) {
+    return false;  // File doesn't exist - not an error, just not available
+  }
+
+  fseek(f, 0, SEEK_END);
+  long font_size = ftell(f);
+  fseek(f, 0, SEEK_SET);
+
+  if (font_size != ROM_FONT_SIZE) {
+    LogError("Invalid font file size: %s (%ld bytes, expected %d)", font_path, font_size, ROM_FONT_SIZE);
+    fclose(f);
+    return false;
+  }
+
+  uint8_t *font_data = malloc(ROM_FONT_SIZE);
+  if (fread(font_data, 1, ROM_FONT_SIZE, f) != ROM_FONT_SIZE) {
+    LogError("Failed to read %s", font_path);
+    fclose(f);
+    free(font_data);
+    return false;
+  }
+  fclose(f);
+
+  // Load width data
+  f = fopen(width_path, "rb");
+  if (!f) {
+    LogError("Font file found but width file missing: %s", width_path);
+    free(font_data);
+    return false;
+  }
+
+  fseek(f, 0, SEEK_END);
+  long width_size = ftell(f);
+  fseek(f, 0, SEEK_SET);
+
+  if (width_size < 1 || width_size > 256) {
+    LogError("Invalid width file size: %s (%ld bytes)", width_path, width_size);
+    fclose(f);
+    free(font_data);
+    return false;
+  }
+
+  uint8_t *width_data = malloc(width_size);
+  if (fread(width_data, 1, width_size, f) != (size_t)width_size) {
+    LogError("Failed to read %s", width_path);
+    fclose(f);
+    free(font_data);
+    free(width_data);
+    return false;
+  }
+  fclose(f);
+
+  printf("    Loaded font from %s (%d bytes) + %s (%ld bytes)\n",
+         font_path, ROM_FONT_SIZE, width_path, width_size);
+
+  *out_font_data = font_data;
+  *out_font_width = width_data;
+  *out_width_count = (size_t)width_size;
+  return true;
+}
+
 // Extract font from PNG and encode to SNES 2bpp format
 // Returns: font_data (256*16 bytes), font_width (chars_per_lang bytes)
 // Caller must free both returned pointers
-static bool ExtractDialogueFontFromPNG(const char *lang, uint8_t **out_font_data,
+static bool ExtractDialogueFontFromPNG(Rom *rom, const char *lang, uint8_t **out_font_data,
                                        uint8_t **out_font_width, size_t *out_width_count) {
   // Font configuration for each language
   // Format: { filename, chars_per_lang }
@@ -857,14 +977,26 @@ static bool ExtractDialogueFontFromPNG(const char *lang, uint8_t **out_font_data
     return false;
   }
 
-  // Load PNG file from embedded assets or filesystem
+  // Priority 1: Try to load from extracted binary files (font_{lang}.bin)
+  // These are created by --extract-dialogue from language ROMs
+  if (ExtractDialogueFontFromBin(lang, out_font_data, out_font_width, out_width_count)) {
+    return true;  // Successfully loaded from .bin files
+  }
+
+  // Priority 2: Try ROM extraction (works for US-based fonts)
+  if (ExtractDialogueFontFromROM(rom, lang, out_font_data, out_font_width, out_width_count)) {
+    return true;  // Successfully extracted from ROM
+  }
+
+  // Priority 3: Try PNG file as last resort (for backwards compatibility)
   char path[256];
   snprintf(path, sizeof(path), "assets/%s", font_filename);
 
   size_t png_size;
   unsigned char *png_data = LoadAssetData(path, &png_size);
   if (!png_data) {
-    LogError("Failed to read %s", path);
+    // No source available
+    LogError("Font for '%s' not found. Extract with: --extract-from-rom <lang_rom> --extract-dialogue", lang);
     return false;
   }
 
@@ -1364,19 +1496,18 @@ static uint8_t *PackArrays(uint8_t **arrays, size_t *array_lens, size_t count, s
 }
 
 // Helper: Get dialogue filename for a language
-// US dialogue always uses embedded assets (assets/dialogue.txt)
-// Other languages use dialogue_dir override if set, otherwise "assets/"
+// All languages use dialogue_dir override if set, otherwise "assets/"
+// For US, file is named "dialogue.txt" (legacy), others are "dialogue_{lang}.txt"
 static char* GetDialogueFilename(const char *lang) {
   char *filename = malloc(512);  // Larger buffer for full paths
   const char *dir = Restool_GetDialogueDir();
+  if (!dir) dir = "assets";
 
   if (strcmp(lang, "us") == 0) {
-    // US dialogue is always from embedded assets, never extracted from ROM
-    // Use "assets/" path so AssetReader can find it in embedded data
-    snprintf(filename, 512, "assets/dialogue.txt");
+    // US uses "dialogue.txt" (legacy naming)
+    snprintf(filename, 512, "%s/dialogue.txt", dir);
   } else {
-    // Other languages: use dialogue_dir if set (for extracted files), else "assets/"
-    if (!dir) dir = "assets";
+    // Other languages: dialogue_{lang}.txt
     // Replace '-' with '_' in language code for filename
     char lang_clean[16];
     strncpy(lang_clean, lang, sizeof(lang_clean) - 1);
@@ -1509,7 +1640,7 @@ static uint8_t *ProcessLanguageDialogue(const char *lang, const LanguageConfig *
 // Extract all dialogue assets with multi-language support
 // languages_arg: comma-separated list like "de,fr,es" (US is always included first)
 // Returns true on success, false on error
-bool ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
+bool ExtractDialogueAssets(AssetBuilder *builder, Rom *rom, const char *languages_arg) {
   // Parse languages - always start with "us"
   const char *lang_list[16];
   size_t lang_count = 1;
@@ -1580,6 +1711,45 @@ bool ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
     printf("    Processing %s (alphabet_size=%zu, dict_size=%zu)...\n",
            lang, config->alphabet_size, config->dictionary_size);
 
+    // For US language, auto-extract dialogue from ROM if file doesn't exist
+    if (strcmp(lang, "us") == 0) {
+      char *dialogue_filename = GetDialogueFilename(lang);
+      size_t dummy_size;
+      char *test_data = (char *)LoadAssetData(dialogue_filename, &dummy_size);
+      if (!test_data) {
+        // US dialogue file not found - extract directly from ROM
+        printf("      (extracting US dialogue from ROM...)\n");
+        DecodedStringsArray *strings = TextDecode_DecodeStrings(rom, "us");
+        if (!strings) {
+          LogError("Failed to decode US dialogue from ROM");
+          free(dialogue_filename);
+          free(all_dialogue); free(all_dialogue_lens);
+          free(all_fonts); free(all_font_lens);
+          free(all_maps); free(all_map_lens);
+          if (languages_copy) free(languages_copy);
+          return false;
+        }
+        // Write to dialogue.txt (in current directory or assets/)
+        const char *out_dir = Restool_GetDialogueDir();
+        if (!out_dir) out_dir = "assets";
+        if (!TextDecode_WriteDialogueFile(strings, "us", out_dir)) {
+          LogError("Failed to write US dialogue file");
+          TextDecode_FreeStrings(strings);
+          free(dialogue_filename);
+          free(all_dialogue); free(all_dialogue_lens);
+          free(all_fonts); free(all_font_lens);
+          free(all_maps); free(all_map_lens);
+          if (languages_copy) free(languages_copy);
+          return false;
+        }
+        TextDecode_FreeStrings(strings);
+        printf("      (wrote %s)\n", dialogue_filename);
+      } else {
+        free(test_data);
+      }
+      free(dialogue_filename);
+    }
+
     // 1. Process dialogue (dict + strings)
     all_dialogue[i] = ProcessLanguageDialogue(lang, config, &all_dialogue_lens[i]);
     if (!all_dialogue[i]) {
@@ -1601,7 +1771,7 @@ bool ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg) {
     uint8_t *font_data = NULL, *font_width = NULL;
     size_t font_width_count = 0;
 
-    if (!ExtractDialogueFontFromPNG(lang, &font_data, &font_width, &font_width_count)) {
+    if (!ExtractDialogueFontFromPNG(rom, lang, &font_data, &font_width, &font_width_count)) {
       LogError("Failed to extract dialogue font for %s", lang);
       for (size_t j = 0; j <= i; j++) free(all_dialogue[j]);
       for (size_t j = 0; j < i; j++) { free(all_fonts[j]); free(all_maps[j]); }
@@ -1934,145 +2104,84 @@ void TestDungeonSprites(void) {
 }
 
 // ============================================================================
-// Dungeon Sprites Extraction
+// Dungeon Sprites Extraction (ROM-only)
 // ============================================================================
 
-void ExtractDungeonSprites(AssetBuilder *builder) {
-  printf("  Extracting dungeon sprites from 320 rooms...\n");
+// ROM addresses for dungeon sprite data
+#define ROM_SPRITE_PTRS   0x89D62E   // Pointer table: 320 entries × 2 bytes
+#define ROM_SPRITE_BASE   0x890000   // Base address for sprite data
+
+void ExtractDungeonSprites(AssetBuilder *builder, Rom *rom) {
+  printf("  Extracting dungeon sprites from ROM (320 rooms)...\n");
 
   // Allocate buffers
   uint16_t *offsets = calloc(320, sizeof(uint16_t));
   uint8_t *data = malloc(64 * 1024);  // 64KB max
   size_t data_len = 0;
 
-  // Initialize with [0, 0xff]
+  // Initialize with [0, 0xff] as the "no sprites" default
   data[data_len++] = 0;
   data[data_len++] = 0xff;
 
-  int rooms_processed = 0;
-  int sprites_encoded = 0;
+  int rooms_with_sprites = 0;
+  int sprites_total = 0;
 
   // Process all 320 dungeon rooms
   for (int room = 0; room < 320; room++) {
-    char filename[64];
-    snprintf(filename, sizeof(filename), "assets/dungeon/dungeon-%d.yaml", room);
+    // Read pointer from table
+    uint16_t ptr = Rom_ReadWord(rom, ROM_SPRITE_PTRS + room * 2);
+    uint32_t sprite_addr = ROM_SPRITE_BASE + ptr;
 
-    YamlDoc *doc = LoadAssetYaml(filename);
-    if (!doc) {
-      LogError("Failed to load %s: %s", filename, Yaml_GetLastError());
-      free(offsets);
-      free(data);
-      return;
+    // Read sort_sprites byte
+    uint8_t sortmode = Rom_ReadByte(rom, sprite_addr);
+
+    // Count sprites to check if room has any
+    uint32_t ea = sprite_addr + 1;
+    int sprite_count = 0;
+    while (Rom_ReadByte(rom, ea) != 0xFF) {
+      sprite_count++;
+      ea += 3;
+      // Handle special drop markers (0xFE/0xFD, 0x00, 0xE4)
+      if (Rom_ReadByte(rom, ea - 3) == 0xFE || Rom_ReadByte(rom, ea - 3) == 0xFD) {
+        sprite_count--;  // This was a drop marker, not a sprite
+      }
     }
-
-    YamlNode *root = Yaml_GetRoot(doc);
-    YamlNode *header = Yaml_GetMapping(root, "Header");
-    YamlNode *sprites = Yaml_GetMapping(root, "Sprites");
-
-    if (!header || !sprites) {
-      Yaml_Free(doc);
-      continue;
-    }
-
-    // Get sort_sprites from Header
-    int sortmode = Yaml_GetInt(header, "sort_sprites", 0);
-    int sprite_count = Yaml_GetSequenceLength(sprites);
 
     // Skip if no sprites and sortmode == 0
     if (sprite_count == 0 && sortmode == 0) {
-      Yaml_Free(doc);
       continue;
     }
 
-    // Set offset and append sortmode
+    // Set offset for this room
     offsets[room] = data_len;
-    data[data_len++] = sortmode;
 
-    // Process each sprite
-    for (int i = 0; i < sprite_count; i++) {
-      YamlNode *sprite = Yaml_GetSequence(sprites, i);
-      if (!sprite || Yaml_GetSequenceLength(sprite) < 4) {
-        continue;
+    // Copy sprite data directly from ROM (including sortmode byte)
+    ea = sprite_addr;
+    data[data_len++] = Rom_ReadByte(rom, ea++);  // sortmode
+
+    while (1) {
+      uint8_t b0 = Rom_ReadByte(rom, ea++);
+      if (b0 == 0xFF) {
+        data[data_len++] = 0xFF;  // Terminator
+        break;
       }
+      uint8_t b1 = Rom_ReadByte(rom, ea++);
+      uint8_t b2 = Rom_ReadByte(rom, ea++);
 
-      // Parse sprite: [x, y, floor, name, optional_drop_type]
-      YamlNode *xx_node = Yaml_GetSequence(sprite, 0);
-      YamlNode *yy_node = Yaml_GetSequence(sprite, 1);
-      YamlNode *floor_node = Yaml_GetSequence(sprite, 2);
-      YamlNode *name_node = Yaml_GetSequence(sprite, 3);
-
-      int xx = Yaml_AsInt(xx_node);
-      int yy = Yaml_AsInt(yy_node);
-      const char *floor_str = Yaml_AsString(floor_node);
-      const char *name = Yaml_AsString(name_node);
-
-      // Parse floor: "upper" = 0, "lower" = 1
-      int f = (strcmp(floor_str, "lower") == 0) ? 1 : 0;
-
-      // Parse subcode from name (e.g., "6D.3-Rat" -> ss=3, name="6D-Rat")
-      int ss = 0;
-      char name_buf[64];
-      strncpy(name_buf, name, sizeof(name_buf) - 1);
-      name_buf[sizeof(name_buf) - 1] = '\0';
-
-      if (strlen(name_buf) > 2 && name_buf[2] == '.') {
-        char *dash = strchr(name_buf + 3, '-');
-        if (dash) {
-          *dash = '\0';
-          ss = atoi(name_buf + 3);
-          // Reconstruct name: first 2 chars + dash + rest
-          snprintf(name_buf, sizeof(name_buf), "%.2s-%s", name, dash + 1);
-        }
-      }
-
-      // Look up sprite index
-      int sprite_idx = FindSpriteIndex(name_buf);
-      if (sprite_idx < 0) {
-        LogError("Unknown sprite name: %s", name_buf);
-        sprite_idx = 0;
-      }
-
-      // Encode 3-byte sprite data
-      if (sprite_idx >= 0x100) {
-        data[data_len++] = (f << 7) | (0 << 5) | yy;
-        data[data_len++] = xx | (7 << 5);
-        data[data_len++] = sprite_idx & 0xff;
-      } else {
-        data[data_len++] = (f << 7) | ((ss >> 3) << 5) | yy;
-        data[data_len++] = xx | ((ss & 7) << 5);
-        data[data_len++] = sprite_idx;
-      }
-
-      // Check for optional drop type (5th element)
-      if (Yaml_GetSequenceLength(sprite) == 5) {
-        YamlNode *drop_node = Yaml_GetSequence(sprite, 4);
-        const char *drop_type = Yaml_AsString(drop_node);
-        if (drop_type && strcmp(drop_type, "drop_key") == 0) {
-          data[data_len++] = 0xfe;
-          data[data_len++] = 0;
-          data[data_len++] = 0xe4;
-        } else if (drop_type && strcmp(drop_type, "drop_big_key") == 0) {
-          data[data_len++] = 0xfd;
-          data[data_len++] = 0;
-          data[data_len++] = 0xe4;
-        }
-      }
-
-      sprites_encoded++;
+      data[data_len++] = b0;
+      data[data_len++] = b1;
+      data[data_len++] = b2;
+      sprites_total++;
     }
 
-    // Append 0xff terminator
-    data[data_len++] = 0xff;
-    rooms_processed++;
-
-    Yaml_Free(doc);
+    rooms_with_sprites++;
   }
 
   // Add assets
   AssetBuilder_AddAsset(builder, "kDungeonSprites", ASSET_TYPE_UINT8, data, data_len);
   AssetBuilder_AddAsset(builder, "kDungeonSpriteOffs", ASSET_TYPE_UINT16, (const uint8_t*)offsets, 320*2);
 
-  printf("    Processed %d rooms, encoded %d sprites\n", rooms_processed, sprites_encoded);
+  printf("    Processed %d rooms with sprites, %d sprite entries\n", rooms_with_sprites, sprites_total);
   printf("    kDungeonSprites: %zu bytes\n", data_len);
   printf("    kDungeonSpriteOffs: 320 entries (640 bytes)\n");
 
@@ -2181,11 +2290,15 @@ void ExtractRomBasedAssets(Rom *rom, AssetBuilder *builder) {
 }
 
 // ============================================================================
-// Dungeon Secrets Extraction
+// Dungeon Secrets Extraction (ROM-only)
 // ============================================================================
 
-void ExtractDungeonSecrets(AssetBuilder *builder) {
-  printf("  Extracting dungeon secrets from 320 rooms...\n");
+// ROM addresses for dungeon secrets
+#define ROM_SECRETS_PTRS  0x81DB69   // Pointer table: 320 entries × 2 bytes
+#define ROM_SECRETS_BASE  0x810000   // Base address for secret data
+
+void ExtractDungeonSecrets(AssetBuilder *builder, Rom *rom) {
+  printf("  Extracting dungeon secrets from ROM (320 rooms)...\n");
 
   // Allocate result array: 320 rooms × 2 bytes offset each = 640 bytes
   uint8_t *result = calloc(640, 1);
@@ -2193,78 +2306,56 @@ void ExtractDungeonSecrets(AssetBuilder *builder) {
   size_t data_len = 0;
 
   int secrets_found = 0;
+  int rooms_with_secrets = 0;
 
   // Process all 320 dungeon rooms
   for (int i = 0; i < 320; i++) {
-    char filename[64];
-    snprintf(filename, sizeof(filename), "assets/dungeon/dungeon-%d.yaml", i);
+    // Read pointer from table
+    uint16_t ptr = Rom_ReadWord(rom, ROM_SECRETS_PTRS + i * 2);
+    uint32_t secret_addr = ROM_SECRETS_BASE | ptr;
 
-    YamlDoc *doc = LoadAssetYaml(filename);
-    if (!doc) {
-      continue;
+    // Check if this room has secrets (not terminated immediately)
+    uint16_t first = Rom_ReadWord(rom, secret_addr);
+    if (first == 0xFFFF) {
+      continue;  // No secrets in this room
     }
 
-    YamlNode *root = Yaml_GetRoot(doc);
-    YamlNode *secrets = Yaml_GetMapping(root, "Secrets");
+    // Set offset for this room (640 + data_len because offsets are relative to combined buffer)
+    uint16_t offset = 640 + data_len;
+    result[i * 2 + 0] = offset & 0xff;
+    result[i * 2 + 1] = (offset >> 8) & 0xff;
 
-    if (!secrets) {
-      Yaml_Free(doc);
-      continue;
-    }
-
-    int secret_count = Yaml_GetSequenceLength(secrets);
-
-    // If room has secrets, set offset and encode them
-    if (secret_count > 0) {
-      // Set offset for this room (640 + data_len because offsets are relative to combined buffer)
-      uint16_t offset = 640 + data_len;
-      result[i * 2 + 0] = offset & 0xff;
-      result[i * 2 + 1] = (offset >> 8) & 0xff;
-
-      // Process each secret: [x, y, name]
-      for (int j = 0; j < secret_count; j++) {
-        YamlNode *secret = Yaml_GetSequence(secrets, j);
-        if (!secret || Yaml_GetSequenceLength(secret) < 3) {
-          continue;
-        }
-
-        // Parse [x, y, name]
-        YamlNode *x_node = Yaml_GetSequence(secret, 0);
-        YamlNode *y_node = Yaml_GetSequence(secret, 1);
-        YamlNode *name_node = Yaml_GetSequence(secret, 2);
-
-        int x = Yaml_AsInt(x_node);
-        int y = Yaml_AsInt(y_node);
-        const char *name = Yaml_AsString(name_node);
-
-        // Look up secret index
-        int secret_idx = FindSecretIndex(name);
-        if (secret_idx < 0) {
-          LogError("Unknown secret name: %s", name);
-          secret_idx = 0;  // Default to "Nothing"
-        }
-
-        // Calculate position: (x + y * 64) * 2
-        int pos = (x + y * 64) * 2;
-
-        // Encode as 3 bytes: [pos_lo, pos_hi, secret_idx]
-        data[data_len++] = pos & 0xff;
-        data[data_len++] = (pos >> 8) & 0xff;
-        data[data_len++] = secret_idx;
-
-        secrets_found++;
+    // Copy secret data directly from ROM until 0xFFFF terminator
+    uint32_t ea = secret_addr;
+    while (1) {
+      uint16_t pos = Rom_ReadWord(rom, ea);
+      if (pos == 0xFFFF) {
+        // Append terminator
+        data[data_len++] = 0xff;
+        data[data_len++] = 0xff;
+        break;
       }
 
-      // Append terminator [0xff, 0xff]
-      data[data_len++] = 0xff;
-      data[data_len++] = 0xff;
+      uint8_t secret_idx = Rom_ReadByte(rom, ea + 2);
+
+      // Copy 3 bytes: [pos_lo, pos_hi, secret_idx]
+      data[data_len++] = pos & 0xff;
+      data[data_len++] = (pos >> 8) & 0xff;
+      data[data_len++] = secret_idx;
+
+      secrets_found++;
+      ea += 3;
     }
 
-    Yaml_Free(doc);
+    rooms_with_secrets++;
   }
 
-  // For rooms with no secrets, set offset to point to end of data (640 + len - 2)
-  uint16_t empty_offset = (640 + data_len) - 2;
+  // For rooms with no secrets, set offset to point to end of data (last terminator)
+  // We need to add a final terminator for empty rooms to point to
+  data[data_len++] = 0xff;
+  data[data_len++] = 0xff;
+  uint16_t empty_offset = 640 + data_len - 2;
+
   for (int i = 0; i < 320; i++) {
     // Check if offset is still 0 (room has no secrets)
     if (result[i * 2 + 0] == 0 && result[i * 2 + 1] == 0) {
@@ -2280,9 +2371,9 @@ void ExtractDungeonSecrets(AssetBuilder *builder) {
 
   AssetBuilder_AddAsset(builder, "kDungeonSecrets", ASSET_TYPE_UINT8, combined, 640 + data_len);
 
-  printf("    Processed 320 rooms, found %d secrets\n", secrets_found);
-  printf("    kDungeonSecrets: %zu bytes (%d offsets + %zu data)\n",
-         640 + data_len, 640, data_len);
+  printf("    Processed %d rooms with secrets, found %d secrets\n", rooms_with_secrets, secrets_found);
+  printf("    kDungeonSecrets: %zu bytes (640 offsets + %zu data)\n",
+         640 + data_len, data_len);
 
   free(result);
   free(data);
@@ -2340,8 +2431,11 @@ static size_t AppendScanBytes(uint8_t **big_ptr, size_t *big_len, size_t *big_ca
 // Dungeon Room Headers
 // ============================================================================
 
-void ExtractDungeonRoomHeaders(AssetBuilder *builder) {
-  printf("  Extracting dungeon room headers from 320 rooms...\n");
+// ROM addresses for dungeon room headers
+#define ROM_ROOM_HEADER_PTRS 0x84F502   // Room metadata pointer table (320 * 2 bytes)
+
+void ExtractDungeonRoomHeaders(AssetBuilder *builder, Rom *rom) {
+  printf("  Extracting dungeon room headers from ROM (320 rooms)...\n");
 
   // Room headers data (deduplicated)
   uint8_t *headers = malloc(64 * 1024);
@@ -2353,96 +2447,25 @@ void ExtractDungeonRoomHeaders(AssetBuilder *builder) {
 
   // Process all 320 dungeon rooms
   for (int i = 0; i < 320; i++) {
-    char filename[64];
-    snprintf(filename, sizeof(filename), "assets/dungeon/dungeon-%d.yaml", i);
+    // Get pointer to room metadata
+    uint16_t ptr = Rom_ReadWord(rom, ROM_ROOM_HEADER_PTRS + i * 2);
+    uint32_t header_addr;
 
-    YamlDoc *doc = LoadAssetYaml(filename);
-    if (!doc) {
-      continue;
+    if (ptr == 0xFFEF) {
+      // Invalid room - use zeros
+      header_addr = 0x82EDC5;  // Points to zeros in ROM
+    } else {
+      header_addr = 0x840000 | ptr;  // Bank $84
     }
 
-    YamlNode *root = Yaml_GetRoot(doc);
-    YamlNode *header_node = Yaml_GetMapping(root, "Header");
-    if (!header_node) {
-      Yaml_Free(doc);
-      continue;
-    }
-
-    // Build 14-byte header
+    // Read 14-byte header directly from ROM
     uint8_t header[14];
-
-    // Byte 0: bg2 (3 bits) << 5 | collision (3 bits) << 2 | lights_out (1 bit)
-    const char *bg2_str = Yaml_GetString(header_node, "bg2", "");
-    const char *collision_str = Yaml_GetString(header_node, "collision", "");
-    int lights_out = Yaml_GetInt(header_node, "lights_out", 0);
-
-    int bg2 = FindBg2Index(bg2_str);
-    int collision = FindCollisionIndex(collision_str);
-    header[0] = (bg2 << 5) | (collision << 2) | lights_out;
-
-    // Bytes 1-3: palette, blockset, enemyblk
-    header[1] = Yaml_GetInt(header_node, "palette", 0);
-    header[2] = Yaml_GetInt(header_node, "blockset", 0);
-    header[3] = Yaml_GetInt(header_node, "enemyblk", 0);
-
-    // Byte 4: effect
-    const char *effect_str = Yaml_GetString(header_node, "effect", "");
-    header[4] = FindEffectIndex(effect_str);
-
-    // Bytes 5-6: tag0, tag1
-    const char *tag0_str = Yaml_GetString(header_node, "tag0", "");
-    const char *tag1_str = Yaml_GetString(header_node, "tag1", "");
-    header[5] = FindTagIndex(tag0_str);
-    header[6] = FindTagIndex(tag1_str);
-
-    // Bytes 7-13: hole/stair destinations
-    // Parse [room, direction] arrays
-    YamlNode *hole0 = Yaml_GetMapping(header_node, "hole0_dest");
-    YamlNode *stair0 = Yaml_GetMapping(header_node, "stair0_dest");
-    YamlNode *stair1 = Yaml_GetMapping(header_node, "stair1_dest");
-    YamlNode *stair2 = Yaml_GetMapping(header_node, "stair2_dest");
-    YamlNode *stair3 = Yaml_GetMapping(header_node, "stair3_dest");
-
-    int hole0_room = 0, hole0_dir = 0;
-    int stair0_room = 0, stair0_dir = 0;
-    int stair1_room = 0, stair1_dir = 0;
-    int stair2_room = 0, stair2_dir = 0;
-    int stair3_room = 0, stair3_dir = 0;
-
-    if (hole0 && Yaml_GetSequenceLength(hole0) >= 2) {
-      hole0_room = Yaml_AsInt(Yaml_GetSequence(hole0, 0));
-      hole0_dir = Yaml_AsInt(Yaml_GetSequence(hole0, 1));
+    for (int j = 0; j < 14; j++) {
+      header[j] = Rom_ReadByte(rom, header_addr + j);
     }
-    if (stair0 && Yaml_GetSequenceLength(stair0) >= 2) {
-      stair0_room = Yaml_AsInt(Yaml_GetSequence(stair0, 0));
-      stair0_dir = Yaml_AsInt(Yaml_GetSequence(stair0, 1));
-    }
-    if (stair1 && Yaml_GetSequenceLength(stair1) >= 2) {
-      stair1_room = Yaml_AsInt(Yaml_GetSequence(stair1, 0));
-      stair1_dir = Yaml_AsInt(Yaml_GetSequence(stair1, 1));
-    }
-    if (stair2 && Yaml_GetSequenceLength(stair2) >= 2) {
-      stair2_room = Yaml_AsInt(Yaml_GetSequence(stair2, 0));
-      stair2_dir = Yaml_AsInt(Yaml_GetSequence(stair2, 1));
-    }
-    if (stair3 && Yaml_GetSequenceLength(stair3) >= 2) {
-      stair3_room = Yaml_AsInt(Yaml_GetSequence(stair3, 0));
-      stair3_dir = Yaml_AsInt(Yaml_GetSequence(stair3, 1));
-    }
-
-    header[7] = hole0_dir | (stair0_dir << 2) | (stair1_dir << 4) | (stair2_dir << 6);
-    header[8] = stair3_dir;
-
-    header[9] = hole0_room;
-    header[10] = stair0_room;
-    header[11] = stair1_room;
-    header[12] = stair2_room;
-    header[13] = stair3_room;
 
     // Deduplicate and store offset
     header_offsets[i] = AppendScanBytes(&headers, &headers_len, &headers_cap, header, 14);
-
-    Yaml_Free(doc);
   }
 
   // Add assets
@@ -2463,91 +2486,47 @@ void ExtractDungeonRoomHeaders(AssetBuilder *builder) {
 // Simple Dungeon Room Assets
 // ============================================================================
 
-void ExtractDungeonRoomSimple(AssetBuilder *builder) {
-  printf("  Extracting simple dungeon room data from 320 rooms...\n");
+// ROM addresses for simple dungeon data
+#define ROM_CHEST_DATA       0x81E96E   // 168 entries × 3 bytes
+#define ROM_CHEST_COUNT      168
+#define ROM_TELEMSG_DATA     0x87F61D   // 320 entries × 2 bytes
+#define ROM_PITS_HURT_DATA   0x80990C   // 57 entries × 2 bytes
+#define ROM_PITS_HURT_COUNT  57
 
-  // kDungeonRoomTeleMsg: 320 uint16 values (sign/teleport message IDs)
-  uint16_t *sign_texts = calloc(320, sizeof(uint16_t));
+void ExtractDungeonRoomSimple(AssetBuilder *builder, Rom *rom) {
+  printf("  Extracting simple dungeon room data from ROM...\n");
 
-  // kDungeonPitsHurtPlayer: Variable-length list of room indices
-  uint16_t *pits_rooms = malloc(320 * sizeof(uint16_t));  // Max 320 rooms
-  int pits_count = 0;
-
-  // kDungeonRoomChests: Variable-length list (3 bytes per chest)
-  uint8_t *chests = malloc(64 * 1024);  // Max reasonable size
-  size_t chests_len = 0;
-  int chest_count = 0;
-
-  // Process all 320 dungeon rooms
-  for (int i = 0; i < 320; i++) {
-    char filename[64];
-    snprintf(filename, sizeof(filename), "assets/dungeon/dungeon-%d.yaml", i);
-
-    YamlDoc *doc = LoadAssetYaml(filename);
-    if (!doc) {
-      continue;
-    }
-
-    YamlNode *root = Yaml_GetRoot(doc);
-    YamlNode *header = Yaml_GetMapping(root, "Header");
-    if (!header) {
-      Yaml_Free(doc);
-      continue;
-    }
-
-    // Read tele_msg (sign/teleport message ID)
-    sign_texts[i] = Yaml_GetInt(header, "tele_msg", 0);
-
-    // Check if pits hurt player
-    bool pits_hurt = Yaml_GetBool(header, "pits_hurt_player", false);
-    if (pits_hurt) {
-      pits_rooms[pits_count++] = i;
-    }
-
-    // Parse Chests array
-    YamlNode *chests_node = Yaml_GetMapping(root, "Chests");
-    if (chests_node) {
-      int num_chests = Yaml_GetSequenceLength(chests_node);
-      for (int j = 0; j < num_chests; j++) {
-        YamlNode *chest = Yaml_GetSequence(chests_node, j);
-        if (!chest) continue;
-
-        // Check if it's a string (ends with '!') or integer
-        const char *str = Yaml_AsString(chest);
-        if (str && strlen(str) > 0 && str[strlen(str) - 1] == '!') {
-          // String with '!' suffix - set 0x80 flag in room_hi
-          int item_id = atoi(str);  // Parse "27!" -> 27
-          chests[chests_len++] = i & 0xff;
-          chests[chests_len++] = (i >> 8) | 0x80;
-          chests[chests_len++] = item_id;
-          chest_count++;
-        } else {
-          // Plain integer
-          int item_id = Yaml_AsInt(chest);
-          chests[chests_len++] = i & 0xff;
-          chests[chests_len++] = (i >> 8) & 0xff;
-          chests[chests_len++] = item_id;
-          chest_count++;
-        }
-      }
-    }
-
-    Yaml_Free(doc);
+  // kDungeonRoomChests: Copy 168 entries directly from ROM
+  uint8_t *chests = malloc(ROM_CHEST_COUNT * 3);
+  for (int i = 0; i < ROM_CHEST_COUNT * 3; i++) {
+    chests[i] = Rom_ReadByte(rom, ROM_CHEST_DATA + i);
   }
 
-  // Add assets (Python order: Chests, TeleMsg, PitsHurtPlayer)
-  AssetBuilder_AddAsset(builder, "kDungeonRoomChests", ASSET_TYPE_UINT8,
-                       chests, chests_len);
-  AssetBuilder_AddAsset(builder, "kDungeonRoomTeleMsg", ASSET_TYPE_UINT16,
-                       (uint8_t*)sign_texts, 320*2);
-  AssetBuilder_AddAsset(builder, "kDungeonPitsHurtPlayer", ASSET_TYPE_UINT16,
-                       (uint8_t*)pits_rooms, pits_count*2);
+  // kDungeonRoomTeleMsg: Read 320 entries from ROM
+  uint16_t *sign_texts = malloc(320 * sizeof(uint16_t));
+  for (int i = 0; i < 320; i++) {
+    sign_texts[i] = Rom_ReadWord(rom, ROM_TELEMSG_DATA + i * 2);
+  }
 
-  printf("    kDungeonRoomChests: %d chests (%zu bytes)\n",
-         chest_count, chests_len);
+  // kDungeonPitsHurtPlayer: Read 57 room IDs from ROM
+  uint16_t *pits_rooms = malloc(ROM_PITS_HURT_COUNT * sizeof(uint16_t));
+  for (int i = 0; i < ROM_PITS_HURT_COUNT; i++) {
+    pits_rooms[i] = Rom_ReadWord(rom, ROM_PITS_HURT_DATA + i * 2);
+  }
+
+  // Add assets
+  AssetBuilder_AddAsset(builder, "kDungeonRoomChests", ASSET_TYPE_UINT8,
+                       chests, ROM_CHEST_COUNT * 3);
+  AssetBuilder_AddAsset(builder, "kDungeonRoomTeleMsg", ASSET_TYPE_UINT16,
+                       (uint8_t*)sign_texts, 320 * 2);
+  AssetBuilder_AddAsset(builder, "kDungeonPitsHurtPlayer", ASSET_TYPE_UINT16,
+                       (uint8_t*)pits_rooms, ROM_PITS_HURT_COUNT * 2);
+
+  printf("    kDungeonRoomChests: %d chests (%d bytes)\n",
+         ROM_CHEST_COUNT, ROM_CHEST_COUNT * 3);
   printf("    kDungeonRoomTeleMsg: 320 entries (640 bytes)\n");
   printf("    kDungeonPitsHurtPlayer: %d rooms where pits hurt (%d bytes)\n",
-         pits_count, pits_count * 2);
+         ROM_PITS_HURT_COUNT, ROM_PITS_HURT_COUNT * 2);
 
   free(sign_texts);
   free(pits_rooms);
@@ -2558,208 +2537,142 @@ void ExtractDungeonRoomSimple(AssetBuilder *builder) {
 // Dungeon Room Data (3-layer object encoding)
 // ============================================================================
 
-// Helper to encode a single layer and return door offset (or 0 if no doors)
-// always_add_door_marker: if true, add door marker even if no doors (for Layer3)
-static uint16_t EncodeRoomLayer(uint8_t **data_ptr, size_t *data_len, size_t *data_cap,
-                                YamlNode *layer_objs, YamlNode *layer_doors,
-                                bool always_add_door_marker) {
-  uint8_t *data = *data_ptr;
-  uint16_t door_offset = 0;
+// ROM addresses for dungeon room data
+#define ROM_ROOM_POINTERS 0x9F8000    // 3-byte pointers for 320 rooms
 
-  if (!layer_objs) {
-    // Empty layer, just add terminator
-    if (*data_len + 2 > *data_cap) {
-      *data_cap = (*data_len + 2) * 2;
-      *data_ptr = realloc(*data_ptr, *data_cap);
-      data = *data_ptr;
-    }
-    data[(*data_len)++] = 0xff;
-    data[(*data_len)++] = 0xff;
-    return 0;
-  }
+// Helper to read one layer from ROM (objects + optional doors)
+// Returns the ROM offset after this layer, sets *door_off to door offset (or 0)
+static uint32_t ReadRoomLayerFromROM(Rom *rom, uint32_t addr,
+                                      uint8_t *out, size_t *out_len, size_t out_cap,
+                                      uint16_t *door_off) {
+  *door_off = 0;
 
-  // Encode objects
-  int num_objs = Yaml_GetSequenceLength(layer_objs);
-  for (int i = 0; i < num_objs; i++) {
-    YamlNode *obj = Yaml_GetSequence(layer_objs, i);
+  while (true) {
+    uint16_t word = Rom_ReadWord(rom, addr);
 
-    int x = Yaml_GetInt(obj, "x", 0);
-    int y = Yaml_GetInt(obj, "y", 0);
-    const char *name = Yaml_GetString(obj, "n", "");
-
-    // Parse size (e.g., "3*1" → w=3, h=1), default to "0*0"
-    const char *size_str = Yaml_GetString(obj, "s", "0*0");
-    int w = 0, h = 0;
-    if (size_str && strlen(size_str) >= 3) {
-      w = size_str[0] - '0';
-      h = size_str[2] - '0';
-    }
-
-    uint8_t p0, p1, p2;
-
-    // Type0: Standard objects (0x00-0xF7)
-    int idx = FindType0Index(name);
-    if (idx >= 0) {
-      p0 = x * 4 + w;
-      p1 = y * 4 + h;
-      p2 = idx;
-    }
-    // Type1: Extended objects (0xF80-0xFFF)
-    else if ((idx = FindType1Index(name)) >= 0) {
-      p0 = x * 4 + (idx & 3);
-      p1 = y * 4 + ((idx >> 2) & 3);
-      p2 = (idx >> 4) + 0xf8;
-    }
-    // Type2: Special objects (0x100-0x140)
-    else if ((idx = FindType2Index(name)) >= 0) {
-      p0 = 0xfc + ((x >> 4) & 3);
-      p1 = ((x << 4) & 0xf0) | ((y >> 2) & 0x0f);
-      p2 = idx | ((y << 6) & 0xc0);
-    }
-    else {
-      fprintf(stderr, "Warning: Unknown object '%s' in room layer\n", name);
-      continue;
-    }
-
-    // Append to buffer
-    if (*data_len + 3 > *data_cap) {
-      *data_cap = (*data_len + 3) * 2;
-      *data_ptr = realloc(*data_ptr, *data_cap);
-      data = *data_ptr;
-    }
-    data[(*data_len)++] = p0;
-    data[(*data_len)++] = p1;
-    data[(*data_len)++] = p2;
-  }
-
-  // Encode doors (if present, or if always_add_door_marker is set)
-  int num_doors = layer_doors ? Yaml_GetSequenceLength(layer_doors) : 0;
-  if (layer_doors || always_add_door_marker) {
-    if (num_doors > 0 || always_add_door_marker) {
-      // Door marker
-      if (*data_len + 2 > *data_cap) {
-        *data_cap = (*data_len + 2) * 2;
-        *data_ptr = realloc(*data_ptr, *data_cap);
-        data = *data_ptr;
+    // End of layer (no doors)
+    if (word == 0xFFFF) {
+      if (*out_len + 2 <= out_cap) {
+        out[(*out_len)++] = 0xFF;
+        out[(*out_len)++] = 0xFF;
       }
-      data[(*data_len)++] = 0xf0;
-      data[(*data_len)++] = 0xff;
+      return addr + 2;
+    }
 
-      door_offset = *data_len;  // Record door offset
+    // Door marker
+    if (word == 0xFFF0) {
+      if (*out_len + 2 <= out_cap) {
+        out[(*out_len)++] = 0xF0;
+        out[(*out_len)++] = 0xFF;
+      }
+      addr += 2;
+      *door_off = *out_len;
 
-      // Encode each door: [dir | pos << 4, type]
-      for (int i = 0; i < num_doors; i++) {
-        YamlNode *door = Yaml_GetSequence(layer_doors, i);
-        int dir = Yaml_GetInt(door, "dir", 0);
-        int pos = Yaml_GetInt(door, "pos", 0);
-        int type = Yaml_GetInt(door, "type", 0);
-
-        if (*data_len + 2 > *data_cap) {
-          *data_cap = (*data_len + 2) * 2;
-          *data_ptr = realloc(*data_ptr, *data_cap);
-          data = *data_ptr;
+      // Read doors until 0xFFFF
+      while (true) {
+        uint16_t dword = Rom_ReadWord(rom, addr);
+        if (dword == 0xFFFF) {
+          if (*out_len + 2 <= out_cap) {
+            out[(*out_len)++] = 0xFF;
+            out[(*out_len)++] = 0xFF;
+          }
+          return addr + 2;
         }
-        data[(*data_len)++] = dir | (pos << 4);
-        data[(*data_len)++] = type;
+        // Copy door data
+        if (*out_len + 2 <= out_cap) {
+          out[(*out_len)++] = dword & 0xFF;
+          out[(*out_len)++] = (dword >> 8) & 0xFF;
+        }
+        addr += 2;
       }
     }
-  }
 
-  // Layer terminator
-  if (*data_len + 2 > *data_cap) {
-    *data_cap = (*data_len + 2) * 2;
-    *data_ptr = realloc(*data_ptr, *data_cap);
-    data = *data_ptr;
+    // Regular object (3 bytes)
+    if (*out_len + 3 <= out_cap) {
+      out[(*out_len)++] = word & 0xFF;
+      out[(*out_len)++] = (word >> 8) & 0xFF;
+      out[(*out_len)++] = Rom_ReadByte(rom, addr + 2);
+    }
+    addr += 3;
   }
-  data[(*data_len)++] = 0xff;
-  data[(*data_len)++] = 0xff;
-
-  return door_offset;
 }
 
-void ExtractDungeonRoomData(AssetBuilder *builder) {
-  printf("  Extracting dungeon room data (3-layer encoding) from 320 rooms...\n");
+// Extract dungeon room data directly from ROM
+static bool ExtractDungeonRoomDataFromROM(AssetBuilder *builder, Rom *rom) {
+  printf("  Extracting dungeon room data from ROM (320 rooms)...\n");
 
-  // Main room data buffer (NOT deduplicated, only headers are)
+  // Buffers
   uint8_t *room_data = malloc(512 * 1024);
   size_t room_data_len = 0;
   size_t room_data_cap = 512 * 1024;
 
-  // Offset arrays
   uint16_t *room_offsets = malloc(320 * sizeof(uint16_t));
   uint16_t *door_offsets = malloc(320 * sizeof(uint16_t));
 
-  // Temporary buffer for single room (before deduplication)
   uint8_t *temp_room = malloc(64 * 1024);
-  size_t temp_room_cap = 64 * 1024;
+  size_t temp_cap = 64 * 1024;
+
+  if (!room_data || !room_offsets || !door_offsets || !temp_room) {
+    LogError("Failed to allocate dungeon room buffers");
+    free(room_data);
+    free(room_offsets);
+    free(door_offsets);
+    free(temp_room);
+    return false;
+  }
 
   for (int i = 0; i < 320; i++) {
-    char filename[64];
-    snprintf(filename, sizeof(filename), "assets/dungeon/dungeon-%d.yaml", i);
+    // Read 3-byte pointer for this room
+    uint32_t ptr_addr = ROM_ROOM_POINTERS + i * 3;
+    uint32_t room_addr = Rom_ReadByte(rom, ptr_addr) |
+                         (Rom_ReadByte(rom, ptr_addr + 1) << 8) |
+                         (Rom_ReadByte(rom, ptr_addr + 2) << 16);
 
-    YamlDoc *doc = LoadAssetYaml(filename);
-    if (!doc) {
-      fprintf(stderr, "Warning: Could not load %s\n", filename);
-      continue;
-    }
-
-    YamlNode *root = Yaml_GetRoot(doc);
-    YamlNode *header = Yaml_GetMapping(root, "Header");
-
-    // Build room data in temp buffer
     size_t temp_len = 0;
+    uint16_t door_off = 0;
 
     // Byte 0: floor1 + floor2 * 16
-    int floor1 = Yaml_GetInt(header, "floor1", 0);
-    int floor2 = Yaml_GetInt(header, "floor2", 0);
-    temp_room[temp_len++] = floor1 + floor2 * 16;
-
     // Byte 1: layout * 4 + start_quadrant
-    int layout = Yaml_GetInt(header, "layout", 0);
-    int start_quadrant = Yaml_GetInt(header, "start_quadrant", 0);
-    temp_room[temp_len++] = layout * 4 + start_quadrant;
+    temp_room[temp_len++] = Rom_ReadByte(rom, room_addr);
+    temp_room[temp_len++] = Rom_ReadByte(rom, room_addr + 1);
+
+    uint32_t addr = room_addr + 2;
 
     // Layer 1
-    YamlNode *layer1 = Yaml_GetMapping(root, "Layer1");
-    YamlNode *layer1_doors = Yaml_GetMapping(root, "Layer1.doors");
-    EncodeRoomLayer(&temp_room, &temp_len, &temp_room_cap, layer1, layer1_doors, false);
+    uint16_t layer_door_off;
+    addr = ReadRoomLayerFromROM(rom, addr, temp_room, &temp_len, temp_cap, &layer_door_off);
 
     // Layer 2
-    YamlNode *layer2 = Yaml_GetMapping(root, "Layer2");
-    YamlNode *layer2_doors = Yaml_GetMapping(root, "Layer2.doors");
-    EncodeRoomLayer(&temp_room, &temp_len, &temp_room_cap, layer2, layer2_doors, false);
+    addr = ReadRoomLayerFromROM(rom, addr, temp_room, &temp_len, temp_cap, &layer_door_off);
 
-    // Layer 3 (always has door marker, even if no doors)
-    YamlNode *layer3 = Yaml_GetMapping(root, "Layer3");
-    YamlNode *layer3_doors = Yaml_GetMapping(root, "Layer3.doors");
-    uint16_t door_off = EncodeRoomLayer(&temp_room, &temp_len, &temp_room_cap, layer3, layer3_doors, true);
+    // Layer 3 - this is where doors are (if any)
+    addr = ReadRoomLayerFromROM(rom, addr, temp_room, &temp_len, temp_cap, &layer_door_off);
+    if (layer_door_off) {
+      door_off = layer_door_off;
+    }
 
-    // Append directly (NO deduplication for room data, only headers are deduplicated)
+    // Record offset for this room
     room_offsets[i] = room_data_len;
 
-    // Ensure capacity
+    // Ensure capacity and copy
     if (room_data_len + temp_len > room_data_cap) {
       room_data_cap = (room_data_len + temp_len) * 2;
       room_data = realloc(room_data, room_data_cap);
     }
-
-    // Append room data
     memcpy(room_data + room_data_len, temp_room, temp_len);
-    room_data_len += temp_len;
 
     door_offsets[i] = door_off ? (room_offsets[i] + door_off) : 0;
-
-    Yaml_Free(doc);
+    room_data_len += temp_len;
   }
 
   // Add assets
   AssetBuilder_AddAsset(builder, "kDungeonRoom", ASSET_TYPE_UINT8, room_data, room_data_len);
   AssetBuilder_AddAsset(builder, "kDungeonRoomOffs", ASSET_TYPE_UINT16,
-                       (uint8_t*)room_offsets, 320*2);
+                        (uint8_t*)room_offsets, 320*2);
   AssetBuilder_AddAsset(builder, "kDungeonRoomDoorOffs", ASSET_TYPE_UINT16,
-                       (uint8_t*)door_offsets, 320*2);
+                        (uint8_t*)door_offsets, 320*2);
 
-  printf("    kDungeonRoom: %zu bytes from 320 rooms\n", room_data_len);
+  printf("    kDungeonRoom: %zu bytes from 320 rooms (from ROM)\n", room_data_len);
   printf("    kDungeonRoomOffs: 320 entries (640 bytes)\n");
   printf("    kDungeonRoomDoorOffs: 320 entries (640 bytes)\n");
 
@@ -2767,408 +2680,305 @@ void ExtractDungeonRoomData(AssetBuilder *builder) {
   free(room_offsets);
   free(door_offsets);
   free(temp_room);
+  return true;
+}
+
+void ExtractDungeonRoomData(AssetBuilder *builder, Rom *rom) {
+  // Extract directly from ROM - this is the only supported method
+  if (!ExtractDungeonRoomDataFromROM(builder, rom)) {
+    LogError("Failed to extract dungeon room data from ROM");
+  }
 }
 
 // ============================================================================
 // Default and Overlay Dungeon Rooms
 // ============================================================================
 
-void ExtractDefaultOverlayRooms(AssetBuilder *builder) {
-  printf("  Extracting default and overlay rooms...\n");
+// ROM addresses for default/overlay room pointers
+#define ROM_DEFAULT_ROOM_PTRS  0x84EF2F   // 8 entries × 3-byte pointers
+#define ROM_OVERLAY_ROOM_PTRS  0x84ECC0   // 19 entries × 3-byte pointers
+#define ROM_DEFAULT_ROOM_COUNT 8
+#define ROM_OVERLAY_ROOM_COUNT 19
 
-  // Default rooms: 8 variants from default_rooms.yaml
-  YamlDoc *default_doc = LoadAssetYaml("assets/dungeon/default_rooms.yaml");
-  if (!default_doc) {
-    LogError("Failed to load default_rooms.yaml: %s", Yaml_GetLastError());
-    return;
+// Read room object data from ROM (no doors) - returns next address after terminator
+static uint32_t ReadRoomObjectsFromROM(Rom *rom, uint32_t addr, uint8_t **out, size_t *len, size_t *cap) {
+  // Read room objects until 0xFFFF terminator
+  // Same format as regular room layer data
+  while (1) {
+    uint16_t v = Rom_ReadWord(rom, addr);
+
+    // Check for terminator
+    if (v == 0xFFFF) {
+      // Add terminator to output
+      if (*len + 2 > *cap) {
+        *cap *= 2;
+        *out = realloc(*out, *cap);
+      }
+      (*out)[(*len)++] = 0xFF;
+      (*out)[(*len)++] = 0xFF;
+      return addr + 2;
+    }
+
+    // Parse object encoding (same as dungeon rooms)
+    uint8_t b0 = v & 0xFF;
+    uint8_t b1 = (v >> 8) & 0xFF;
+
+    if ((b0 & 0xFC) == 0xFC) {
+      // Subtype 1/2: 3 bytes
+      uint8_t b2 = Rom_ReadByte(rom, addr + 2);
+      if (*len + 3 > *cap) {
+        *cap *= 2;
+        *out = realloc(*out, *cap);
+      }
+      (*out)[(*len)++] = b0;
+      (*out)[(*len)++] = b1;
+      (*out)[(*len)++] = b2;
+      addr += 3;
+    } else {
+      // Subtype 0: 3 bytes
+      uint8_t b2 = Rom_ReadByte(rom, addr + 2);
+      if (*len + 3 > *cap) {
+        *cap *= 2;
+        *out = realloc(*out, *cap);
+      }
+      (*out)[(*len)++] = b0;
+      (*out)[(*len)++] = b1;
+      (*out)[(*len)++] = b2;
+      addr += 3;
+    }
   }
+}
 
+void ExtractDefaultOverlayRooms(AssetBuilder *builder, Rom *rom) {
+  printf("  Extracting default and overlay rooms from ROM...\n");
+
+  // Default rooms: 8 variants
   uint8_t *default_data = malloc(64 * 1024);
   size_t default_len = 0;
   size_t default_cap = 64 * 1024;
-  uint16_t *default_offsets = malloc(8 * sizeof(uint16_t));
+  uint16_t *default_offsets = malloc(ROM_DEFAULT_ROOM_COUNT * sizeof(uint16_t));
 
-  YamlNode *default_root = Yaml_GetRoot(default_doc);
-
-  for (int i = 0; i < 8; i++) {
-    char key[32];
-    snprintf(key, sizeof(key), "Default%d", i);
-    YamlNode *variant = Yaml_GetMapping(default_root, key);
-
-    if (!variant) {
-      LogError("Default room variant %d not found", i);
-      continue;
-    }
+  for (int i = 0; i < ROM_DEFAULT_ROOM_COUNT; i++) {
+    // Read 3-byte pointer
+    uint32_t ptr_addr = ROM_DEFAULT_ROOM_PTRS + i * 3;
+    uint32_t room_addr = Rom_ReadByte(rom, ptr_addr) |
+                         (Rom_ReadByte(rom, ptr_addr + 1) << 8) |
+                         (Rom_ReadByte(rom, ptr_addr + 2) << 16);
 
     default_offsets[i] = default_len;
-    EncodeRoomLayer(&default_data, &default_len, &default_cap, variant, NULL, false);
+    ReadRoomObjectsFromROM(rom, room_addr, &default_data, &default_len, &default_cap);
   }
-
-  Yaml_Free(default_doc);
 
   AssetBuilder_AddAsset(builder, "kDungeonRoomDefault", ASSET_TYPE_UINT8,
                        default_data, default_len);
   AssetBuilder_AddAsset(builder, "kDungeonRoomDefaultOffs", ASSET_TYPE_UINT16,
-                       (uint8_t*)default_offsets, 8 * sizeof(uint16_t));
+                       (uint8_t*)default_offsets, ROM_DEFAULT_ROOM_COUNT * sizeof(uint16_t));
 
-  printf("    kDungeonRoomDefault: %zu bytes from 8 variants\n", default_len);
-  printf("    kDungeonRoomDefaultOffs: 8 entries (16 bytes)\n");
+  printf("    kDungeonRoomDefault: %zu bytes from %d variants\n", default_len, ROM_DEFAULT_ROOM_COUNT);
+  printf("    kDungeonRoomDefaultOffs: %d entries (%zu bytes)\n",
+         ROM_DEFAULT_ROOM_COUNT, ROM_DEFAULT_ROOM_COUNT * sizeof(uint16_t));
 
   free(default_data);
   free(default_offsets);
 
-  // Overlay rooms: 19 variants from overlay_rooms.yaml
-  YamlDoc *overlay_doc = LoadAssetYaml("assets/dungeon/overlay_rooms.yaml");
-  if (!overlay_doc) {
-    LogError("Failed to load overlay_rooms.yaml: %s", Yaml_GetLastError());
-    return;
-  }
-
+  // Overlay rooms: 19 variants
   uint8_t *overlay_data = malloc(64 * 1024);
   size_t overlay_len = 0;
   size_t overlay_cap = 64 * 1024;
-  uint16_t *overlay_offsets = malloc(19 * sizeof(uint16_t));
+  uint16_t *overlay_offsets = malloc(ROM_OVERLAY_ROOM_COUNT * sizeof(uint16_t));
 
-  YamlNode *overlay_root = Yaml_GetRoot(overlay_doc);
-
-  for (int i = 0; i < 19; i++) {
-    char key[32];
-    snprintf(key, sizeof(key), "Overlay%d", i);
-    YamlNode *variant = Yaml_GetMapping(overlay_root, key);
-
-    if (!variant) {
-      LogError("Overlay room variant %d not found", i);
-      continue;
-    }
+  for (int i = 0; i < ROM_OVERLAY_ROOM_COUNT; i++) {
+    // Read 3-byte pointer
+    uint32_t ptr_addr = ROM_OVERLAY_ROOM_PTRS + i * 3;
+    uint32_t room_addr = Rom_ReadByte(rom, ptr_addr) |
+                         (Rom_ReadByte(rom, ptr_addr + 1) << 8) |
+                         (Rom_ReadByte(rom, ptr_addr + 2) << 16);
 
     overlay_offsets[i] = overlay_len;
-    EncodeRoomLayer(&overlay_data, &overlay_len, &overlay_cap, variant, NULL, false);
+    ReadRoomObjectsFromROM(rom, room_addr, &overlay_data, &overlay_len, &overlay_cap);
   }
-
-  Yaml_Free(overlay_doc);
 
   AssetBuilder_AddAsset(builder, "kDungeonRoomOverlay", ASSET_TYPE_UINT8,
                        overlay_data, overlay_len);
   AssetBuilder_AddAsset(builder, "kDungeonRoomOverlayOffs", ASSET_TYPE_UINT16,
-                       (uint8_t*)overlay_offsets, 19 * sizeof(uint16_t));
+                       (uint8_t*)overlay_offsets, ROM_OVERLAY_ROOM_COUNT * sizeof(uint16_t));
 
-  printf("    kDungeonRoomOverlay: %zu bytes from 19 variants\n", overlay_len);
-  printf("    kDungeonRoomOverlayOffs: 19 entries (38 bytes)\n");
+  printf("    kDungeonRoomOverlay: %zu bytes from %d variants\n", overlay_len, ROM_OVERLAY_ROOM_COUNT);
+  printf("    kDungeonRoomOverlayOffs: %d entries (%zu bytes)\n",
+         ROM_OVERLAY_ROOM_COUNT, ROM_OVERLAY_ROOM_COUNT * sizeof(uint16_t));
 
   free(overlay_data);
   free(overlay_offsets);
 }
-// Extract all entrances and starting points from dungeon YAML files
-// Extract entrances and starting points - 33 assets total (indexed by YAML fields)
-void ExtractEntrancesAndStartingPoints(AssetBuilder *builder) {
-  printf("  Extracting entrances and starting points from 320 rooms...\n");
+// ROM addresses for entrance data (133 entries each)
+#define ROM_ENT_ROOM      0x82C813
+#define ROM_ENT_RELCOORD  0x82C91D  // 8 bytes each
+#define ROM_ENT_SCROLLX   0x82CD45
+#define ROM_ENT_SCROLLY   0x82CE4F
+#define ROM_ENT_PLAYERY   0x82CF59
+#define ROM_ENT_PLAYERX   0x82D063
+#define ROM_ENT_CAMERAY   0x82D16D
+#define ROM_ENT_CAMERAX   0x82D277
+#define ROM_ENT_BLOCKSET  0x82D381
+#define ROM_ENT_FLOOR     0x82D406
+#define ROM_ENT_PALACE    0x82D48B
+#define ROM_ENT_DOORWAY   0x82D510
+#define ROM_ENT_PLANELAD  0x82D595
+#define ROM_ENT_QUADFLAG  0x82D61A
+#define ROM_ENT_QUADSTART 0x82D69F
+#define ROM_ENT_EXITDOOR  0x82D724
+#define ROM_ENT_MUSIC     0x82D82E
+#define ROM_ENT_COUNT     133
 
-  typedef struct {
-    uint16_t room;
-    uint8_t rel_coords[8];
-    uint16_t scroll_x, scroll_y, player_x, player_y, camera_x, camera_y;
-    uint8_t blockset, doorway_orient, starting_bg, quad1, quad2, music;
-    int8_t floor, palace;
-    uint16_t door_settings;
-    uint8_t assoc_entrance;
-  } Entry;
+// ROM addresses for starting point data (7 entries each)
+#define ROM_SP_ROOM       0x82DB6E
+#define ROM_SP_RELCOORD   0x82DB7C
+#define ROM_SP_SCROLLX    0x82DBB4
+#define ROM_SP_SCROLLY    0x82DBC2
+#define ROM_SP_PLAYERY    0x82DBD0
+#define ROM_SP_PLAYERX    0x82DBDE
+#define ROM_SP_CAMERAY    0x82DBEC
+#define ROM_SP_CAMERAX    0x82DBFA
+#define ROM_SP_BLOCKSET   0x82DC08
+#define ROM_SP_FLOOR      0x82DC0F
+#define ROM_SP_PALACE     0x82DC16
+#define ROM_SP_PLANELAD   0x82DC1D
+#define ROM_SP_QUADFLAG   0x82DC24
+#define ROM_SP_QUADSTART  0x82DC2B
+#define ROM_SP_EXITDOOR   0x82DC32
+#define ROM_SP_ASSOCENT   0x82DC40
+#define ROM_SP_MUSIC      0x82DC4E
+#define ROM_SP_COUNT      7
 
-  // Pre-allocate exact sizes based on Python
-  Entry *entrances = calloc(133, sizeof(Entry));
-  Entry *starting_pts = calloc(7, sizeof(Entry));
+// Helper to read ROM array into buffer
+static void ReadRomArray16(Rom *rom, uint32_t addr, uint16_t *out, int count) {
+  for (int i = 0; i < count; i++) out[i] = Rom_ReadWord(rom, addr + i * 2);
+}
+static void ReadRomArray8(Rom *rom, uint32_t addr, uint8_t *out, int count) {
+  for (int i = 0; i < count; i++) out[i] = Rom_ReadByte(rom, addr + i);
+}
 
-  for (int room = 0; room < 320; room++) {
-    char path[256];
-    snprintf(path, sizeof(path), "assets/dungeon/dungeon-%d.yaml", room);
+void ExtractEntrancesAndStartingPoints(AssetBuilder *builder, Rom *rom) {
+  printf("  Extracting entrances and starting points from ROM...\n");
 
-    YamlDoc *doc = LoadAssetYaml(path);
-    if (!doc) continue;
+  // Allocate buffers for entrance data (133 entries)
+  uint16_t *e_rooms = malloc(ROM_ENT_COUNT * 2);
+  uint8_t *e_rel = malloc(ROM_ENT_COUNT * 8);
+  uint16_t *e_sx = malloc(ROM_ENT_COUNT * 2), *e_sy = malloc(ROM_ENT_COUNT * 2);
+  uint16_t *e_px = malloc(ROM_ENT_COUNT * 2), *e_py = malloc(ROM_ENT_COUNT * 2);
+  uint16_t *e_cx = malloc(ROM_ENT_COUNT * 2), *e_cy = malloc(ROM_ENT_COUNT * 2);
+  uint8_t *e_blk = malloc(ROM_ENT_COUNT), *e_dor = malloc(ROM_ENT_COUNT);
+  uint8_t *e_bg = malloc(ROM_ENT_COUNT), *e_q1 = malloc(ROM_ENT_COUNT);
+  uint8_t *e_q2 = malloc(ROM_ENT_COUNT), *e_mus = malloc(ROM_ENT_COUNT);
+  int8_t *e_flr = malloc(ROM_ENT_COUNT), *e_pal = malloc(ROM_ENT_COUNT);
+  uint16_t *e_door = malloc(ROM_ENT_COUNT * 2);
 
-    YamlNode *root = Yaml_GetRoot(doc);
-    if (!root) { Yaml_Free(doc); continue; }
+  // Read entrance data directly from ROM
+  ReadRomArray16(rom, ROM_ENT_ROOM, e_rooms, ROM_ENT_COUNT);
+  for (int i = 0; i < ROM_ENT_COUNT; i++)
+    for (int j = 0; j < 8; j++)
+      e_rel[i*8+j] = Rom_ReadByte(rom, ROM_ENT_RELCOORD + i*8 + j);
+  ReadRomArray16(rom, ROM_ENT_SCROLLX, e_sx, ROM_ENT_COUNT);
+  ReadRomArray16(rom, ROM_ENT_SCROLLY, e_sy, ROM_ENT_COUNT);
+  ReadRomArray16(rom, ROM_ENT_PLAYERX, e_px, ROM_ENT_COUNT);
+  ReadRomArray16(rom, ROM_ENT_PLAYERY, e_py, ROM_ENT_COUNT);
+  ReadRomArray16(rom, ROM_ENT_CAMERAX, e_cx, ROM_ENT_COUNT);
+  ReadRomArray16(rom, ROM_ENT_CAMERAY, e_cy, ROM_ENT_COUNT);
+  ReadRomArray8(rom, ROM_ENT_BLOCKSET, e_blk, ROM_ENT_COUNT);
+  ReadRomArray8(rom, ROM_ENT_FLOOR, (uint8_t*)e_flr, ROM_ENT_COUNT);
+  ReadRomArray8(rom, ROM_ENT_PALACE, (uint8_t*)e_pal, ROM_ENT_COUNT);
+  ReadRomArray8(rom, ROM_ENT_DOORWAY, e_dor, ROM_ENT_COUNT);
+  ReadRomArray8(rom, ROM_ENT_PLANELAD, e_bg, ROM_ENT_COUNT);
+  ReadRomArray8(rom, ROM_ENT_QUADFLAG, e_q1, ROM_ENT_COUNT);
+  ReadRomArray8(rom, ROM_ENT_QUADSTART, e_q2, ROM_ENT_COUNT);
+  ReadRomArray16(rom, ROM_ENT_EXITDOOR, e_door, ROM_ENT_COUNT);
+  ReadRomArray8(rom, ROM_ENT_MUSIC, e_mus, ROM_ENT_COUNT);
 
-    // Process Entrances - index by entrance_index field
-    YamlNode *ent_list = Yaml_GetMapping(root, "Entrances");
-    if (ent_list) {
-      int n = Yaml_GetSequenceLength(ent_list);
-      for (int i = 0; i < n; i++) {
-        YamlNode *e = Yaml_GetSequence(ent_list, i);
-        if (!e) continue;
+  // Add entrance assets
+  AssetBuilder_AddAsset(builder, "kEntranceData_rooms", ASSET_TYPE_UINT16, (uint8_t*)e_rooms, ROM_ENT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kEntranceData_relativeCoords", ASSET_TYPE_UINT8, e_rel, ROM_ENT_COUNT*8);
+  AssetBuilder_AddAsset(builder, "kEntranceData_scrollX", ASSET_TYPE_UINT16, (uint8_t*)e_sx, ROM_ENT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kEntranceData_scrollY", ASSET_TYPE_UINT16, (uint8_t*)e_sy, ROM_ENT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kEntranceData_playerX", ASSET_TYPE_UINT16, (uint8_t*)e_px, ROM_ENT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kEntranceData_playerY", ASSET_TYPE_UINT16, (uint8_t*)e_py, ROM_ENT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kEntranceData_cameraX", ASSET_TYPE_UINT16, (uint8_t*)e_cx, ROM_ENT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kEntranceData_cameraY", ASSET_TYPE_UINT16, (uint8_t*)e_cy, ROM_ENT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kEntranceData_blockset", ASSET_TYPE_UINT8, e_blk, ROM_ENT_COUNT);
+  AssetBuilder_AddAsset(builder, "kEntranceData_floor", ASSET_TYPE_INT8, (uint8_t*)e_flr, ROM_ENT_COUNT);
+  AssetBuilder_AddAsset(builder, "kEntranceData_palace", ASSET_TYPE_INT8, (uint8_t*)e_pal, ROM_ENT_COUNT);
+  AssetBuilder_AddAsset(builder, "kEntranceData_doorwayOrientation", ASSET_TYPE_UINT8, e_dor, ROM_ENT_COUNT);
+  AssetBuilder_AddAsset(builder, "kEntranceData_startingBg", ASSET_TYPE_UINT8, e_bg, ROM_ENT_COUNT);
+  AssetBuilder_AddAsset(builder, "kEntranceData_quadrant1", ASSET_TYPE_UINT8, e_q1, ROM_ENT_COUNT);
+  AssetBuilder_AddAsset(builder, "kEntranceData_quadrant2", ASSET_TYPE_UINT8, e_q2, ROM_ENT_COUNT);
+  AssetBuilder_AddAsset(builder, "kEntranceData_doorSettings", ASSET_TYPE_UINT16, (uint8_t*)e_door, ROM_ENT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kEntranceData_musicTrack", ASSET_TYPE_UINT8, e_mus, ROM_ENT_COUNT);
 
-        int idx = Yaml_GetInt(e, "entrance_index", -1);
-        if (idx < 0 || idx >= 133) continue;
-
-        Entry *ent = &entrances[idx];
-        ent->room = room;
-
-        YamlNode *scroll = Yaml_GetMapping(e, "scroll_xy");
-        YamlNode *player = Yaml_GetMapping(e, "player_xy");
-        YamlNode *camera = Yaml_GetMapping(e, "camera_xy");
-        YamlNode *quads = Yaml_GetMapping(e, "quadrants");
-        YamlNode *exit = Yaml_GetMapping(e, "house_exit_door");
-
-        int base_x = ((room & 0xf) << 9), base_y = ((room & 0x1f0) << 5);
-
-        YamlNode *sx = scroll ? Yaml_GetSequence(scroll, 0) : NULL;
-        YamlNode *sy = scroll ? Yaml_GetSequence(scroll, 1) : NULL;
-        YamlNode *px = player ? Yaml_GetSequence(player, 0) : NULL;
-        YamlNode *py = player ? Yaml_GetSequence(player, 1) : NULL;
-        YamlNode *cx = camera ? Yaml_GetSequence(camera, 0) : NULL;
-        YamlNode *cy = camera ? Yaml_GetSequence(camera, 1) : NULL;
-
-        ent->scroll_x = (sx ? Yaml_AsInt(sx) : 0) + base_x;
-        ent->scroll_y = (sy ? Yaml_AsInt(sy) : 0) + base_y;
-        ent->player_x = (px ? Yaml_AsInt(px) : 0) + base_x;
-        ent->player_y = (py ? Yaml_AsInt(py) : 0) + base_y;
-        ent->camera_x = cx ? Yaml_AsInt(cx) : 0;
-        ent->camera_y = cy ? Yaml_AsInt(cy) : 0;
-
-        ent->blockset = Yaml_GetInt(e, "blockset", 0);
-        ent->floor = Yaml_GetInt(e, "floor", 0);
-
-        const char *palace = Yaml_GetString(e, "palace", "None");
-        int pidx = FindPalaceIndex(palace);
-        ent->palace = (pidx == 0) ? -1 : (pidx - 1) * 2;
-
-        ent->doorway_orient = Yaml_GetInt(e, "doorway_orientation", 0);
-        ent->starting_bg = Yaml_GetInt(e, "plane", 0) + Yaml_GetInt(e, "ladder_level", 0) * 16;
-
-        YamlNode *q0 = quads ? Yaml_GetSequence(quads, 0) : NULL;
-        YamlNode *q1 = quads ? Yaml_GetSequence(quads, 1) : NULL;
-        YamlNode *q2 = quads ? Yaml_GetSequence(quads, 2) : NULL;
-        const char *q0s = q0 ? Yaml_AsString(q0) : "single_x";
-        const char *q1s = q1 ? Yaml_AsString(q1) : "single_y";
-        const char *q2s = q2 ? Yaml_AsString(q2) : "upper_left";
-
-        ent->quad1 = (strcmp(q0s, "double_x") == 0 ? 1 : 0) * 0x20 + (strcmp(q1s, "double_y") == 0 ? 1 : 0) * 0x02;
-        ent->quad2 = strcmp(q2s, "lower_left") == 0 ? 2 : strcmp(q2s, "upper_right") == 0 ? 16 : strcmp(q2s, "lower_right") == 0 ? 18 : 0;
-
-        YamlNode *et = exit ? Yaml_GetSequence(exit, 0) : NULL;
-        const char *etype = et ? Yaml_AsString(et) : "none";
-        if (strcmp(etype, "none_0xffff") == 0) ent->door_settings = 0xffff;
-        else if (strcmp(etype, "none") == 0) ent->door_settings = 0;
-        else {
-          YamlNode *ep = exit ? Yaml_GetSequence(exit, 1) : NULL;
-          YamlNode *ed = exit ? Yaml_GetSequence(exit, 2) : NULL;
-          uint16_t tval = strcmp(etype, "bombable") == 0 ? 1 : 0;
-          ent->door_settings = (tval << 15) | ((ep ? Yaml_AsInt(ep) : 0) << 1) | ((ed ? Yaml_AsInt(ed) : 0) << 7);
-        }
-
-        ent->music = FindMusicIndex(Yaml_GetString(e, "music", "None"));
-
-        // Relative coords
-        int pxi = px ? Yaml_AsInt(px) : 0, pyi = py ? Yaml_AsInt(py) : 0;
-        int bx = (room & 0xf) * 2, by = (room >> 4) * 2;
-        int ym = (pyi & 0x100) >> 8, xm = (pxi & 0x100) >> 8;
-        int qqq = (room >= 242 && strcmp(q0s, "single_x") == 0) ? xm : 0;
-        int coords[8] = {by+ym, by, by+ym, by+1, bx+xm, bx+qqq, bx+xm, bx+qqq+1};
-
-        YamlNode *repair = Yaml_GetMapping(e, "repair_scroll_bounds");
-        if (repair) {
-          int rlen = Yaml_GetSequenceLength(repair);
-          for (int ri = 0; ri < 8 && ri < rlen; ri++) {
-            YamlNode *rn = Yaml_GetSequence(repair, ri);
-            if (rn) coords[ri] += Yaml_AsInt(rn);
-          }
-        }
-        for (int ci = 0; ci < 8; ci++) ent->rel_coords[ci] = coords[ci];
-      }
-    }
-
-    // Process StartingPoints - index by starting_point_index field
-    YamlNode *sp_list = Yaml_GetMapping(root, "StartingPoints");
-    if (sp_list) {
-      int n = Yaml_GetSequenceLength(sp_list);
-      for (int i = 0; i < n; i++) {
-        YamlNode *s = Yaml_GetSequence(sp_list, i);
-        if (!s) continue;
-
-        int idx = Yaml_GetInt(s, "starting_point_index", -1);
-        if (idx < 0 || idx >= 7) continue;
-
-        Entry *ent = &starting_pts[idx];
-        ent->room = room;
-
-        YamlNode *scroll = Yaml_GetMapping(s, "scroll_xy");
-        YamlNode *player = Yaml_GetMapping(s, "player_xy");
-        YamlNode *camera = Yaml_GetMapping(s, "camera_xy");
-        YamlNode *quads = Yaml_GetMapping(s, "quadrants");
-        YamlNode *exit = Yaml_GetMapping(s, "house_exit_door");
-
-        int base_x = ((room & 0xf) << 9), base_y = ((room & 0x1f0) << 5);
-
-        YamlNode *sx = scroll ? Yaml_GetSequence(scroll, 0) : NULL;
-        YamlNode *sy = scroll ? Yaml_GetSequence(scroll, 1) : NULL;
-        YamlNode *px = player ? Yaml_GetSequence(player, 0) : NULL;
-        YamlNode *py = player ? Yaml_GetSequence(player, 1) : NULL;
-        YamlNode *cx = camera ? Yaml_GetSequence(camera, 0) : NULL;
-        YamlNode *cy = camera ? Yaml_GetSequence(camera, 1) : NULL;
-
-        ent->scroll_x = (sx ? Yaml_AsInt(sx) : 0) + base_x;
-        ent->scroll_y = (sy ? Yaml_AsInt(sy) : 0) + base_y;
-        ent->player_x = (px ? Yaml_AsInt(px) : 0) + base_x;
-        ent->player_y = (py ? Yaml_AsInt(py) : 0) + base_y;
-        ent->camera_x = cx ? Yaml_AsInt(cx) : 0;
-        ent->camera_y = cy ? Yaml_AsInt(cy) : 0;
-
-        ent->blockset = Yaml_GetInt(s, "blockset", 0);
-        ent->floor = Yaml_GetInt(s, "floor", 0);
-
-        const char *palace = Yaml_GetString(s, "palace", "None");
-        int pidx = FindPalaceIndex(palace);
-        ent->palace = (pidx == 0) ? -1 : (pidx - 1) * 2;
-
-        ent->doorway_orient = Yaml_GetInt(s, "doorway_orientation", 0);
-        ent->starting_bg = Yaml_GetInt(s, "plane", 0) + Yaml_GetInt(s, "ladder_level", 0) * 16;
-
-        YamlNode *q0 = quads ? Yaml_GetSequence(quads, 0) : NULL;
-        YamlNode *q1 = quads ? Yaml_GetSequence(quads, 1) : NULL;
-        YamlNode *q2 = quads ? Yaml_GetSequence(quads, 2) : NULL;
-        const char *q0s = q0 ? Yaml_AsString(q0) : "single_x";
-        const char *q1s = q1 ? Yaml_AsString(q1) : "single_y";
-        const char *q2s = q2 ? Yaml_AsString(q2) : "upper_left";
-
-        ent->quad1 = (strcmp(q0s, "double_x") == 0 ? 1 : 0) * 0x20 + (strcmp(q1s, "double_y") == 0 ? 1 : 0) * 0x02;
-        ent->quad2 = strcmp(q2s, "lower_left") == 0 ? 2 : strcmp(q2s, "upper_right") == 0 ? 16 : strcmp(q2s, "lower_right") == 0 ? 18 : 0;
-
-        YamlNode *et = exit ? Yaml_GetSequence(exit, 0) : NULL;
-        const char *etype = et ? Yaml_AsString(et) : "none";
-        if (strcmp(etype, "none_0xffff") == 0) ent->door_settings = 0xffff;
-        else if (strcmp(etype, "none") == 0) ent->door_settings = 0;
-        else {
-          YamlNode *ep = exit ? Yaml_GetSequence(exit, 1) : NULL;
-          YamlNode *ed = exit ? Yaml_GetSequence(exit, 2) : NULL;
-          uint16_t tval = strcmp(etype, "bombable") == 0 ? 1 : 0;
-          ent->door_settings = (tval << 15) | ((ep ? Yaml_AsInt(ep) : 0) << 1) | ((ed ? Yaml_AsInt(ed) : 0) << 7);
-        }
-
-        ent->music = FindMusicIndex(Yaml_GetString(s, "music", "None"));
-        ent->assoc_entrance = Yaml_GetInt(s, "associated_entrance_index", 0);
-
-        // Relative coords
-        int pxi = px ? Yaml_AsInt(px) : 0, pyi = py ? Yaml_AsInt(py) : 0;
-        int bx = (room & 0xf) * 2, by = (room >> 4) * 2;
-        int ym = (pyi & 0x100) >> 8, xm = (pxi & 0x100) >> 8;
-        int qqq = (room >= 242 && strcmp(q0s, "single_x") == 0) ? xm : 0;
-        int coords[8] = {by+ym, by, by+ym, by+1, bx+xm, bx+qqq, bx+xm, bx+qqq+1};
-
-        YamlNode *repair = Yaml_GetMapping(s, "repair_scroll_bounds");
-        if (repair) {
-          int rlen = Yaml_GetSequenceLength(repair);
-          for (int ri = 0; ri < 8 && ri < rlen; ri++) {
-            YamlNode *rn = Yaml_GetSequence(repair, ri);
-            if (rn) coords[ri] += Yaml_AsInt(rn);
-          }
-        }
-        for (int ci = 0; ci < 8; ci++) ent->rel_coords[ci] = coords[ci];
-      }
-    }
-
-    Yaml_Free(doc);
-  }
-
-  printf("    Extracted 133 entrances, 7 starting points (indexed)\n");
-
-  // Build entrance assets - 16 assets, 133 entries each
-  uint16_t *e_rooms = malloc(133 * 2);
-  uint8_t *e_rel = malloc(133 * 8);
-  uint16_t *e_sx = malloc(133 * 2), *e_sy = malloc(133 * 2);
-  uint16_t *e_px = malloc(133 * 2), *e_py = malloc(133 * 2);
-  uint16_t *e_cx = malloc(133 * 2), *e_cy = malloc(133 * 2);
-  uint8_t *e_blk = malloc(133), *e_dor = malloc(133), *e_bg = malloc(133);
-  uint8_t *e_q1 = malloc(133), *e_q2 = malloc(133), *e_mus = malloc(133);
-  int8_t *e_flr = malloc(133), *e_pal = malloc(133);
-  uint16_t *e_door = malloc(133 * 2);
-
-  for (int i = 0; i < 133; i++) {
-    e_rooms[i] = entrances[i].room;
-    memcpy(&e_rel[i*8], entrances[i].rel_coords, 8);
-    e_sx[i] = entrances[i].scroll_x; e_sy[i] = entrances[i].scroll_y;
-    e_px[i] = entrances[i].player_x; e_py[i] = entrances[i].player_y;
-    e_cx[i] = entrances[i].camera_x; e_cy[i] = entrances[i].camera_y;
-    e_blk[i] = entrances[i].blockset; e_flr[i] = entrances[i].floor;
-    e_pal[i] = entrances[i].palace; e_dor[i] = entrances[i].doorway_orient;
-    e_bg[i] = entrances[i].starting_bg; e_q1[i] = entrances[i].quad1;
-    e_q2[i] = entrances[i].quad2; e_door[i] = entrances[i].door_settings;
-    e_mus[i] = entrances[i].music;
-  }
-  
-  AssetBuilder_AddAsset(builder, "kEntranceData_rooms", ASSET_TYPE_UINT16, (uint8_t*)e_rooms, 133*2);
-  AssetBuilder_AddAsset(builder, "kEntranceData_relativeCoords", ASSET_TYPE_UINT8, e_rel, 133*8);
-  AssetBuilder_AddAsset(builder, "kEntranceData_scrollX", ASSET_TYPE_UINT16, (uint8_t*)e_sx, 133*2);
-  AssetBuilder_AddAsset(builder, "kEntranceData_scrollY", ASSET_TYPE_UINT16, (uint8_t*)e_sy, 133*2);
-  AssetBuilder_AddAsset(builder, "kEntranceData_playerX", ASSET_TYPE_UINT16, (uint8_t*)e_px, 133*2);
-  AssetBuilder_AddAsset(builder, "kEntranceData_playerY", ASSET_TYPE_UINT16, (uint8_t*)e_py, 133*2);
-  AssetBuilder_AddAsset(builder, "kEntranceData_cameraX", ASSET_TYPE_UINT16, (uint8_t*)e_cx, 133*2);
-  AssetBuilder_AddAsset(builder, "kEntranceData_cameraY", ASSET_TYPE_UINT16, (uint8_t*)e_cy, 133*2);
-  AssetBuilder_AddAsset(builder, "kEntranceData_blockset", ASSET_TYPE_UINT8, e_blk, 133);
-  AssetBuilder_AddAsset(builder, "kEntranceData_floor", ASSET_TYPE_INT8, (uint8_t*)e_flr, 133);
-  AssetBuilder_AddAsset(builder, "kEntranceData_palace", ASSET_TYPE_INT8, (uint8_t*)e_pal, 133);
-  AssetBuilder_AddAsset(builder, "kEntranceData_doorwayOrientation", ASSET_TYPE_UINT8, e_dor, 133);
-  AssetBuilder_AddAsset(builder, "kEntranceData_startingBg", ASSET_TYPE_UINT8, e_bg, 133);
-  AssetBuilder_AddAsset(builder, "kEntranceData_quadrant1", ASSET_TYPE_UINT8, e_q1, 133);
-  AssetBuilder_AddAsset(builder, "kEntranceData_quadrant2", ASSET_TYPE_UINT8, e_q2, 133);
-  AssetBuilder_AddAsset(builder, "kEntranceData_doorSettings", ASSET_TYPE_UINT16, (uint8_t*)e_door, 133*2);
-  AssetBuilder_AddAsset(builder, "kEntranceData_musicTrack", ASSET_TYPE_UINT8, e_mus, 133);
-  
   free(e_rooms); free(e_rel); free(e_sx); free(e_sy); free(e_px); free(e_py);
   free(e_cx); free(e_cy); free(e_blk); free(e_flr); free(e_pal); free(e_dor);
   free(e_bg); free(e_q1); free(e_q2); free(e_door); free(e_mus);
 
-  printf("    Added 16 entrance assets (133 entries each)\n");
+  printf("    Added 16 entrance assets (%d entries each)\n", ROM_ENT_COUNT);
 
-  // Build starting point assets - 17 assets, 7 entries each
-  uint16_t *s_rooms = malloc(7 * 2);
-  uint8_t *s_rel = malloc(7 * 8);
-  uint16_t *s_sx = malloc(7 * 2), *s_sy = malloc(7 * 2);
-  uint16_t *s_px = malloc(7 * 2), *s_py = malloc(7 * 2);
-  uint16_t *s_cx = malloc(7 * 2), *s_cy = malloc(7 * 2);
-  uint8_t *s_blk = malloc(7), *s_dor = malloc(7), *s_bg = malloc(7);
-  uint8_t *s_q1 = malloc(7), *s_q2 = malloc(7), *s_mus = malloc(7);
-  uint8_t *s_ent = malloc(7);
-  int8_t *s_flr = malloc(7), *s_pal = malloc(7);
-  uint16_t *s_door = malloc(7 * 2);
+  // Allocate buffers for starting point data (7 entries)
+  uint16_t *s_rooms = malloc(ROM_SP_COUNT * 2);
+  uint8_t *s_rel = malloc(ROM_SP_COUNT * 8);
+  uint16_t *s_sx = malloc(ROM_SP_COUNT * 2), *s_sy = malloc(ROM_SP_COUNT * 2);
+  uint16_t *s_px = malloc(ROM_SP_COUNT * 2), *s_py = malloc(ROM_SP_COUNT * 2);
+  uint16_t *s_cx = malloc(ROM_SP_COUNT * 2), *s_cy = malloc(ROM_SP_COUNT * 2);
+  uint8_t *s_blk = malloc(ROM_SP_COUNT), *s_dor = malloc(ROM_SP_COUNT);
+  uint8_t *s_bg = malloc(ROM_SP_COUNT), *s_q1 = malloc(ROM_SP_COUNT);
+  uint8_t *s_q2 = malloc(ROM_SP_COUNT), *s_mus = malloc(ROM_SP_COUNT);
+  uint8_t *s_ent = malloc(ROM_SP_COUNT);
+  int8_t *s_flr = malloc(ROM_SP_COUNT), *s_pal = malloc(ROM_SP_COUNT);
+  uint16_t *s_door = malloc(ROM_SP_COUNT * 2);
 
-  for (int i = 0; i < 7; i++) {
-    s_rooms[i] = starting_pts[i].room;
-    memcpy(&s_rel[i*8], starting_pts[i].rel_coords, 8);
-    s_sx[i] = starting_pts[i].scroll_x; s_sy[i] = starting_pts[i].scroll_y;
-    s_px[i] = starting_pts[i].player_x; s_py[i] = starting_pts[i].player_y;
-    s_cx[i] = starting_pts[i].camera_x; s_cy[i] = starting_pts[i].camera_y;
-    s_blk[i] = starting_pts[i].blockset; s_flr[i] = starting_pts[i].floor;
-    s_pal[i] = starting_pts[i].palace; s_dor[i] = starting_pts[i].doorway_orient;
-    s_bg[i] = starting_pts[i].starting_bg; s_q1[i] = starting_pts[i].quad1;
-    s_q2[i] = starting_pts[i].quad2; s_door[i] = starting_pts[i].door_settings;
-    s_ent[i] = starting_pts[i].assoc_entrance; s_mus[i] = starting_pts[i].music;
-  }
-  
-  AssetBuilder_AddAsset(builder, "kStartingPoint_rooms", ASSET_TYPE_UINT16, (uint8_t*)s_rooms, 7*2);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_relativeCoords", ASSET_TYPE_UINT8, s_rel, 7*8);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_scrollX", ASSET_TYPE_UINT16, (uint8_t*)s_sx, 7*2);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_scrollY", ASSET_TYPE_UINT16, (uint8_t*)s_sy, 7*2);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_playerX", ASSET_TYPE_UINT16, (uint8_t*)s_px, 7*2);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_playerY", ASSET_TYPE_UINT16, (uint8_t*)s_py, 7*2);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_cameraX", ASSET_TYPE_UINT16, (uint8_t*)s_cx, 7*2);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_cameraY", ASSET_TYPE_UINT16, (uint8_t*)s_cy, 7*2);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_blockset", ASSET_TYPE_UINT8, s_blk, 7);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_floor", ASSET_TYPE_INT8, (uint8_t*)s_flr, 7);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_palace", ASSET_TYPE_INT8, (uint8_t*)s_pal, 7);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_doorwayOrientation", ASSET_TYPE_UINT8, s_dor, 7);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_startingBg", ASSET_TYPE_UINT8, s_bg, 7);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_quadrant1", ASSET_TYPE_UINT8, s_q1, 7);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_quadrant2", ASSET_TYPE_UINT8, s_q2, 7);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_doorSettings", ASSET_TYPE_UINT16, (uint8_t*)s_door, 7*2);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_entrance", ASSET_TYPE_UINT8, s_ent, 7);
-  AssetBuilder_AddAsset(builder, "kStartingPoint_musicTrack", ASSET_TYPE_UINT8, s_mus, 7);
-  
+  // Read starting point data directly from ROM
+  ReadRomArray16(rom, ROM_SP_ROOM, s_rooms, ROM_SP_COUNT);
+  for (int i = 0; i < ROM_SP_COUNT; i++)
+    for (int j = 0; j < 8; j++)
+      s_rel[i*8+j] = Rom_ReadByte(rom, ROM_SP_RELCOORD + i*8 + j);
+  ReadRomArray16(rom, ROM_SP_SCROLLX, s_sx, ROM_SP_COUNT);
+  ReadRomArray16(rom, ROM_SP_SCROLLY, s_sy, ROM_SP_COUNT);
+  ReadRomArray16(rom, ROM_SP_PLAYERX, s_px, ROM_SP_COUNT);
+  ReadRomArray16(rom, ROM_SP_PLAYERY, s_py, ROM_SP_COUNT);
+  ReadRomArray16(rom, ROM_SP_CAMERAX, s_cx, ROM_SP_COUNT);
+  ReadRomArray16(rom, ROM_SP_CAMERAY, s_cy, ROM_SP_COUNT);
+  ReadRomArray8(rom, ROM_SP_BLOCKSET, s_blk, ROM_SP_COUNT);
+  ReadRomArray8(rom, ROM_SP_FLOOR, (uint8_t*)s_flr, ROM_SP_COUNT);
+  ReadRomArray8(rom, ROM_SP_PALACE, (uint8_t*)s_pal, ROM_SP_COUNT);
+  memset(s_dor, 0, ROM_SP_COUNT);  // Starting points don't have doorway orientation
+  ReadRomArray8(rom, ROM_SP_PLANELAD, s_bg, ROM_SP_COUNT);
+  ReadRomArray8(rom, ROM_SP_QUADFLAG, s_q1, ROM_SP_COUNT);
+  ReadRomArray8(rom, ROM_SP_QUADSTART, s_q2, ROM_SP_COUNT);
+  ReadRomArray16(rom, ROM_SP_EXITDOOR, s_door, ROM_SP_COUNT);
+  ReadRomArray16(rom, ROM_SP_ASSOCENT, (uint16_t*)s_ent, ROM_SP_COUNT);  // Actually word values
+  ReadRomArray8(rom, ROM_SP_MUSIC, s_mus, ROM_SP_COUNT);
+
+  // Add starting point assets
+  AssetBuilder_AddAsset(builder, "kStartingPoint_rooms", ASSET_TYPE_UINT16, (uint8_t*)s_rooms, ROM_SP_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_relativeCoords", ASSET_TYPE_UINT8, s_rel, ROM_SP_COUNT*8);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_scrollX", ASSET_TYPE_UINT16, (uint8_t*)s_sx, ROM_SP_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_scrollY", ASSET_TYPE_UINT16, (uint8_t*)s_sy, ROM_SP_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_playerX", ASSET_TYPE_UINT16, (uint8_t*)s_px, ROM_SP_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_playerY", ASSET_TYPE_UINT16, (uint8_t*)s_py, ROM_SP_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_cameraX", ASSET_TYPE_UINT16, (uint8_t*)s_cx, ROM_SP_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_cameraY", ASSET_TYPE_UINT16, (uint8_t*)s_cy, ROM_SP_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_blockset", ASSET_TYPE_UINT8, s_blk, ROM_SP_COUNT);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_floor", ASSET_TYPE_INT8, (uint8_t*)s_flr, ROM_SP_COUNT);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_palace", ASSET_TYPE_INT8, (uint8_t*)s_pal, ROM_SP_COUNT);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_doorwayOrientation", ASSET_TYPE_UINT8, s_dor, ROM_SP_COUNT);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_startingBg", ASSET_TYPE_UINT8, s_bg, ROM_SP_COUNT);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_quadrant1", ASSET_TYPE_UINT8, s_q1, ROM_SP_COUNT);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_quadrant2", ASSET_TYPE_UINT8, s_q2, ROM_SP_COUNT);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_doorSettings", ASSET_TYPE_UINT16, (uint8_t*)s_door, ROM_SP_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_entrance", ASSET_TYPE_UINT8, s_ent, ROM_SP_COUNT);
+  AssetBuilder_AddAsset(builder, "kStartingPoint_musicTrack", ASSET_TYPE_UINT8, s_mus, ROM_SP_COUNT);
+
   free(s_rooms); free(s_rel); free(s_sx); free(s_sy); free(s_px); free(s_py);
   free(s_cx); free(s_cy); free(s_blk); free(s_flr); free(s_pal); free(s_dor);
   free(s_bg); free(s_q1); free(s_q2); free(s_door); free(s_ent); free(s_mus);
 
-  printf("    Added 17 starting point assets (7 entries each)\n");
-
-  free(entrances);
-  free(starting_pts);
+  printf("    Added 17 starting point assets (%d entries each)\n", ROM_SP_COUNT);
 }
 
 // ============================================================================
@@ -3187,108 +2997,6 @@ static bool Overworld_IsAreaHead(Rom *rom, int i) {
   if (i >= 128) return true;
   uint8_t parent = Rom_ReadByte(rom, 0x82A5EC + (i & 63));
   return parent == (i & 63);
-}
-
-// Pack music and ambient sound into single byte
-static uint8_t Overworld_GetMusicByte(YamlNode *h, const char *tag) {
-  YamlNode *music_node = Yaml_GetMapping(h, "music");
-  YamlNode *ambient_node = Yaml_GetMapping(h, "ambient");
-  if (!music_node || !ambient_node) return 0;
-
-  const char *music = Yaml_GetString(music_node, tag, "None");
-  const char *ambient = Yaml_GetString(ambient_node, tag, "None");
-
-  return FindMusicIndex(music) | (FindAmbientSoundIndex(ambient) << 4);
-}
-
-// Write with mirroring for big maps (uint8)
-static void Overworld_Awrite(uint8_t *arr, uint8_t *map_is_small, int area, int key, uint8_t value) {
-  arr[key] = value;
-  if (area < 128 && map_is_small[area] == 0) {
-    arr[key + 1] = value;
-    arr[key + 8] = value;
-    arr[key + 9] = value;
-  }
-}
-
-// Write with mirroring for big maps (uint16)
-static void Overworld_Awrite16(uint16_t *arr, uint8_t *map_is_small, int area, int key, uint16_t value) {
-  arr[key] = value;
-  if (area < 128 && map_is_small[area] == 0) {
-    arr[key + 1] = value;
-    arr[key + 8] = value;
-    arr[key + 9] = value;
-  }
-}
-
-// Helper for sprite stage processing (Phase 7)
-static void Overworld_ProcessSpriteStage(Rom *rom, uint8_t *map_is_small,
-                                         uint16_t *sprite_offs, uint8_t *sprite_gfx, uint8_t *sprite_pal,
-                                         uint8_t *sprite_data, int *sprite_len,
-                                         int start, int end, const char *stage_name,
-                                         int *stage_idxs, int num_stages, int info_stage) {
-  for (int i = start; i < end; i++) {
-    if (!Overworld_IsAreaHead(rom, i)) continue;
-
-    char path[256];
-    snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
-    YamlDoc *doc = LoadAssetYaml(path);
-    if (!doc) continue;
-
-    YamlNode *root = Yaml_GetRoot(doc);
-    if (!root) { Yaml_Free(doc); continue; }
-
-    YamlNode *stage = Yaml_GetMapping(root, stage_name);
-    if (!stage) { Yaml_Free(doc); continue; }
-
-    // Info (gfx + palette)
-    YamlNode *info = Yaml_GetMapping(stage, "info");
-    if (info && i < 128) {
-      int gfx = Yaml_GetInt(info, "gfx", 0);
-      int pal = Yaml_GetInt(info, "palette", 0);
-      int idx = (i & 63) + info_stage * 64;
-      sprite_gfx[idx] = gfx;
-      sprite_pal[idx] = pal;
-
-      if (map_is_small[i] == 0) {
-        sprite_gfx[idx + 1] = gfx;
-        sprite_gfx[idx + 8] = gfx;
-        sprite_gfx[idx + 9] = gfx;
-        sprite_pal[idx + 1] = pal;
-        sprite_pal[idx + 8] = pal;
-        sprite_pal[idx + 9] = pal;
-      }
-    }
-
-    // Sprites list
-    YamlNode *sprites = Yaml_GetMapping(stage, "sprites");
-    if (sprites && Yaml_GetSequenceLength(sprites) > 0) {
-      int n = Yaml_GetSequenceLength(sprites);
-
-      // Set offset for all stages this sprite list applies to
-      for (int si = 0; si < num_stages; si++) {
-        sprite_offs[stage_idxs[si] * 144 + i] = *sprite_len;
-      }
-
-      for (int si = 0; si < n; si++) {
-        YamlNode *s = Yaml_GetSequence(sprites, si);
-        if (!s || Yaml_GetSequenceLength(s) < 3) continue;
-
-        int x = Yaml_AsInt(Yaml_GetSequence(s, 0));
-        int y = Yaml_AsInt(Yaml_GetSequence(s, 1));
-        const char *sprite_name = Yaml_AsString(Yaml_GetSequence(s, 2));
-        int sprite_id = FindSpriteIndex(sprite_name);
-
-        sprite_data[(*sprite_len)++] = y;
-        sprite_data[(*sprite_len)++] = x;
-        sprite_data[(*sprite_len)++] = sprite_id;
-      }
-
-      sprite_data[(*sprite_len)++] = 0xff;  // Terminator
-    }
-
-    Yaml_Free(doc);
-  }
 }
 
 // ============================================================================
@@ -3381,81 +3089,118 @@ void ExtractOverworldCompressed(Rom *rom, AssetBuilder *builder) {
 // Overworld YAML Extraction
 // ============================================================================
 
-// Extract overworld data from 160 YAML files (~48 assets)
+// ============================================================================
+// Overworld ROM Addresses
+// ============================================================================
+#define ROM_OW_MAP_IS_SMALL    0x82F88D   // 192 bytes
+#define ROM_OW_GFX             0x80FC9C   // 128 bytes (areas 0-127)
+#define ROM_OW_PALETTE         0x80FD1C   // 136 bytes (areas 0-135)
+#define ROM_OW_SIGN_TEXT       0x87F51D   // 128 words (areas 0-127)
+#define ROM_OW_MUSIC           0x82C303   // 256 bytes (areas 0-63 × 4 phases)
+#define ROM_OW_MUSIC2          0x82C403   // 96 bytes (areas 64-159)
+
+// Bird travel (17 entries)
+#define ROM_BIRD_SCREEN        0x82EAE5
+#define ROM_BIRD_LOAD          0x82EB07
+#define ROM_BIRD_SCROLL_Y      0x82EB29
+#define ROM_BIRD_SCROLL_X      0x82EB4B
+#define ROM_BIRD_POS_Y         0x82EB6D
+#define ROM_BIRD_POS_X         0x82EB8F
+#define ROM_BIRD_CAMERA_Y      0x82EBB1
+#define ROM_BIRD_CAMERA_X      0x82EBD3
+#define ROM_BIRD_UNK1          0x82EBF5
+#define ROM_BIRD_UNK3          0x82EC17
+#define ROM_WHIRLPOOL_AREAS    0x82ECF8   // 8 entries (for indices 9-16)
+
+// Overworld entrances (129 entries)
+#define ROM_OW_ENT_AREA        0x9BB96F
+#define ROM_OW_ENT_POS         0x9BBA71
+#define ROM_OW_ENT_ID          0x9BBB73
+#define ROM_OW_ENT_COUNT       129
+
+// Holes (19 entries)
+#define ROM_HOLE_POS           0x9BB800
+#define ROM_HOLE_AREA          0x9BB826
+#define ROM_HOLE_ENT_ID        0x9BB84C
+#define ROM_HOLE_COUNT         19
+
+// Exits (79 entries)
+#define ROM_EXIT_ROOM          0x82DD8A
+#define ROM_EXIT_SCREEN        0x82DE28   // byte
+#define ROM_EXIT_LOAD          0x82DE77
+#define ROM_EXIT_SCROLL_Y      0x82DF15
+#define ROM_EXIT_SCROLL_X      0x82DFB3
+#define ROM_EXIT_POS_Y         0x82E051
+#define ROM_EXIT_POS_X         0x82E0EF
+#define ROM_EXIT_CAMERA_Y      0x82E18D
+#define ROM_EXIT_CAMERA_X      0x82E22B
+#define ROM_EXIT_UNK1          0x82E2C9   // byte
+#define ROM_EXIT_UNK3          0x82E318   // byte
+#define ROM_EXIT_DOOR_NORM     0x82E367
+#define ROM_EXIT_DOOR_FANCY    0x82E405
+#define ROM_EXIT_COUNT         79
+
+// Special exits (16 entries, rooms 0x180-0x18F)
+#define ROM_SPECIAL_EXIT_DIR       0x82E801
+#define ROM_SPECIAL_EXIT_SPR_GFX   0x82E811
+#define ROM_SPECIAL_EXIT_AUX_GFX   0x82E821
+#define ROM_SPECIAL_EXIT_PAL_BG    0x82E831
+#define ROM_SPECIAL_EXIT_PAL_SPR   0x82E841
+#define ROM_SPECIAL_EXIT_TOP       0x82E6E1
+#define ROM_SPECIAL_EXIT_BOTTOM    0x82E701
+#define ROM_SPECIAL_EXIT_LEFT      0x82E721
+#define ROM_SPECIAL_EXIT_RIGHT     0x82E741
+#define ROM_SPECIAL_EXIT_LEFT_EDGE 0x82E7E1
+#define ROM_SPECIAL_EXIT_UNK4      0x82E761
+#define ROM_SPECIAL_EXIT_UNK5      0x82E7A1
+#define ROM_SPECIAL_EXIT_UNK6      0x82E781
+#define ROM_SPECIAL_EXIT_UNK7      0x82E7C1
+#define ROM_SPECIAL_EXIT_COUNT     16
+
+// Overworld items/secrets
+#define ROM_OW_ITEMS_PTRS      0x9BC2F9   // 128 words (pointer table)
+#define ROM_OW_ITEMS_BASE      0x9B0000
+
+// Overworld sprites
+#define ROM_OW_SPRITES_BASE0   0x89C881   // Beginning sprites (areas 0-63)
+#define ROM_OW_SPRITES_BASE1   0x89C901   // Zelda sprites (areas 0-63)
+#define ROM_OW_SPRITES_BASE2   0x89CA21   // Sword sprites (areas 0-63, also areas 64-127)
+#define ROM_OW_SPRITE_GFX      0x80FA41   // 256 bytes (64 areas × 4 stages)
+#define ROM_OW_SPRITE_PAL      0x80FB41   // 256 bytes
+
+// Extract overworld data from ROM (~48 assets)
 void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
-  printf("  Extracting overworld YAML data (160 areas)...\n");
-
-  // Allocate map_is_small FIRST - needed by multiple phases
-  uint8_t *map_is_small = calloc(192, 1);
+  printf("  Extracting overworld data from ROM (160 areas)...\n");
 
   // ======================================================================
-  // Phase 1: Header data (6 assets)
+  // Phase 1: Header data (6 assets) - Read directly from ROM
   // ======================================================================
 
-  uint8_t *aux_tile_theme = calloc(128, 1);
-  uint8_t *bg_palettes = calloc(136, 1);
-  uint16_t *sign_text = calloc(128, 2);
-  uint8_t *music_sets = calloc(256, 1);
-  uint8_t *music_sets2 = calloc(96, 1);
+  // map_is_small - read directly from ROM
+  uint8_t *map_is_small = malloc(192);
+  for (int i = 0; i < 192; i++) {
+    map_is_small[i] = Rom_ReadByte(rom, ROM_OW_MAP_IS_SMALL + i);
+  }
 
-  int area_count = 0;
-  for (int i = 0; i < 160; i++) {
-    if (!Overworld_IsAreaHead(rom, i)) continue;
+  // Read header arrays directly from ROM - they're already in the right format!
+  uint8_t *aux_tile_theme = malloc(128);
+  uint8_t *bg_palettes = malloc(136);
+  uint16_t *sign_text = malloc(128 * 2);
+  uint8_t *music_sets = malloc(256);
+  uint8_t *music_sets2 = malloc(96);
 
-    char path[256];
-    snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
-
-    YamlDoc *doc = LoadAssetYaml(path);
-    if (!doc) continue;
-
-    YamlNode *root = Yaml_GetRoot(doc);
-    if (!root) { Yaml_Free(doc); continue; }
-
-    YamlNode *header = Yaml_GetMapping(root, "Header");
-    if (!header) { Yaml_Free(doc); continue; }
-
-    area_count++;
-
-    const char *size = Yaml_GetString(header, "size", "small");
-    map_is_small[i] = (strcmp(size, "small") == 0) ? 1 : 0;
-
-    // Python checks: if i < len(array)
-    if (i < 128) {  // aux_tile_theme and sign_text are size 128
-      Overworld_Awrite(aux_tile_theme, map_is_small, i, i, Yaml_GetInt(header, "gfx", 0));
-      Overworld_Awrite16(sign_text, map_is_small, i, i, Yaml_GetInt(header, "sign_text", 0));
-    }
-    if (i < 136) {  // bg_palettes is size 136
-      Overworld_Awrite(bg_palettes, map_is_small, i, i, Yaml_GetInt(header, "palette", 0));
-    }
-
-    if (i < 64) {
-      uint8_t mb = Overworld_GetMusicByte(header, "beginning");
-      uint8_t mz = Overworld_GetMusicByte(header, "zelda");
-      uint8_t ms = Overworld_GetMusicByte(header, "sword");
-      uint8_t ma = Overworld_GetMusicByte(header, "agahnim");
-
-      music_sets[i] = mb; music_sets[i + 64] = mz;
-      music_sets[i + 128] = ms; music_sets[i + 192] = ma;
-
-      if (map_is_small[i] == 0) {
-        music_sets[i + 1] = mb; music_sets[i + 8] = mb; music_sets[i + 9] = mb;
-        music_sets[i + 65] = mz; music_sets[i + 72] = mz; music_sets[i + 73] = mz;
-        music_sets[i + 129] = ms; music_sets[i + 136] = ms; music_sets[i + 137] = ms;
-        music_sets[i + 193] = ma; music_sets[i + 200] = ma; music_sets[i + 201] = ma;
-      }
-    } else if (i >= 64 && i < 160) {
-      uint8_t ma = Overworld_GetMusicByte(header, "agahnim");
-      music_sets2[i - 64] = ma;
-      // Python: awrite checks 'if area < 128' before expanding for large areas
-      // So areas 128-159 never expand to adjacent indices
-      if (i < 128 && map_is_small[i] == 0) {
-        music_sets2[i - 63] = ma;
-        music_sets2[i - 56] = ma;
-        music_sets2[i - 55] = ma;
-      }
-    }
-
-    Yaml_Free(doc);
+  for (int i = 0; i < 128; i++) {
+    aux_tile_theme[i] = Rom_ReadByte(rom, ROM_OW_GFX + i);
+    sign_text[i] = Rom_ReadWord(rom, ROM_OW_SIGN_TEXT + i * 2);
+  }
+  for (int i = 0; i < 136; i++) {
+    bg_palettes[i] = Rom_ReadByte(rom, ROM_OW_PALETTE + i);
+  }
+  for (int i = 0; i < 256; i++) {
+    music_sets[i] = Rom_ReadByte(rom, ROM_OW_MUSIC + i);
+  }
+  for (int i = 0; i < 96; i++) {
+    music_sets2[i] = Rom_ReadByte(rom, ROM_OW_MUSIC2 + i);
   }
 
   AssetBuilder_AddAsset(builder, "kOverworldMapIsSmall", ASSET_TYPE_UINT8, map_is_small, 192);
@@ -3468,89 +3213,35 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
   free(aux_tile_theme); free(bg_palettes); free(sign_text);
   free(music_sets); free(music_sets2);
 
-  printf("    Phase 1: Added 6 header assets from %d areas\n", area_count);
+  printf("    Phase 1: Added 6 header assets from ROM\n");
 
   // ======================================================================
-  // Phase 2: Travel data (9 assets) - Bird travel + whirlpools
+  // Phase 2: Travel data (11 assets) - Read directly from ROM
   // ======================================================================
 
-  uint16_t *bird_screen = calloc(17, 2);
-  uint16_t *bird_load = calloc(17, 2);
-  uint16_t *bird_sx = calloc(17, 2), *bird_sy = calloc(17, 2);
-  uint16_t *bird_px = calloc(17, 2), *bird_py = calloc(17, 2);
-  uint16_t *bird_cx = calloc(17, 2), *bird_cy = calloc(17, 2);
-  int8_t *bird_unk1 = calloc(17, 1), *bird_unk3 = calloc(17, 1);
-  uint16_t *whirlpool_areas = calloc(8, 2);
+  uint16_t *bird_screen = malloc(17 * 2);
+  uint16_t *bird_load = malloc(17 * 2);
+  uint16_t *bird_sx = malloc(17 * 2), *bird_sy = malloc(17 * 2);
+  uint16_t *bird_px = malloc(17 * 2), *bird_py = malloc(17 * 2);
+  uint16_t *bird_cx = malloc(17 * 2), *bird_cy = malloc(17 * 2);
+  int8_t *bird_unk1 = malloc(17), *bird_unk3 = malloc(17);
+  uint16_t *whirlpool_areas = malloc(8 * 2);
 
-  int next_whirlpool_id = 0;
-
-  printf("    Processing travel data from areas...\n");
-  for (int i = 0; i < 160; i++) {
-    if (!Overworld_IsAreaHead(rom, i)) continue;
-
-    char path[256];
-    snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
-    YamlDoc *doc = LoadAssetYaml(path);
-    if (!doc) continue;
-
-    YamlNode *root = Yaml_GetRoot(doc);
-    if (!root) { Yaml_Free(doc); continue; }
-
-    YamlNode *travel = Yaml_GetMapping(root, "Travel");
-    if (travel) {
-      int n = Yaml_GetSequenceLength(travel);
-      for (int ti = 0; ti < n; ti++) {
-        YamlNode *t = Yaml_GetSequence(travel, ti);
-        if (!t) continue;
-
-        int j;
-        if (Yaml_HasKey(t, "bird_travel_id")) {
-          j = Yaml_GetInt(t, "bird_travel_id", 0);
-        } else {
-          // Whirlpool
-          whirlpool_areas[next_whirlpool_id] = Yaml_GetInt(t, "whirlpool_src_area", 0);
-          j = next_whirlpool_id + 9;
-          next_whirlpool_id++;
-        }
-
-        int base_x = (i & 7) << 9;
-        int base_y = (i & 56) << 6;
-
-        bird_screen[j] = i;
-
-        // get_loadoffs calculation
-        YamlNode *scroll = Yaml_GetMapping(t, "scroll_xy");
-        YamlNode *load = Yaml_GetMapping(t, "load_xy");
-        int sx = scroll ? Yaml_AsInt(Yaml_GetSequence(scroll, 0)) : 0;
-        int sy = scroll ? Yaml_AsInt(Yaml_GetSequence(scroll, 1)) : 0;
-        int lx = load ? Yaml_AsInt(Yaml_GetSequence(load, 0)) : 0;
-        int ly = load ? Yaml_AsInt(Yaml_GetSequence(load, 1)) : 0;
-        int x = (sx >> 4) + lx;
-        int y = (sy >> 4) + ly;
-        bird_load[j] = ((y & 0x3f) << 7) | ((x & 0x3f) << 1);
-
-        bird_sx[j] = sx + base_x;
-        bird_sy[j] = sy + base_y;
-
-        YamlNode *xy = Yaml_GetMapping(t, "xy");
-        int px = xy ? Yaml_AsInt(Yaml_GetSequence(xy, 0)) : 0;
-        int py = xy ? Yaml_AsInt(Yaml_GetSequence(xy, 1)) : 0;
-        bird_px[j] = px + base_x;
-        bird_py[j] = py + base_y;
-
-        YamlNode *camera = Yaml_GetMapping(t, "camera_xy");
-        int cx = camera ? Yaml_AsInt(Yaml_GetSequence(camera, 0)) : 0;
-        int cy = camera ? Yaml_AsInt(Yaml_GetSequence(camera, 1)) : 0;
-        bird_cx[j] = cx + base_x;
-        bird_cy[j] = cy + base_y;
-
-        YamlNode *unk = Yaml_GetMapping(t, "unk");
-        bird_unk1[j] = unk ? Yaml_AsInt(Yaml_GetSequence(unk, 0)) : 0;
-        bird_unk3[j] = unk ? Yaml_AsInt(Yaml_GetSequence(unk, 1)) : 0;
-      }
-    }
-
-    Yaml_Free(doc);
+  for (int i = 0; i < 17; i++) {
+    bird_screen[i] = Rom_ReadWord(rom, ROM_BIRD_SCREEN + i * 2);
+    bird_load[i] = Rom_ReadWord(rom, ROM_BIRD_LOAD + i * 2);
+    bird_sy[i] = Rom_ReadWord(rom, ROM_BIRD_SCROLL_Y + i * 2);
+    bird_sx[i] = Rom_ReadWord(rom, ROM_BIRD_SCROLL_X + i * 2);
+    bird_py[i] = Rom_ReadWord(rom, ROM_BIRD_POS_Y + i * 2);
+    bird_px[i] = Rom_ReadWord(rom, ROM_BIRD_POS_X + i * 2);
+    bird_cy[i] = Rom_ReadWord(rom, ROM_BIRD_CAMERA_Y + i * 2);
+    bird_cx[i] = Rom_ReadWord(rom, ROM_BIRD_CAMERA_X + i * 2);
+    // Note: unk1/unk3 are stored every other byte in ROM
+    bird_unk1[i] = (int8_t)Rom_ReadByte(rom, ROM_BIRD_UNK1 + i * 2);
+    bird_unk3[i] = (int8_t)Rom_ReadByte(rom, ROM_BIRD_UNK3 + i * 2);
+  }
+  for (int i = 0; i < 8; i++) {
+    whirlpool_areas[i] = Rom_ReadWord(rom, ROM_WHIRLPOOL_AREAS + i * 2);
   }
 
   AssetBuilder_AddAsset(builder, "kBirdTravel_ScreenIndex", ASSET_TYPE_UINT16, (uint8_t*)bird_screen, 17*2);
@@ -3569,295 +3260,139 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
   free(bird_px); free(bird_py); free(bird_cx); free(bird_cy);
   free(bird_unk1); free(bird_unk3); free(whirlpool_areas);
 
-  printf("    Phase 2: Added 9 travel assets (17 bird travel + 8 whirlpools)\n");
+  printf("    Phase 2: Added 11 travel assets from ROM\n");
 
   // ======================================================================
-  // Phase 3: Entrances (3 assets) - Overworld entrances indexed by 'index' field
+  // Phase 3: Entrances (3 assets) - Read directly from ROM
   // ======================================================================
 
-  uint16_t *ent_area = calloc(129, 2);
-  uint16_t *ent_pos = calloc(129, 2);
-  uint8_t *ent_id = calloc(129, 1);
+  uint16_t *ent_area = malloc(ROM_OW_ENT_COUNT * 2);
+  uint16_t *ent_pos = malloc(ROM_OW_ENT_COUNT * 2);
+  uint8_t *ent_id = malloc(ROM_OW_ENT_COUNT);
 
-  printf("    Processing entrances from areas...\n");
-  for (int i = 0; i < 160; i++) {
-    if (!Overworld_IsAreaHead(rom, i)) continue;
-
-    char path[256];
-    snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
-    YamlDoc *doc = LoadAssetYaml(path);
-    if (!doc) continue;
-
-    YamlNode *root = Yaml_GetRoot(doc);
-    if (!root) { Yaml_Free(doc); continue; }
-
-    YamlNode *entrances = Yaml_GetMapping(root, "Entrances");
-    if (entrances) {
-      int n = Yaml_GetSequenceLength(entrances);
-      for (int ei = 0; ei < n; ei++) {
-        YamlNode *e = Yaml_GetSequence(entrances, ei);
-        if (!e) continue;
-
-        int j = Yaml_GetInt(e, "index", -1);
-        if (j < 0 || j >= 129) continue;
-
-        ent_area[j] = i;
-        ent_id[j] = Yaml_GetInt(e, "entrance_id", 0);
-
-        int x = Yaml_GetInt(e, "x", 0);
-        int y = Yaml_GetInt(e, "y", 0);
-        ent_pos[j] = (x << 1) | (y << 7);
-      }
-    }
-
-    Yaml_Free(doc);
+  for (int i = 0; i < ROM_OW_ENT_COUNT; i++) {
+    ent_area[i] = Rom_ReadWord(rom, ROM_OW_ENT_AREA + i * 2);
+    ent_pos[i] = Rom_ReadWord(rom, ROM_OW_ENT_POS + i * 2);
+    ent_id[i] = Rom_ReadByte(rom, ROM_OW_ENT_ID + i);
   }
 
-  AssetBuilder_AddAsset(builder, "kOverworld_Entrance_Area", ASSET_TYPE_UINT16, (uint8_t*)ent_area, 129*2);
-  AssetBuilder_AddAsset(builder, "kOverworld_Entrance_Pos", ASSET_TYPE_UINT16, (uint8_t*)ent_pos, 129*2);
-  AssetBuilder_AddAsset(builder, "kOverworld_Entrance_Id", ASSET_TYPE_UINT8, ent_id, 129);
+  AssetBuilder_AddAsset(builder, "kOverworld_Entrance_Area", ASSET_TYPE_UINT16, (uint8_t*)ent_area, ROM_OW_ENT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kOverworld_Entrance_Pos", ASSET_TYPE_UINT16, (uint8_t*)ent_pos, ROM_OW_ENT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kOverworld_Entrance_Id", ASSET_TYPE_UINT8, ent_id, ROM_OW_ENT_COUNT);
 
   free(ent_area); free(ent_pos); free(ent_id);
 
-  printf("    Phase 3: Added 3 entrance assets (129 entries each)\n");
+  printf("    Phase 3: Added 3 entrance assets (%d entries each)\n", ROM_OW_ENT_COUNT);
 
   // ======================================================================
-  // Phase 4: Holes (3 assets) - Fall holes sorted by entrance_id
+  // Phase 4: Holes (3 assets) - Read directly from ROM
   // ======================================================================
 
-  Overworld_Hole *holes = malloc(100 * sizeof(Overworld_Hole));
-  int hole_count = 0;
+  uint16_t *hole_pos = malloc(ROM_HOLE_COUNT * 2);
+  uint16_t *hole_area = malloc(ROM_HOLE_COUNT * 2);
+  uint8_t *hole_ent_id = malloc(ROM_HOLE_COUNT);
 
-  printf("    Processing holes from areas...\n");
-  for (int i = 0; i < 160; i++) {
-    if (!Overworld_IsAreaHead(rom, i)) continue;
-
-    char path[256];
-    snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
-    YamlDoc *doc = LoadAssetYaml(path);
-    if (!doc) continue;
-
-    YamlNode *root = Yaml_GetRoot(doc);
-    if (!root) { Yaml_Free(doc); continue; }
-
-    YamlNode *holes_list = Yaml_GetMapping(root, "Holes");
-    if (holes_list) {
-      int n = Yaml_GetSequenceLength(holes_list);
-      for (int hi = 0; hi < n; hi++) {
-        YamlNode *h = Yaml_GetSequence(holes_list, hi);
-        if (!h) continue;
-
-        int x = Yaml_GetInt(h, "x", 0);
-        int y = Yaml_GetInt(h, "y", 0);
-        uint8_t eid = Yaml_GetInt(h, "entrance_id", 0);
-
-        holes[hole_count].entrance_id = eid;
-        holes[hole_count].pos = (x << 1) | (((y - 8) & 0x3f) << 7);
-        holes[hole_count].area = i;
-        hole_count++;
-      }
-    }
-
-    Yaml_Free(doc);
+  for (int i = 0; i < ROM_HOLE_COUNT; i++) {
+    // Note: Python adds 0x400 to pos
+    hole_pos[i] = Rom_ReadWord(rom, ROM_HOLE_POS + i * 2) + 0x400;
+    hole_area[i] = Rom_ReadWord(rom, ROM_HOLE_AREA + i * 2);
+    hole_ent_id[i] = Rom_ReadByte(rom, ROM_HOLE_ENT_ID + i);
   }
 
-  // Sort holes by (entrance_id, pos, area) - matching Python's tuple sort
-  for (int i = 0; i < hole_count - 1; i++) {
-    for (int j = i + 1; j < hole_count; j++) {
-      bool should_swap = false;
-      if (holes[j].entrance_id < holes[i].entrance_id) {
-        should_swap = true;
-      } else if (holes[j].entrance_id == holes[i].entrance_id) {
-        if (holes[j].pos < holes[i].pos) {
-          should_swap = true;
-        } else if (holes[j].pos == holes[i].pos) {
-          if (holes[j].area < holes[i].area) {
-            should_swap = true;
-          }
-        }
-      }
-      if (should_swap) {
-        Overworld_Hole temp = holes[i];
-        holes[i] = holes[j];
-        holes[j] = temp;
-      }
-    }
-  }
+  AssetBuilder_AddAsset(builder, "kFallHole_Area", ASSET_TYPE_UINT16, (uint8_t*)hole_area, ROM_HOLE_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kFallHole_Pos", ASSET_TYPE_UINT16, (uint8_t*)hole_pos, ROM_HOLE_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kFallHole_Entrances", ASSET_TYPE_UINT8, hole_ent_id, ROM_HOLE_COUNT);
 
-  uint16_t *hole_area = malloc(19 * 2);
-  uint16_t *hole_pos = malloc(19 * 2);
-  uint8_t *hole_ent = malloc(19);
+  free(hole_area); free(hole_pos); free(hole_ent_id);
 
-  for (int i = 0; i < 19 && i < hole_count; i++) {
-    hole_area[i] = holes[i].area;
-    hole_pos[i] = holes[i].pos;
-    hole_ent[i] = holes[i].entrance_id;
-  }
-
-  AssetBuilder_AddAsset(builder, "kFallHole_Area", ASSET_TYPE_UINT16, (uint8_t*)hole_area, 19*2);
-  AssetBuilder_AddAsset(builder, "kFallHole_Pos", ASSET_TYPE_UINT16, (uint8_t*)hole_pos, 19*2);
-  AssetBuilder_AddAsset(builder, "kFallHole_Entrances", ASSET_TYPE_UINT8, hole_ent, 19);
-
-  free(holes); free(hole_area); free(hole_pos); free(hole_ent);
-
-  printf("    Phase 4: Added 3 hole assets (%d holes, sorted)\n", hole_count);
+  printf("    Phase 4: Added 3 hole assets (%d entries)\n", ROM_HOLE_COUNT);
 
   // ======================================================================
-  // Phase 5: Exits (22 assets) - Regular exits + Special exits
+  // Phase 5: Exits (22 assets) - Read directly from ROM
   // ======================================================================
 
-  uint8_t *exit_screen = calloc(79, 1);
-  uint16_t *exit_rooms = calloc(79, 2);
-  uint16_t *exit_load = calloc(79, 2);
-  uint16_t *exit_sx = calloc(79, 2), *exit_sy = calloc(79, 2);
-  uint16_t *exit_px = calloc(79, 2), *exit_py = calloc(79, 2);
-  uint16_t *exit_cx = calloc(79, 2), *exit_cy = calloc(79, 2);
-  uint16_t *exit_normal_door = calloc(79, 2);
-  uint16_t *exit_fancy_door = calloc(79, 2);
-  int8_t *exit_unk1 = calloc(79, 1), *exit_unk3 = calloc(79, 1);
+  // Regular exits (79 entries)
+  uint8_t *exit_screen = malloc(ROM_EXIT_COUNT);
+  uint16_t *exit_rooms = malloc(ROM_EXIT_COUNT * 2);
+  uint16_t *exit_load = malloc(ROM_EXIT_COUNT * 2);
+  uint16_t *exit_sx = malloc(ROM_EXIT_COUNT * 2), *exit_sy = malloc(ROM_EXIT_COUNT * 2);
+  uint16_t *exit_px = malloc(ROM_EXIT_COUNT * 2), *exit_py = malloc(ROM_EXIT_COUNT * 2);
+  uint16_t *exit_cx = malloc(ROM_EXIT_COUNT * 2), *exit_cy = malloc(ROM_EXIT_COUNT * 2);
+  uint16_t *exit_normal_door = malloc(ROM_EXIT_COUNT * 2);
+  uint16_t *exit_fancy_door = malloc(ROM_EXIT_COUNT * 2);
+  int8_t *exit_unk1 = malloc(ROM_EXIT_COUNT), *exit_unk3 = malloc(ROM_EXIT_COUNT);
+
+  for (int i = 0; i < ROM_EXIT_COUNT; i++) {
+    exit_screen[i] = Rom_ReadByte(rom, ROM_EXIT_SCREEN + i);
+    exit_rooms[i] = Rom_ReadWord(rom, ROM_EXIT_ROOM + i * 2);
+    exit_load[i] = Rom_ReadWord(rom, ROM_EXIT_LOAD + i * 2);
+    exit_sy[i] = Rom_ReadWord(rom, ROM_EXIT_SCROLL_Y + i * 2);
+    exit_sx[i] = Rom_ReadWord(rom, ROM_EXIT_SCROLL_X + i * 2);
+    exit_py[i] = Rom_ReadWord(rom, ROM_EXIT_POS_Y + i * 2);
+    exit_px[i] = Rom_ReadWord(rom, ROM_EXIT_POS_X + i * 2);
+    exit_cy[i] = Rom_ReadWord(rom, ROM_EXIT_CAMERA_Y + i * 2);
+    exit_cx[i] = Rom_ReadWord(rom, ROM_EXIT_CAMERA_X + i * 2);
+    exit_unk1[i] = (int8_t)Rom_ReadByte(rom, ROM_EXIT_UNK1 + i);
+    exit_unk3[i] = (int8_t)Rom_ReadByte(rom, ROM_EXIT_UNK3 + i);
+    exit_normal_door[i] = Rom_ReadWord(rom, ROM_EXIT_DOOR_NORM + i * 2);
+    exit_fancy_door[i] = Rom_ReadWord(rom, ROM_EXIT_DOOR_FANCY + i * 2);
+  }
 
   // Special exits (16 entries)
-  uint16_t *sp_top = calloc(16, 2), *sp_bottom = calloc(16, 2);
-  uint16_t *sp_left = calloc(16, 2), *sp_right = calloc(16, 2);
-  int16_t *sp_tab4 = calloc(16, 2), *sp_tab5 = calloc(16, 2);
-  int16_t *sp_tab6 = calloc(16, 2), *sp_tab7 = calloc(16, 2);
-  uint16_t *sp_left_edge = calloc(16, 2);
-  uint8_t *sp_dir = calloc(16, 1);
-  uint8_t *sp_spr_gfx = calloc(16, 1), *sp_aux_gfx = calloc(16, 1);
-  uint8_t *sp_pal_bg = calloc(16, 1), *sp_pal_spr = calloc(16, 1);
+  uint16_t *sp_top = malloc(ROM_SPECIAL_EXIT_COUNT * 2), *sp_bottom = malloc(ROM_SPECIAL_EXIT_COUNT * 2);
+  uint16_t *sp_left = malloc(ROM_SPECIAL_EXIT_COUNT * 2), *sp_right = malloc(ROM_SPECIAL_EXIT_COUNT * 2);
+  int16_t *sp_tab4 = malloc(ROM_SPECIAL_EXIT_COUNT * 2), *sp_tab5 = malloc(ROM_SPECIAL_EXIT_COUNT * 2);
+  int16_t *sp_tab6 = malloc(ROM_SPECIAL_EXIT_COUNT * 2), *sp_tab7 = malloc(ROM_SPECIAL_EXIT_COUNT * 2);
+  uint16_t *sp_left_edge = malloc(ROM_SPECIAL_EXIT_COUNT * 2);
+  uint8_t *sp_dir = malloc(ROM_SPECIAL_EXIT_COUNT);
+  uint8_t *sp_spr_gfx = malloc(ROM_SPECIAL_EXIT_COUNT), *sp_aux_gfx = malloc(ROM_SPECIAL_EXIT_COUNT);
+  uint8_t *sp_pal_bg = malloc(ROM_SPECIAL_EXIT_COUNT), *sp_pal_spr = malloc(ROM_SPECIAL_EXIT_COUNT);
 
-  printf("    Processing exits from areas...\n");
-  for (int i = 0; i < 160; i++) {
-    if (!Overworld_IsAreaHead(rom, i)) continue;
-
-    char path[256];
-    snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
-    YamlDoc *doc = LoadAssetYaml(path);
-    if (!doc) continue;
-
-    YamlNode *root = Yaml_GetRoot(doc);
-    if (!root) { Yaml_Free(doc); continue; }
-
-    YamlNode *exits = Yaml_GetMapping(root, "Exits");
-    if (exits) {
-      int n = Yaml_GetSequenceLength(exits);
-      for (int ei = 0; ei < n; ei++) {
-        YamlNode *e = Yaml_GetSequence(exits, ei);
-        if (!e) continue;
-
-        int j = Yaml_GetInt(e, "index", -1);
-        if (j < 0 || j >= 79) continue;
-
-        int base_x = (i & 7) << 9;
-        int base_y = (i & 56) << 6;
-
-        exit_screen[j] = i;
-        exit_rooms[j] = Yaml_GetInt(e, "room", 0);
-
-        // get_loadoffs calculation
-        YamlNode *scroll = Yaml_GetMapping(e, "scroll_xy");
-        YamlNode *load = Yaml_GetMapping(e, "load_xy");
-        int sx = scroll ? Yaml_AsInt(Yaml_GetSequence(scroll, 0)) : 0;
-        int sy = scroll ? Yaml_AsInt(Yaml_GetSequence(scroll, 1)) : 0;
-        int lx = load ? Yaml_AsInt(Yaml_GetSequence(load, 0)) : 0;
-        int ly = load ? Yaml_AsInt(Yaml_GetSequence(load, 1)) : 0;
-        int x = (sx >> 4) + lx;
-        int y = (sy >> 4) + ly;
-        exit_load[j] = ((y & 0x3f) << 7) | ((x & 0x3f) << 1);
-
-        exit_sx[j] = sx + base_x;
-        exit_sy[j] = sy + base_y;
-
-        YamlNode *xy = Yaml_GetMapping(e, "xy");
-        int px = xy ? Yaml_AsInt(Yaml_GetSequence(xy, 0)) : 0;
-        int py = xy ? Yaml_AsInt(Yaml_GetSequence(xy, 1)) : 0;
-        exit_px[j] = px + base_x;
-        exit_py[j] = py + base_y;
-
-        YamlNode *camera = Yaml_GetMapping(e, "camera_xy");
-        int cx = camera ? Yaml_AsInt(Yaml_GetSequence(camera, 0)) : 0;
-        int cy = camera ? Yaml_AsInt(Yaml_GetSequence(camera, 1)) : 0;
-        exit_cx[j] = cx + base_x;
-        exit_cy[j] = cy + base_y;
-
-        YamlNode *unk = Yaml_GetMapping(e, "unk");
-        exit_unk1[j] = unk ? Yaml_AsInt(Yaml_GetSequence(unk, 0)) : 0;
-        exit_unk3[j] = unk ? Yaml_AsInt(Yaml_GetSequence(unk, 1)) : 0;
-
-        // Door processing
-        YamlNode *door = Yaml_GetMapping(e, "door");
-        if (door && Yaml_GetSequenceLength(door) >= 3) {
-          YamlNode *dtype = Yaml_GetSequence(door, 0);
-          YamlNode *dpos = Yaml_GetSequence(door, 1);
-          YamlNode *ddir = Yaml_GetSequence(door, 2);
-
-          const char *type = dtype ? Yaml_AsString(dtype) : "none";
-          int pos = dpos ? Yaml_AsInt(dpos) : 0;
-          int dir = ddir ? Yaml_AsInt(ddir) : 0;
-
-          if (strcmp(type, "bombable") == 0 || strcmp(type, "wooden") == 0) {
-            exit_normal_door[j] = (pos << 1) | (dir << 7) | (strcmp(type, "bombable") == 0 ? 0x8000 : 0);
-          } else if (strcmp(type, "palace") == 0 || strcmp(type, "sanctuary") == 0) {
-            exit_fancy_door[j] = (pos << 1) | (dir << 7) | (strcmp(type, "palace") == 0 ? 0x8000 : 0);
-          }
-        }
-
-        // Special exit processing
-        YamlNode *se = Yaml_GetMapping(e, "special_exit");
-        if (se) {
-          int room = exit_rooms[j];
-          if (room >= 0x180 && room < 0x190) {
-            int sp_idx = room - 0x180;
-            sp_dir[sp_idx] = Yaml_GetInt(se, "dir", 0) * 2;
-            sp_spr_gfx[sp_idx] = Yaml_GetInt(se, "spr_gfx", 0);
-            sp_aux_gfx[sp_idx] = Yaml_GetInt(se, "aux_gfx", 0);
-            sp_pal_bg[sp_idx] = Yaml_GetInt(se, "pal_bg", 0);
-            sp_pal_spr[sp_idx] = Yaml_GetInt(se, "pal_spr", 0);
-            sp_top[sp_idx] = Yaml_GetInt(se, "top", 0);
-            sp_bottom[sp_idx] = Yaml_GetInt(se, "bottom", 0);
-            sp_left[sp_idx] = Yaml_GetInt(se, "left", 0);
-            sp_right[sp_idx] = Yaml_GetInt(se, "right", 0);
-            sp_left_edge[sp_idx] = Yaml_GetInt(se, "left_edge_of_map", 0);
-            sp_tab4[sp_idx] = Yaml_GetInt(se, "unk4", 0);
-            sp_tab5[sp_idx] = Yaml_GetInt(se, "unk5", 0);
-            sp_tab6[sp_idx] = Yaml_GetInt(se, "unk6", 0);
-            sp_tab7[sp_idx] = Yaml_GetInt(se, "unk7", 0);
-          }
-        }
-      }
-    }
-
-    Yaml_Free(doc);
+  for (int i = 0; i < ROM_SPECIAL_EXIT_COUNT; i++) {
+    sp_dir[i] = Rom_ReadByte(rom, ROM_SPECIAL_EXIT_DIR + i);
+    sp_spr_gfx[i] = Rom_ReadByte(rom, ROM_SPECIAL_EXIT_SPR_GFX + i);
+    sp_aux_gfx[i] = Rom_ReadByte(rom, ROM_SPECIAL_EXIT_AUX_GFX + i);
+    sp_pal_bg[i] = Rom_ReadByte(rom, ROM_SPECIAL_EXIT_PAL_BG + i);
+    sp_pal_spr[i] = Rom_ReadByte(rom, ROM_SPECIAL_EXIT_PAL_SPR + i);
+    sp_top[i] = Rom_ReadWord(rom, ROM_SPECIAL_EXIT_TOP + i * 2);
+    sp_bottom[i] = Rom_ReadWord(rom, ROM_SPECIAL_EXIT_BOTTOM + i * 2);
+    sp_left[i] = Rom_ReadWord(rom, ROM_SPECIAL_EXIT_LEFT + i * 2);
+    sp_right[i] = Rom_ReadWord(rom, ROM_SPECIAL_EXIT_RIGHT + i * 2);
+    sp_left_edge[i] = Rom_ReadWord(rom, ROM_SPECIAL_EXIT_LEFT_EDGE + i * 2);
+    sp_tab4[i] = (int16_t)Rom_ReadWord(rom, ROM_SPECIAL_EXIT_UNK4 + i * 2);
+    sp_tab5[i] = (int16_t)Rom_ReadWord(rom, ROM_SPECIAL_EXIT_UNK5 + i * 2);
+    sp_tab6[i] = (int16_t)Rom_ReadWord(rom, ROM_SPECIAL_EXIT_UNK6 + i * 2);
+    sp_tab7[i] = (int16_t)Rom_ReadWord(rom, ROM_SPECIAL_EXIT_UNK7 + i * 2);
   }
 
-  AssetBuilder_AddAsset(builder, "kExitData_ScreenIndex", ASSET_TYPE_UINT8, exit_screen, 79);
-  AssetBuilder_AddAsset(builder, "kExitDataRooms", ASSET_TYPE_UINT16, (uint8_t*)exit_rooms, 79*2);
-  AssetBuilder_AddAsset(builder, "kExitData_Map16LoadSrcOff", ASSET_TYPE_UINT16, (uint8_t*)exit_load, 79*2);
-  AssetBuilder_AddAsset(builder, "kExitData_ScrollX", ASSET_TYPE_UINT16, (uint8_t*)exit_sx, 79*2);
-  AssetBuilder_AddAsset(builder, "kExitData_ScrollY", ASSET_TYPE_UINT16, (uint8_t*)exit_sy, 79*2);
-  AssetBuilder_AddAsset(builder, "kExitData_XCoord", ASSET_TYPE_UINT16, (uint8_t*)exit_px, 79*2);
-  AssetBuilder_AddAsset(builder, "kExitData_YCoord", ASSET_TYPE_UINT16, (uint8_t*)exit_py, 79*2);
-  AssetBuilder_AddAsset(builder, "kExitData_CameraXScroll", ASSET_TYPE_UINT16, (uint8_t*)exit_cx, 79*2);
-  AssetBuilder_AddAsset(builder, "kExitData_CameraYScroll", ASSET_TYPE_UINT16, (uint8_t*)exit_cy, 79*2);
-  AssetBuilder_AddAsset(builder, "kExitData_NormalDoor", ASSET_TYPE_UINT16, (uint8_t*)exit_normal_door, 79*2);
-  AssetBuilder_AddAsset(builder, "kExitData_FancyDoor", ASSET_TYPE_UINT16, (uint8_t*)exit_fancy_door, 79*2);
-  AssetBuilder_AddAsset(builder, "kExitData_Unk1", ASSET_TYPE_INT8, (uint8_t*)exit_unk1, 79);
-  AssetBuilder_AddAsset(builder, "kExitData_Unk3", ASSET_TYPE_INT8, (uint8_t*)exit_unk3, 79);
+  AssetBuilder_AddAsset(builder, "kExitData_ScreenIndex", ASSET_TYPE_UINT8, exit_screen, ROM_EXIT_COUNT);
+  AssetBuilder_AddAsset(builder, "kExitDataRooms", ASSET_TYPE_UINT16, (uint8_t*)exit_rooms, ROM_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kExitData_Map16LoadSrcOff", ASSET_TYPE_UINT16, (uint8_t*)exit_load, ROM_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kExitData_ScrollX", ASSET_TYPE_UINT16, (uint8_t*)exit_sx, ROM_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kExitData_ScrollY", ASSET_TYPE_UINT16, (uint8_t*)exit_sy, ROM_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kExitData_XCoord", ASSET_TYPE_UINT16, (uint8_t*)exit_px, ROM_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kExitData_YCoord", ASSET_TYPE_UINT16, (uint8_t*)exit_py, ROM_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kExitData_CameraXScroll", ASSET_TYPE_UINT16, (uint8_t*)exit_cx, ROM_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kExitData_CameraYScroll", ASSET_TYPE_UINT16, (uint8_t*)exit_cy, ROM_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kExitData_NormalDoor", ASSET_TYPE_UINT16, (uint8_t*)exit_normal_door, ROM_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kExitData_FancyDoor", ASSET_TYPE_UINT16, (uint8_t*)exit_fancy_door, ROM_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kExitData_Unk1", ASSET_TYPE_INT8, (uint8_t*)exit_unk1, ROM_EXIT_COUNT);
+  AssetBuilder_AddAsset(builder, "kExitData_Unk3", ASSET_TYPE_INT8, (uint8_t*)exit_unk3, ROM_EXIT_COUNT);
 
-  AssetBuilder_AddAsset(builder, "kSpExit_Top", ASSET_TYPE_UINT16, (uint8_t*)sp_top, 16*2);
-  AssetBuilder_AddAsset(builder, "kSpExit_Bottom", ASSET_TYPE_UINT16, (uint8_t*)sp_bottom, 16*2);
-  AssetBuilder_AddAsset(builder, "kSpExit_Left", ASSET_TYPE_UINT16, (uint8_t*)sp_left, 16*2);
-  AssetBuilder_AddAsset(builder, "kSpExit_Right", ASSET_TYPE_UINT16, (uint8_t*)sp_right, 16*2);
-  AssetBuilder_AddAsset(builder, "kSpExit_Tab4", ASSET_TYPE_INT16, (uint8_t*)sp_tab4, 16*2);
-  AssetBuilder_AddAsset(builder, "kSpExit_Tab5", ASSET_TYPE_INT16, (uint8_t*)sp_tab5, 16*2);
-  AssetBuilder_AddAsset(builder, "kSpExit_Tab6", ASSET_TYPE_INT16, (uint8_t*)sp_tab6, 16*2);
-  AssetBuilder_AddAsset(builder, "kSpExit_Tab7", ASSET_TYPE_INT16, (uint8_t*)sp_tab7, 16*2);
-  AssetBuilder_AddAsset(builder, "kSpExit_LeftEdgeOfMap", ASSET_TYPE_UINT16, (uint8_t*)sp_left_edge, 16*2);
-  AssetBuilder_AddAsset(builder, "kSpExit_Dir", ASSET_TYPE_UINT8, sp_dir, 16);
-  AssetBuilder_AddAsset(builder, "kSpExit_SprGfx", ASSET_TYPE_UINT8, sp_spr_gfx, 16);
-  AssetBuilder_AddAsset(builder, "kSpExit_AuxGfx", ASSET_TYPE_UINT8, sp_aux_gfx, 16);
-  AssetBuilder_AddAsset(builder, "kSpExit_PalBg", ASSET_TYPE_UINT8, sp_pal_bg, 16);
-  AssetBuilder_AddAsset(builder, "kSpExit_PalSpr", ASSET_TYPE_UINT8, sp_pal_spr, 16);
+  AssetBuilder_AddAsset(builder, "kSpExit_Top", ASSET_TYPE_UINT16, (uint8_t*)sp_top, ROM_SPECIAL_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kSpExit_Bottom", ASSET_TYPE_UINT16, (uint8_t*)sp_bottom, ROM_SPECIAL_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kSpExit_Left", ASSET_TYPE_UINT16, (uint8_t*)sp_left, ROM_SPECIAL_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kSpExit_Right", ASSET_TYPE_UINT16, (uint8_t*)sp_right, ROM_SPECIAL_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kSpExit_Tab4", ASSET_TYPE_INT16, (uint8_t*)sp_tab4, ROM_SPECIAL_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kSpExit_Tab5", ASSET_TYPE_INT16, (uint8_t*)sp_tab5, ROM_SPECIAL_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kSpExit_Tab6", ASSET_TYPE_INT16, (uint8_t*)sp_tab6, ROM_SPECIAL_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kSpExit_Tab7", ASSET_TYPE_INT16, (uint8_t*)sp_tab7, ROM_SPECIAL_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kSpExit_LeftEdgeOfMap", ASSET_TYPE_UINT16, (uint8_t*)sp_left_edge, ROM_SPECIAL_EXIT_COUNT*2);
+  AssetBuilder_AddAsset(builder, "kSpExit_Dir", ASSET_TYPE_UINT8, sp_dir, ROM_SPECIAL_EXIT_COUNT);
+  AssetBuilder_AddAsset(builder, "kSpExit_SprGfx", ASSET_TYPE_UINT8, sp_spr_gfx, ROM_SPECIAL_EXIT_COUNT);
+  AssetBuilder_AddAsset(builder, "kSpExit_AuxGfx", ASSET_TYPE_UINT8, sp_aux_gfx, ROM_SPECIAL_EXIT_COUNT);
+  AssetBuilder_AddAsset(builder, "kSpExit_PalBg", ASSET_TYPE_UINT8, sp_pal_bg, ROM_SPECIAL_EXIT_COUNT);
+  AssetBuilder_AddAsset(builder, "kSpExit_PalSpr", ASSET_TYPE_UINT8, sp_pal_spr, ROM_SPECIAL_EXIT_COUNT);
 
   free(exit_screen); free(exit_rooms); free(exit_load); free(exit_sx); free(exit_sy);
   free(exit_px); free(exit_py); free(exit_cx); free(exit_cy);
@@ -3866,10 +3401,12 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
   free(sp_tab4); free(sp_tab5); free(sp_tab6); free(sp_tab7); free(sp_left_edge);
   free(sp_dir); free(sp_spr_gfx); free(sp_aux_gfx); free(sp_pal_bg); free(sp_pal_spr);
 
-  printf("    Phase 5: Added 22 exit assets (79 regular + 16 special)\n");
+  printf("    Phase 5: Added 22 exit assets from ROM\n");
 
   // ======================================================================
-  // Phase 6: Secrets (2 assets) - Item locations with terminators
+  // Phase 6: Secrets (2 assets) - Item locations from ROM
+  // ROM format: pointer table at 0x9BC2F9, data at 0x9B0000 | ptr
+  // Data format: [pos_lo, pos_hi, item_id] triplets, 0xFFFF terminator
   // ======================================================================
 
   uint16_t *secret_offs = malloc(128 * 2);
@@ -3881,71 +3418,58 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
     secret_offs[i] = 0xFFFF;
   }
 
-  printf("    Processing secrets from areas...\n");
-  for (int i = 0; i < 128; i++) {  // Only light world (0-127)
+  for (int i = 0; i < 128; i++) {  // Only areas 0-127
     if (!Overworld_IsAreaHead(rom, i)) {
-      // Leave as 0xFFFF (will be set to default_offset later)
-      continue;
+      continue;  // Will be mirrored from area head or set to default
     }
 
-    char path[256];
-    snprintf(path, sizeof(path), "assets/overworld/overworld-%d.yaml", i);
-    YamlDoc *doc = LoadAssetYaml(path);
-    if (!doc) {
-      // Leave as 0 (will be set to default_offset later)
-      continue;
+    // Read pointer from table
+    uint16_t ptr = Rom_ReadWord(rom, ROM_OW_ITEMS_PTRS + i * 2);
+    uint32_t ea = ROM_OW_ITEMS_BASE | ptr;
+
+    // Check if there are any items (first word != 0xFFFF)
+    uint16_t first = Rom_ReadWord(rom, ea);
+    if (first == 0xFFFF) {
+      continue;  // No items - will be set to default
     }
 
-    YamlNode *root = Yaml_GetRoot(doc);
-    if (!root) {
-      Yaml_Free(doc);
-      // Leave as 0 (will be set to default_offset later)
-      continue;
-    }
+    // Has items - record offset and copy data
+    secret_offs[i] = secret_len;
 
-    YamlNode *items = Yaml_GetMapping(root, "Items");
-    int has_items = items && Yaml_GetSequenceLength(items) > 0;
-
-    if (has_items) {
-      secret_offs[i] = secret_len;
-      int n = Yaml_GetSequenceLength(items);
-
-      for (int ii = 0; ii < n; ii++) {
-        YamlNode *item = Yaml_GetSequence(items, ii);
-        if (!item || Yaml_GetSequenceLength(item) < 3) continue;
-
-        int x = Yaml_AsInt(Yaml_GetSequence(item, 0));
-        int y = Yaml_AsInt(Yaml_GetSequence(item, 1));
-        const char *item_name = Yaml_AsString(Yaml_GetSequence(item, 2));
-
-        uint16_t pos = (x << 1) | (y << 7);
-        uint8_t item_id = FindSecretIndex(item_name);
-
-        secret_data[secret_len++] = pos & 0xff;
-        secret_data[secret_len++] = pos >> 8;
-        secret_data[secret_len++] = item_id;
+    // Copy item entries until terminator
+    while (true) {
+      uint16_t pos = Rom_ReadWord(rom, ea);
+      if (pos == 0xFFFF) {
+        // Add terminator
+        secret_data[secret_len++] = 0xff;
+        secret_data[secret_len++] = 0xff;
+        break;
       }
-
-      // Terminator
-      secret_data[secret_len++] = 0xff;
-      secret_data[secret_len++] = 0xff;
-
-      // Mirror for big maps
-      if (map_is_small[i] == 0) {
-        secret_offs[i + 1] = secret_offs[i];
-        secret_offs[i + 8] = secret_offs[i];
-        secret_offs[i + 9] = secret_offs[i];
-      }
+      uint8_t item_id = Rom_ReadByte(rom, ea + 2);
+      secret_data[secret_len++] = pos & 0xff;
+      secret_data[secret_len++] = pos >> 8;
+      secret_data[secret_len++] = item_id;
+      ea += 3;
     }
-    // else: leave as 0 (will be set to default_offset later)
 
-    Yaml_Free(doc);
+    // Mirror for big maps
+    if (map_is_small[i] == 0) {
+      secret_offs[i + 1] = secret_offs[i];
+      secret_offs[i + 8] = secret_offs[i];
+      secret_offs[i + 9] = secret_offs[i];
+    }
   }
 
   // Fill in default offsets for areas without items
+  // Point to an empty entry (just a terminator)
+  if (secret_len == 0) {
+    // No items at all - add a terminator
+    secret_data[secret_len++] = 0xff;
+    secret_data[secret_len++] = 0xff;
+  }
   uint16_t default_offset = secret_len - 2;  // Point to last 0xFFFF
   for (int i = 0; i < 128; i++) {
-    if (secret_offs[i] == 0xFFFF) {  // Was not set (no items or mirrored)
+    if (secret_offs[i] == 0xFFFF) {  // Was not set
       secret_offs[i] = default_offset;
     }
   }
@@ -3956,10 +3480,13 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
   free(secret_offs);
   free(secret_data);
 
-  printf("    Phase 6: Added 2 secret assets (%d bytes of data)\n", secret_len);
+  printf("    Phase 6: Added 2 secret assets from ROM (%d bytes of data)\n", secret_len);
 
   // ======================================================================
-  // Phase 7: Sprites (4 assets) - Sprite lists for game stages
+  // Phase 7: Sprites (4 assets) - Sprite lists from ROM
+  // ROM format: pointer tables at 0x89C881/C901/CA21, data at 0x890000 | ptr
+  // Data format: [y, x, type] triplets, 0xFF terminator
+  // GFX/Palette: 0x80FA41/FB41 + (area & 63) + stage * 64
   // ======================================================================
 
   uint16_t *sprite_offs = calloc(144 * 3, 2);  // 3 stages × 144 areas
@@ -3968,24 +3495,87 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
   uint8_t *sprite_data = malloc(50000);
   int sprite_len = 0;
 
-  sprite_data[sprite_len++] = 0xff;  // Initial terminator
+  sprite_data[sprite_len++] = 0xff;  // Initial terminator (for empty areas)
 
-  printf("    Processing sprites from areas...\n");
+  // Read GFX and palette tables from ROM (256 bytes each)
+  for (int i = 0; i < 256; i++) {
+    sprite_gfx[i] = Rom_ReadByte(rom, ROM_OW_SPRITE_GFX + i);
+    sprite_pal[i] = Rom_ReadByte(rom, ROM_OW_SPRITE_PAL + i);
+  }
 
-  // Process 4 sprite stages
-  int stage0[] = {0};
-  int stage1[] = {1};
-  int stage2[] = {2};
-  int stage12[] = {1, 2};
+  // Helper: extract sprites from ROM for an area with a given pointer table base
+  #define EXTRACT_SPRITES(area, ptr_table_base, stage_idx) do { \
+    uint16_t ptr = Rom_ReadWord(rom, (ptr_table_base) + (area) * 2); \
+    uint32_t ea = 0x890000 | ptr; \
+    /* Check if there are any sprites (first byte != 0xFF) */ \
+    if (Rom_ReadByte(rom, ea) != 0xFF) { \
+      /* Has sprites - record offset */ \
+      sprite_offs[(stage_idx) * 144 + (area)] = sprite_len; \
+      /* Copy sprite entries until terminator */ \
+      while (true) { \
+        uint8_t y = Rom_ReadByte(rom, ea); \
+        if (y == 0xFF) { \
+          sprite_data[sprite_len++] = 0xff; /* Terminator */ \
+          break; \
+        } \
+        sprite_data[sprite_len++] = y; \
+        sprite_data[sprite_len++] = Rom_ReadByte(rom, ea + 1); /* x */ \
+        sprite_data[sprite_len++] = Rom_ReadByte(rom, ea + 2); /* type */ \
+        ea += 3; \
+      } \
+    } \
+  } while(0)
 
-  Overworld_ProcessSpriteStage(rom, map_is_small, sprite_offs, sprite_gfx, sprite_pal,
-                                sprite_data, &sprite_len, 0, 64, "Sprites.Beginning", stage0, 1, 0);
-  Overworld_ProcessSpriteStage(rom, map_is_small, sprite_offs, sprite_gfx, sprite_pal,
-                                sprite_data, &sprite_len, 0, 64, "Sprites.FirstPart", stage1, 1, 1);
-  Overworld_ProcessSpriteStage(rom, map_is_small, sprite_offs, sprite_gfx, sprite_pal,
-                                sprite_data, &sprite_len, 0, 64, "Sprites.SecondPart", stage2, 1, 2);
-  Overworld_ProcessSpriteStage(rom, map_is_small, sprite_offs, sprite_gfx, sprite_pal,
-                                sprite_data, &sprite_len, 64, 144, "Sprites", stage12, 2, 3);
+  // Process Light World areas (0-63) - 3 stages
+  for (int i = 0; i < 64; i++) {
+    if (!Overworld_IsAreaHead(rom, i)) continue;
+
+    // Stage 0: Beginning sprites (ptr table at 0x89C881)
+    EXTRACT_SPRITES(i, ROM_OW_SPRITES_BASE0, 0);
+    // Mirror for big maps
+    if (map_is_small[i] == 0) {
+      sprite_offs[0 * 144 + i + 1] = sprite_offs[0 * 144 + i];
+      sprite_offs[0 * 144 + i + 8] = sprite_offs[0 * 144 + i];
+      sprite_offs[0 * 144 + i + 9] = sprite_offs[0 * 144 + i];
+    }
+
+    // Stage 1: FirstPart sprites (ptr table at 0x89C901)
+    EXTRACT_SPRITES(i, ROM_OW_SPRITES_BASE1, 1);
+    if (map_is_small[i] == 0) {
+      sprite_offs[1 * 144 + i + 1] = sprite_offs[1 * 144 + i];
+      sprite_offs[1 * 144 + i + 8] = sprite_offs[1 * 144 + i];
+      sprite_offs[1 * 144 + i + 9] = sprite_offs[1 * 144 + i];
+    }
+
+    // Stage 2: SecondPart sprites (ptr table at 0x89CA21)
+    EXTRACT_SPRITES(i, ROM_OW_SPRITES_BASE2, 2);
+    if (map_is_small[i] == 0) {
+      sprite_offs[2 * 144 + i + 1] = sprite_offs[2 * 144 + i];
+      sprite_offs[2 * 144 + i + 8] = sprite_offs[2 * 144 + i];
+      sprite_offs[2 * 144 + i + 9] = sprite_offs[2 * 144 + i];
+    }
+  }
+
+  // Process Dark World and special areas (64-143) - stages 1 and 2 use the same data
+  for (int i = 64; i < 144; i++) {
+    if (!Overworld_IsAreaHead(rom, i)) continue;
+
+    // Areas 64-143 use SecondPart sprites for both stage 1 and 2
+    EXTRACT_SPRITES(i, ROM_OW_SPRITES_BASE2, 1);
+    // Copy same offset to stage 2
+    sprite_offs[2 * 144 + i] = sprite_offs[1 * 144 + i];
+
+    if (i < 128 && map_is_small[i] == 0) {
+      sprite_offs[1 * 144 + i + 1] = sprite_offs[1 * 144 + i];
+      sprite_offs[1 * 144 + i + 8] = sprite_offs[1 * 144 + i];
+      sprite_offs[1 * 144 + i + 9] = sprite_offs[1 * 144 + i];
+      sprite_offs[2 * 144 + i + 1] = sprite_offs[2 * 144 + i];
+      sprite_offs[2 * 144 + i + 8] = sprite_offs[2 * 144 + i];
+      sprite_offs[2 * 144 + i + 9] = sprite_offs[2 * 144 + i];
+    }
+  }
+
+  #undef EXTRACT_SPRITES
 
   AssetBuilder_AddAsset(builder, "kOverworldSpriteOffs", ASSET_TYPE_UINT16, (uint8_t*)sprite_offs, 144*3*2);
   AssetBuilder_AddAsset(builder, "kOverworldSprites", ASSET_TYPE_UINT8, sprite_data, sprite_len);
@@ -3997,7 +3587,7 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
   free(sprite_gfx);
   free(sprite_pal);
 
-  printf("    Phase 7: Added 4 sprite assets (%d bytes of sprite data)\n", sprite_len);
+  printf("    Phase 7: Added 4 sprite assets from ROM (%d bytes of sprite data)\n", sprite_len);
 
   // ======================================================================
   // Phase 8: ROM-based assets (2 assets)
@@ -4105,9 +3695,102 @@ void TestYAMLLoading(void) {
   }
 }
 
-// Extract sound banks using pure C music compiler
+// ROM addresses for sound banks (SNES addresses)
+static const uint32_t kSoundBankAddresses[] = {
+  0x998000,  // intro
+  0x9B8000,  // indoor
+  0x9AD380,  // ending
+};
+
+// Extract a sound bank directly from ROM
+// The ROM contains sound data in loadable format: [len_lo][len_hi][addr_lo][addr_hi][data...]
+// repeated until len == 0 (terminator: [0x00][0x00])
+static uint8_t* ExtractSoundBankFromROM(Rom *rom, int bank_index, size_t *out_size) {
+  if (bank_index < 0 || bank_index >= 3) {
+    LogError("Invalid sound bank index: %d", bank_index);
+    return NULL;
+  }
+
+  uint32_t snes_addr = kSoundBankAddresses[bank_index];
+
+  // First pass: calculate total size
+  size_t total_size = 0;
+  uint32_t ea = snes_addr;
+  int chunk_count = 0;
+
+  while (chunk_count < 256) {  // Safety limit
+    uint16_t numbytes = Rom_ReadWord(rom, ea);
+    if (numbytes == 0) {
+      total_size += 2;  // Terminator
+      break;
+    }
+
+    // Header (4 bytes) + data
+    total_size += 4 + numbytes;
+    ea += 4 + numbytes;
+
+    // Handle bank boundary crossing (SNES addressing quirk)
+    // If we cross below $8000 in the low word, we need to add $8000
+    if ((ea & 0xFFFF) < 0x8000) {
+      ea = (ea & 0xFF0000) | ((ea & 0xFFFF) + 0x8000);
+    }
+
+    chunk_count++;
+  }
+
+  if (chunk_count >= 256) {
+    LogError("Sound bank at $%06X seems corrupted (too many chunks)", snes_addr);
+    return NULL;
+  }
+
+  // Allocate output buffer
+  uint8_t *output = malloc(total_size);
+  if (!output) {
+    LogError("Failed to allocate %zu bytes for sound bank", total_size);
+    return NULL;
+  }
+
+  // Second pass: copy data
+  size_t pos = 0;
+  ea = snes_addr;
+
+  while (true) {
+    uint16_t numbytes = Rom_ReadWord(rom, ea);
+    uint16_t target = Rom_ReadWord(rom, ea + 2);
+
+    // Write header
+    output[pos++] = numbytes & 0xFF;
+    output[pos++] = (numbytes >> 8) & 0xFF;
+
+    if (numbytes == 0) {
+      // Terminator - target address is entry point, not used in output
+      break;
+    }
+
+    output[pos++] = target & 0xFF;
+    output[pos++] = (target >> 8) & 0xFF;
+
+    ea += 4;
+
+    // Copy data bytes
+    for (uint16_t i = 0; i < numbytes; i++) {
+      output[pos++] = Rom_ReadByte(rom, ea);
+      ea++;
+
+      // Handle bank boundary crossing
+      if ((ea & 0xFFFF) < 0x8000) {
+        ea = (ea & 0xFF0000) | ((ea & 0xFFFF) + 0x8000);
+      }
+    }
+  }
+
+  *out_size = pos;
+  return output;
+}
+
+// Extract sound banks - uses ROM data directly if embedded assets unavailable
 // Returns true on success, false on error
-bool ExtractSoundBanks(AssetBuilder *builder) {
+bool ExtractSoundBanks(AssetBuilder *builder, Rom *rom) {
   printf("  Extracting sound banks (intro, indoor, ending)...\n");
 
   const char *songs[] = {"intro", "indoor", "ending"};
@@ -4115,12 +3798,10 @@ bool ExtractSoundBanks(AssetBuilder *builder) {
   for (int i = 0; i < 3; i++) {
     const char *song = songs[i];
 
-    uint8_t *data = NULL;
     size_t size = 0;
-
-    // Use pure C music compiler (no Python dependency)
-    if (!MusicCompiler_CompileSoundBank(song, "assets", &data, &size)) {
-      LogError("Failed to compile sound bank %s", song);
+    uint8_t *data = ExtractSoundBankFromROM(rom, i, &size);
+    if (!data) {
+      LogError("Failed to extract sound bank %s from ROM", song);
       return false;
     }
 
@@ -4140,7 +3821,7 @@ bool ExtractSoundBanks(AssetBuilder *builder) {
 // Extract dialogue assets (pure C implementation - no Python dependency)
 // languages_arg: comma-separated list like "de,fr" (US is always included first), or NULL for US only
 // Returns true on success, false on error
-bool ExtractDialogue(AssetBuilder *builder, const char *languages_arg) {
+bool ExtractDialogue(AssetBuilder *builder, Rom *rom, const char *languages_arg) {
   // Call pure C implementation (replaces Python script)
-  return ExtractDialogueAssets(builder, languages_arg);
+  return ExtractDialogueAssets(builder, rom, languages_arg);
 }

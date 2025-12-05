@@ -20,47 +20,6 @@ if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 # ============================================================================
-# Embedded Assets Generation
-# ============================================================================
-
-# Find Python for asset embedding script
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-
-# Output paths for generated files
-set(EMBEDDED_ASSETS_C "${CMAKE_CURRENT_BINARY_DIR}/embedded_assets.c")
-set(EMBEDDED_ASSETS_H "${CMAKE_CURRENT_BINARY_DIR}/embedded_assets.h")
-
-# Collect all asset files (for dependency tracking)
-file(GLOB_RECURSE ASSET_FILES
-  "${CMAKE_SOURCE_DIR}/assets/dungeon/*.yaml"
-  "${CMAKE_SOURCE_DIR}/assets/overworld/*.yaml"
-  "${CMAKE_SOURCE_DIR}/assets/sound/*.brr"
-  "${CMAKE_SOURCE_DIR}/assets/*.txt"
-  "${CMAKE_SOURCE_DIR}/assets/*.yaml"
-  "${CMAKE_SOURCE_DIR}/assets/*.png"
-)
-
-# Custom command to generate embedded assets
-add_custom_command(
-  OUTPUT ${EMBEDDED_ASSETS_C} ${EMBEDDED_ASSETS_H}
-  COMMAND ${Python3_EXECUTABLE}
-    ${CMAKE_CURRENT_SOURCE_DIR}/generate_embedded_assets.py
-    ${CMAKE_SOURCE_DIR}/assets
-    ${EMBEDDED_ASSETS_C}
-    ${EMBEDDED_ASSETS_H}
-  DEPENDS
-    ${CMAKE_CURRENT_SOURCE_DIR}/generate_embedded_assets.py
-    ${ASSET_FILES}
-  COMMENT "Generating embedded assets..."
-  VERBATIM
-)
-
-# Custom target to ensure assets are generated
-add_custom_target(generate_embedded_assets
-  DEPENDS ${EMBEDDED_ASSETS_C} ${EMBEDDED_ASSETS_H}
-)
-
-# ============================================================================
 # Static Library (shared between CLI and launcher)
 # ============================================================================
 
@@ -80,7 +39,7 @@ set(RESTOOL_LIB_SOURCES
   ${CMAKE_CURRENT_SOURCE_DIR}/asset_reader.c
   ${CMAKE_CURRENT_SOURCE_DIR}/extract_common.c
   ${CMAKE_CURRENT_SOURCE_DIR}/sprite_loader.c
-  ${EMBEDDED_ASSETS_C}
+  ${CMAKE_CURRENT_SOURCE_DIR}/embedded_assets_stub.c
 )
 
 # Third-party vendored sources
@@ -106,7 +65,6 @@ add_library(restool_lib STATIC
 # Include directories for the library
 target_include_directories(restool_lib PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}              # For restool headers
-  ${CMAKE_CURRENT_BINARY_DIR}              # For generated embedded_assets.h
   ${CMAKE_SOURCE_DIR}/third_party/stb      # For stb_image.h, stb_image_write.h
   ${CMAKE_SOURCE_DIR}/third_party/sha256   # For sha256.h
   ${CMAKE_SOURCE_DIR}/third_party/lodepng  # For lodepng.h
@@ -127,7 +85,6 @@ endif()
 set(RESTOOL_LIB_TARGET restool_lib PARENT_SCOPE)
 set(RESTOOL_INCLUDE_DIRS
   ${CMAKE_CURRENT_SOURCE_DIR}
-  ${CMAKE_CURRENT_BINARY_DIR}
   ${CMAKE_SOURCE_DIR}/third_party/stb
   ${CMAKE_SOURCE_DIR}/third_party/sha256
   ${CMAKE_SOURCE_DIR}/third_party/lodepng

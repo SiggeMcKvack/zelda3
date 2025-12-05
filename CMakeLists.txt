@@ -61,9 +61,6 @@ if(YAML_FOUND)
     message(STATUS "Found libyaml: ${YAML_LIBRARIES}")
 endif()
 
-# Find Python3 (required for embedded assets generation)
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-
 # Find GTK3 (optional, for settings launcher)
 if(BUILD_LAUNCHER)
     find_package(PkgConfig QUIET)

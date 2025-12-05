@@ -9,7 +9,6 @@ This guide covers building Zelda3 on Windows using Visual Studio and vcpkg.
 - **Visual Studio 2019 or later** (Community Edition is free)
 - **CMake 3.10+**
 - **vcpkg** (for dependency management)
-- **Python 3.x** with pip (optional - only needed for Python restool)
 
 ## Installing Visual Studio
 
@@ -58,9 +57,6 @@ cd C:\vcpkg
 
 # Optional: Install GTK3 for the launcher (adds ~50 packages)
 .\vcpkg install gtk3:x64-windows pkgconf:x64-windows
-
-# Install Python requirements
-python -m pip install -r requirements.txt
 ```
 
 **Note:** Installation may take 10-15 minutes as vcpkg builds from source. GTK3 installation takes longer due to many dependencies.

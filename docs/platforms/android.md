@@ -12,7 +12,6 @@ This guide covers building and deploying Zelda3 on Android devices using Gradle 
 - **Android NDK** (r21e or later)
 - **Java 17+** (for Gradle 8.x)
 - `ANDROID_HOME` environment variable set
-- **Python 3.x** with pip (optional - only needed for Python restool)
 
 ## Installing Android Studio
 

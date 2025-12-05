@@ -23,30 +23,13 @@ This is a ~70-80kLOC C reimplementation of the original SNES game, reverse-engin
 
 ## Quick Start
 
-### 1. Get the Assets
-
-You need a US region ROM to extract game assets:
-
-```bash
-# Install Python dependencies
-python3 -m pip install -r requirements.txt
-
-# Place your zelda3.sfc ROM in the project root
-# SHA256: 66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb
-
-# Extract assets
-python3 assets/restool.py --extract-from-rom
-```
-
-This creates `zelda3_assets.dat` containing all game resources.
-
-### 2. Build
+### 1. Build
 
 **Linux/macOS:**
 ```bash
 # Install dependencies
-# Ubuntu/Debian: sudo apt install libsdl2-dev libopus-dev cmake build-essential
-# macOS: brew install sdl2 opus cmake
+# Ubuntu/Debian: sudo apt install libsdl2-dev libopus-dev libyaml-dev cmake build-essential
+# macOS: brew install sdl2 opus libyaml cmake
 
 # Optional: Install GTK3 for graphical launcher
 # Ubuntu/Debian: sudo apt install libgtk-3-dev
@@ -61,7 +44,7 @@ cmake --build . -j$(nproc)
 **Windows:**
 ```cmd
 # Using vcpkg for dependencies:
-vcpkg install sdl2:x64-windows opus:x64-windows
+vcpkg install sdl2:x64-windows opus:x64-windows libyaml:x64-windows
 
 # Build with CMake
 mkdir build && cd build
@@ -70,6 +53,17 @@ cmake --build . --config Release
 ```
 
 **See detailed instructions:** [Installation Guide](docs/installation.md) | [Platform-Specific Guides](docs/index.md#building--installation)
+
+### 2. Extract Assets
+
+You need a US region ROM (SHA256: `66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb`):
+
+```bash
+# Extract and compile assets from ROM
+./zelda3-restool --extract-from-rom /path/to/zelda3.sfc --compile
+```
+
+This creates `zelda3_assets.dat` containing all game resources.
 
 ### 3. Run
 

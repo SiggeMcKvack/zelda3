@@ -29,8 +29,9 @@ void ExtractSpriteGraphics(Rom *rom, AssetBuilder *builder, bool sprites_from_pn
 // Extract kBgGfx (115 background tilesets)
 void ExtractBackgroundGraphics(Rom *rom, AssetBuilder *builder);
 
-// Extract Link sprite graphics from PNG
-void ExtractLinkGraphics(AssetBuilder *builder);
+// Extract Link sprite graphics
+// use_custom_png: If true, load from linksprite.png; if false, extract from ROM
+void ExtractLinkGraphics(AssetBuilder *builder, Rom *rom, bool use_custom_png);
 
 // ============================================================================
 // Dungeon Extraction (extract_dungeon.c)
@@ -39,29 +40,29 @@ void ExtractLinkGraphics(AssetBuilder *builder);
 // Extract dungeon map data (2 packed assets)
 void ExtractDungeonMap(Rom *rom, AssetBuilder *builder);
 
-// Extract dungeon sprites from YAML
-void ExtractDungeonSprites(AssetBuilder *builder);
+// Extract dungeon sprites from ROM
+void ExtractDungeonSprites(AssetBuilder *builder, Rom *rom);
 
-// Extract dungeon secrets from YAML
-void ExtractDungeonSecrets(AssetBuilder *builder);
+// Extract dungeon secrets from ROM
+void ExtractDungeonSecrets(AssetBuilder *builder, Rom *rom);
 
 // Extract misc dungeon ROM assets (5 assets: kDungAttrsForTile_Offs, kDungAttrsForTile, etc.)
 void ExtractMiscDungeonRomAssets(Rom *rom, AssetBuilder *builder);
 
 // Extract dungeon room headers
-void ExtractDungeonRoomHeaders(AssetBuilder *builder);
+void ExtractDungeonRoomHeaders(AssetBuilder *builder, Rom *rom);
 
 // Extract simple dungeon room data (chests, tele_msg, pits)
-void ExtractDungeonRoomSimple(AssetBuilder *builder);
+void ExtractDungeonRoomSimple(AssetBuilder *builder, Rom *rom);
 
 // Extract dungeon room object data (3-layer encoding)
-void ExtractDungeonRoomData(AssetBuilder *builder);
+void ExtractDungeonRoomData(AssetBuilder *builder, Rom *rom);
 
 // Extract default and overlay dungeon rooms
-void ExtractDefaultOverlayRooms(AssetBuilder *builder);
+void ExtractDefaultOverlayRooms(AssetBuilder *builder, Rom *rom);
 
 // Extract entrances and starting points (33 assets)
-void ExtractEntrancesAndStartingPoints(AssetBuilder *builder);
+void ExtractEntrancesAndStartingPoints(AssetBuilder *builder, Rom *rom);
 
 // ============================================================================
 // Overworld Extraction (extract_overworld.c)
@@ -79,11 +80,11 @@ void ExtractOverworldCompressed(Rom *rom, AssetBuilder *builder);
 
 // Extract dialogue assets (kDialogue, kDialogueFont, kDialogueMap)
 // languages_arg: comma-separated list like "de,fr" (US is always included first), or NULL for US only
-bool ExtractDialogueAssets(AssetBuilder *builder, const char *languages_arg);
+bool ExtractDialogueAssets(AssetBuilder *builder, Rom *rom, const char *languages_arg);
 
 // Extract dialogue (wrapper for full extraction)
 // languages_arg: comma-separated list like "de,fr" (US is always included first), or NULL for US only
-bool ExtractDialogue(AssetBuilder *builder, const char *languages_arg);
+bool ExtractDialogue(AssetBuilder *builder, Rom *rom, const char *languages_arg);
 
 // ============================================================================
 // Misc Extraction (extract_misc.c)
@@ -105,14 +106,14 @@ void ExtractEnemyDamageData(Rom *rom, AssetBuilder *builder);
 // Map32 Extraction (extract_map32.c)
 // ============================================================================
 
-// Extract kMap32ToMap16 (4 assets from text file)
-void ExtractMap32toMap16(AssetBuilder *builder);
+// Extract kMap32ToMap16 (4 assets from text file or ROM)
+void ExtractMap32toMap16(AssetBuilder *builder, Rom *rom);
 
 // ============================================================================
-// Sound Extraction (in music_compiler.c)
+// Sound Extraction (in main.c)
 // ============================================================================
 
-// Extract sound banks using pure C music compiler
-bool ExtractSoundBanks(AssetBuilder *builder);
+// Extract sound banks - uses ROM data directly if embedded assets unavailable
+bool ExtractSoundBanks(AssetBuilder *builder, Rom *rom);
 
 #endif // RESTOOL_EXTRACT_H

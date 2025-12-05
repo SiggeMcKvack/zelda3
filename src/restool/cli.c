@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 // Shared utilities
 #include "../platform.h"
@@ -37,6 +38,120 @@
 
 #define RESTOOL_VERSION "0.1.0"
 
+// ============================================================================
+// Font ROM Extraction
+// ============================================================================
+
+// Font configuration for each language
+// Format: { lang_code, font_addr, font_size, width_addr, width_count }
+// All ROMs store fonts as 2bpp SNES tiles (256 chars × 16 bytes = 4096 bytes)
+typedef struct {
+  const char *lang;
+  uint32_t font_addr;     // SNES address of font tile data
+  uint32_t width_addr;    // SNES address of font width table
+  int width_count;        // Number of entries in width table
+} FontRomConfig;
+
+static const FontRomConfig kFontRomConfigs[] = {
+  { "us",         0x8E8000, 0x8ECADF, 99 },
+  { "en",         0x8E8000, 0x8ECAFF, 102 },
+  { "de",         0x0CC6E8, 0x8CDECF, 112 },  // German ROM has font at different address
+  { "fr",         0x0CC6E8, 0x8CDEAF, 112 },  // French ROM
+  { "fr-c",       0x0CD078, 0x8CE83F, 112 },  // French Canada ROM
+  { "es",         0x8E8000, 0x8ECADF, 99 },
+  { "pl",         0x8E8000, 0x8ECADF, 99 },
+  { "pt",         0x8E8000, 0x8ECADF, 121 },
+  { "nl",         0x8E8000, 0x8ECADF, 99 },
+  { "sv",         0x8E8000, 0x8ECADF, 99 },
+  { "redux",      0x8E8000, 0x8ECADF, 99 },
+  { "retrans-kal",0x8E8000, 0x8ECADF, 99 },
+};
+
+#define FONT_TILE_SIZE 4096  // 256 chars × 16 bytes
+
+static const FontRomConfig* GetFontRomConfig(const char *lang) {
+  for (size_t i = 0; i < sizeof(kFontRomConfigs) / sizeof(kFontRomConfigs[0]); i++) {
+    if (strcmp(kFontRomConfigs[i].lang, lang) == 0) {
+      return &kFontRomConfigs[i];
+    }
+  }
+  return NULL;
+}
+
+// Extract font data from ROM and save to binary files
+// Creates: font_{lang}.bin (4096 bytes) and fontwidth_{lang}.bin (width_count bytes)
+static bool ExtractFontFromRom(Rom *rom, const char *lang_code, const char *output_dir) {
+  const FontRomConfig *config = GetFontRomConfig(lang_code);
+  if (!config) {
+    LogError("No font configuration for language '%s'", lang_code);
+    return false;
+  }
+
+  printf("Extracting font from ROM at 0x%X...\n", config->font_addr);
+
+  // Read font tile data
+  uint8_t *font_data = Rom_ReadPtr(rom, config->font_addr, FONT_TILE_SIZE);
+  if (!font_data) {
+    LogError("Failed to read font data from ROM at 0x%X", config->font_addr);
+    return false;
+  }
+
+  // Read width table
+  uint8_t *width_data = Rom_ReadPtr(rom, config->width_addr, config->width_count);
+  if (!width_data) {
+    LogError("Failed to read font width table from ROM at 0x%X", config->width_addr);
+    free(font_data);
+    return false;
+  }
+
+  // Build output filenames
+  char font_filename[512], width_filename[512];
+  const char *dir = output_dir && output_dir[0] ? output_dir : ".";
+
+  // Replace '-' with '_' in language code for filename
+  char lang_clean[16];
+  strncpy(lang_clean, lang_code, sizeof(lang_clean) - 1);
+  lang_clean[sizeof(lang_clean) - 1] = '\0';
+  for (char *p = lang_clean; *p; p++) {
+    if (*p == '-') *p = '_';
+  }
+
+  snprintf(font_filename, sizeof(font_filename), "%s/font_%s.bin", dir, lang_clean);
+  snprintf(width_filename, sizeof(width_filename), "%s/fontwidth_%s.bin", dir, lang_clean);
+
+  // Write font data
+  FILE *f = fopen(font_filename, "wb");
+  if (!f) {
+    LogError("Failed to create %s", font_filename);
+    free(font_data);
+    free(width_data);
+    return false;
+  }
+  fwrite(font_data, 1, FONT_TILE_SIZE, f);
+  fclose(f);
+  printf("  Wrote %s (%d bytes)\n", font_filename, FONT_TILE_SIZE);
+
+  // Write width data
+  f = fopen(width_filename, "wb");
+  if (!f) {
+    LogError("Failed to create %s", width_filename);
+    free(font_data);
+    free(width_data);
+    return false;
+  }
+  fwrite(width_data, 1, config->width_count, f);
+  fclose(f);
+  printf("  Wrote %s (%d bytes)\n", width_filename, config->width_count);
+
+  free(font_data);
+  free(width_data);
+  return true;
+}
+
+// ============================================================================
+// CLI Arguments
+// ============================================================================
+
 typedef struct {
   const char *rom_path;
   const char *output_dir;
@@ -50,6 +165,7 @@ typedef struct {
   const char *language;
   const char *languages;    // --languages comma-separated list for multi-lang build
   bool sprites_from_png;    // --sprites-from-png: load sprites from PNG instead of ROM
+  bool custom_sprites;      // --custom-sprites: use linksprite.png instead of ROM
   bool verbose;
   bool test_yaml;
   bool test_map32;
@@ -75,6 +191,7 @@ static void PrintHelp(void) {
   printf("  --compile                   Compile assets to zelda3_assets.dat\n");
   printf("  --no-compile                Skip compilation (extract only)\n");
   printf("  --sprites-from-png          Load sprite graphics from PNG instead of ROM\n");
+  printf("  --custom-sprites            Use linksprite.png for Link graphics instead of ROM\n");
   printf("  --output <dir>              Output directory (default: current)\n");
   printf("  --verbose, -v               Verbose output\n");
   printf("  --help, -h                  Show this help\n");
@@ -174,6 +291,8 @@ static bool ParseArgs(int argc, char **argv, RestoolArgs *args) {
       args->no_compile = true;
     } else if (strcmp(argv[i], "--sprites-from-png") == 0) {
       args->sprites_from_png = true;
+    } else if (strcmp(argv[i], "--custom-sprites") == 0) {
+      args->custom_sprites = true;
     } else if (strcmp(argv[i], "--languages") == 0) {
       if (i + 1 >= argc) {
         LogError("--languages requires a comma-separated list of language codes");
@@ -447,6 +566,14 @@ int main(int argc, char **argv) {
     }
 
     TextDecode_FreeStrings(strings);
+
+    // Also extract font data from the ROM
+    // This allows the font to be used when compiling with --languages
+    if (!ExtractFontFromRom(rom, lang_code, args.output_dir)) {
+      LogError("Failed to extract font (dialogue extraction succeeded)");
+      // Continue anyway - dialogue was extracted successfully
+    }
+
     Rom_Free(rom);
     return 0;  // Exit after dialogue extraction
   }
@@ -472,7 +599,8 @@ int main(int argc, char **argv) {
       .output_path = output_path,
       .languages = args.languages,
       .dialogue_dir = NULL,
-      .sprites_from_png = args.sprites_from_png
+      .sprites_from_png = args.sprites_from_png,
+      .custom_sprites = args.custom_sprites
     };
 
     int result = Restool_CompileAssetsEx(&options);

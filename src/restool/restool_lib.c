@@ -134,7 +134,7 @@ int Restool_CompileAssetsEx(const RestoolCompileOptions *options) {
     // ========================================================================
 
     // 1. print_sound_banks() - Music data (3 assets)
-    if (!ExtractSoundBanks(builder)) {
+    if (!ExtractSoundBanks(builder, rom)) {
         LogError("Failed to extract sound banks");
         AssetBuilder_Free(builder);
         Rom_Free(rom);
@@ -142,25 +142,25 @@ int Restool_CompileAssetsEx(const RestoolCompileOptions *options) {
     }
 
     // 2. print_dungeon_rooms() - All dungeon room data
-    ExtractDungeonRoomData(builder);
-    ExtractDungeonRoomHeaders(builder);
-    ExtractDungeonRoomSimple(builder);
-    ExtractEntrancesAndStartingPoints(builder);
-    ExtractDefaultOverlayRooms(builder);
-    ExtractDungeonSecrets(builder);
+    ExtractDungeonRoomData(builder, rom);
+    ExtractDungeonRoomHeaders(builder, rom);
+    ExtractDungeonRoomSimple(builder, rom);
+    ExtractEntrancesAndStartingPoints(builder, rom);
+    ExtractDefaultOverlayRooms(builder, rom);
+    ExtractDungeonSecrets(builder, rom);
     ExtractMiscDungeonRomAssets(rom, builder);
 
     // 3. print_enemy_damage_data() - 1 asset
     ExtractEnemyDamageData(rom, builder);
 
     // 4. print_link_graphics() - 1 asset
-    ExtractLinkGraphics(builder);
+    ExtractLinkGraphics(builder, rom, options->custom_sprites);
 
     // 5. print_dungeon_sprites() - 2 assets
-    ExtractDungeonSprites(builder);
+    ExtractDungeonSprites(builder, rom);
 
     // 6. print_map32_to_map16() - 4 assets
-    ExtractMap32toMap16(builder);
+    ExtractMap32toMap16(builder, rom);
 
     // 7. print_images() - Sprite and background graphics
     ExtractSpriteGraphics(rom, builder, options->sprites_from_png);
@@ -170,7 +170,7 @@ int Restool_CompileAssetsEx(const RestoolCompileOptions *options) {
     ExtractMiscAssets(rom, builder);
 
     // 9. print_dialogue() - 3 assets per language
-    if (!ExtractDialogue(builder, options->languages)) {
+    if (!ExtractDialogue(builder, rom, options->languages)) {
         LogError("Failed to extract dialogue");
         AssetBuilder_Free(builder);
         Rom_Free(rom);

@@ -27,12 +27,14 @@ cmake --build . -j$(nproc)
 # 2. Place your ROM in the project root
 cp /path/to/your/rom.sfc ../zelda3.sfc
 
-# 3. Extract assets and compile
+# 3. Extract assets and compile (all data extracted directly from ROM)
 ./zelda3-restool --extract-from-rom ../zelda3.sfc
 
 # 4. Verify output
-ls -lh zelda3_assets.dat  # Should be ~680KB
+ls -lh zelda3_assets.dat  # Should be ~680KB for US-only, ~1MB with multiple languages
 ```
+
+**Note:** The C restool extracts all assets directly from ROM addresses - no intermediate YAML or PNG files are required. This ensures release builds work on any system without needing pre-extracted asset files.
 
 ## Command-Line Parameters
 
@@ -154,6 +156,36 @@ This flag is useful for ROM hacking and sprite modifications. When enabled, the 
 - Community sprite sheet projects
 - Testing sprite modifications before ROM injection
 
+### `--custom-sprites`
+
+Use custom Link sprite graphics from `linksprite.png` instead of extracting from ROM.
+
+**Type:** Boolean flag
+**Default:** False
+
+By default, Link graphics are extracted directly from the ROM at address `$90:8000` (28,672 bytes = 896 tiles). This flag overrides that behavior to load from a PNG file instead.
+
+```bash
+# Default: Extract Link graphics from ROM (recommended)
+./zelda3-restool --extract-from-rom zelda3.sfc
+
+# Use custom linksprite.png for Link graphics
+./zelda3-restool --extract-from-rom zelda3.sfc --custom-sprites
+```
+
+**PNG Requirements:**
+- Filename: `assets/linksprite.png`
+- Dimensions: 128×448 pixels (16×56 tiles)
+- Format: Indexed PNG with 16-color palette
+- Must exist when flag is used (no ROM fallback)
+
+**Use Cases:**
+- Custom Link sprite modifications (different colors, outfits)
+- ROM hacking projects with modified player graphics
+- Testing sprite changes before ROM injection
+
+**Note:** This flag only affects Link's sprite graphics. Enemy sprites use `--sprites-from-png` for customization.
+
 ### `--extract-overworld`
 
 Extract overworld data only.
@@ -242,11 +274,13 @@ certutil -hashfile zelda3.sfc SHA1
 # Place ROM in project root
 cp /path/to/zelda3.sfc .
 
-# Extract and compile
-./build/src/restool/zelda3-restool --extract-from-rom zelda3.sfc --compile
+# Extract and compile (all data comes directly from ROM)
+./build/zelda3-restool --extract-from-rom zelda3.sfc
 
 # Output: zelda3_assets.dat (~680KB)
 ```
+
+**Note:** No intermediate files required - everything is extracted directly from ROM addresses.
 
 ### Workflow 2: Extract Dialogue from Translated ROM
 
@@ -257,23 +291,20 @@ cp /path/to/zelda3.sfc .
 # Creates: assets/dialogue_de.txt
 ```
 
-### Workflow 3: Inspect Extracted Data
+### Workflow 3: Extract and Inspect Specific Data
 
 ```bash
-# Extract without compiling
-./zelda3-restool --extract-from-rom zelda3.sfc
+# Extract Link graphics to PNG for inspection/modification
+./zelda3-restool --extract-from-rom zelda3.sfc --extract-graphics
+open linksprite.png  # macOS
+xdg-open linksprite.png  # Linux
 
-# Examine YAML files
-cat assets/dungeon/dungeon-0.yaml
-cat assets/overworld/overworld-0.yaml
-
-# View graphics
-open assets/linksprite.png  # macOS
-xdg-open assets/linksprite.png  # Linux
-
-# Check dialogue
+# Extract dialogue for editing
+./zelda3-restool --extract-from-rom zelda3.sfc --extract-dialogue
 head -n 20 assets/dialogue.txt
 ```
+
+**Note:** The C restool reads data directly from ROM, so there are no intermediate YAML files to inspect. Use `--extract-graphics` or `--extract-dialogue` to create editable files.
 
 ### Workflow 4: Extract Specific Assets
 
@@ -288,10 +319,24 @@ head -n 20 assets/dialogue.txt
 ./zelda3-restool --extract-from-rom zelda3.sfc --extract-overworld
 ```
 
-### Workflow 5: Verbose Debugging
+### Workflow 5: Multi-Language Build
 
 ```bash
-./zelda3-restool --verbose --extract-from-rom zelda3.sfc --compile
+# 1. Extract dialogue from each language ROM
+./zelda3-restool --extract-from-rom german.sfc --extract-dialogue
+./zelda3-restool --extract-from-rom french.sfc --extract-dialogue
+./zelda3-restool --extract-from-rom spanish.sfc --extract-dialogue
+
+# 2. Compile with US ROM and additional languages
+./zelda3-restool --extract-from-rom zelda3.sfc --languages de,fr,es
+
+# Output: zelda3_assets.dat (~1MB with 4 languages)
+```
+
+### Workflow 6: Verbose Debugging
+
+```bash
+./zelda3-restool --verbose --extract-from-rom zelda3.sfc
 ```
 
 ## Output Files
@@ -303,38 +348,22 @@ zelda3/
 └── zelda3_assets.dat          # ~680KB binary asset file
 ```
 
-### Intermediate Files (Created by `--extract-from-rom`)
+### Intermediate Files (Optional - for debugging/editing)
+
+The C restool extracts all data directly from ROM, so intermediate files are **not required** for normal operation. However, some files may be created when using specific extraction options:
 
 ```
 assets/
-├── dungeon/
-│   ├── dungeon-0.yaml         # Room 0 data
-│   ├── dungeon-1.yaml         # Room 1 data
-│   ├── ...                    # Rooms 2-318
-│   ├── dungeon-319.yaml       # Room 319 data
-│   ├── default_rooms.yaml     # 8 default room templates
-│   └── overlay_rooms.yaml     # 19 overlay templates
-│
-├── overworld/
-│   ├── overworld-0.yaml       # Area 0 (Light world 0,0)
-│   ├── overworld-1.yaml       # Area 1
-│   ├── ...                    # Areas 2-158
-│   └── overworld-159.yaml     # Area 159
-│
-├── linksprite.png             # Link sprites (128×448 pixels)
-├── font.png                   # Font glyphs
-├── dialogue.txt               # US dialogue (397 strings)
+├── dialogue.txt               # US dialogue (created by --extract-dialogue)
 ├── dialogue_de.txt            # German dialogue (if extracted)
 ├── dialogue_fr.txt            # French dialogue (if extracted)
 │   ... (other dialogue files)
 │
-├── map32_to_map16.txt         # Tile conversion table
-├── music_info.yaml            # Music metadata
-├── sfx.txt                    # Sound effects data
-├── sound_intro.txt            # Intro music data
-├── sound_indoor.txt           # Indoor music data
-└── sound_ending.txt           # Ending music data
+├── linksprite.png             # Link sprites (created by --extract-graphics)
+└── font*.png                  # Font glyphs (used for non-US languages)
 ```
+
+**Note:** Unlike the Python restool which requires YAML intermediate files, the C restool reads all dungeon, overworld, map, music, and sprite data directly from ROM addresses. This eliminates dependency on git-ignored extracted files.
 
 ### zelda3_assets.dat Structure
 
@@ -677,6 +706,7 @@ typedef struct {
     const char *languages;       // Comma-separated language codes (e.g., "de,fr") or NULL
     const char *dialogue_dir;    // Directory containing dialogue_{lang}.txt files (or NULL)
     bool sprites_from_png;       // If true, load sprites from PNG files instead of ROM
+    bool custom_sprites;         // If true, use linksprite.png instead of ROM for Link graphics
 } RestoolCompileOptions;
 
 int Restool_CompileAssetsEx(const RestoolCompileOptions *options);
@@ -752,7 +782,8 @@ RestoolCompileOptions options = {
     .output_path = "/data/zelda3_assets.dat",
     .languages = "de",
     .dialogue_dir = "/cache/dialogue",
-    .sprites_from_png = false
+    .sprites_from_png = false,
+    .custom_sprites = false    // Use ROM for Link graphics (default)
 };
 int result = Restool_CompileAssetsEx(&options);
 ```
@@ -775,7 +806,8 @@ To compile assets with multiple languages:
        .output_path = "zelda3_assets.dat",
        .languages = "de,fr",           // Additional languages
        .dialogue_dir = output_dir,     // Where dialogue files were extracted
-       .sprites_from_png = false
+       .sprites_from_png = false,
+       .custom_sprites = false         // Use ROM for Link graphics
    };
    Restool_CompileAssetsEx(&options);
    ```

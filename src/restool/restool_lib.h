@@ -42,6 +42,7 @@ typedef struct {
     const char *languages;       // Comma-separated language codes (e.g., "de,fr") or NULL for US only
     const char *dialogue_dir;    // Directory containing dialogue_{lang}.txt files (can be NULL)
     bool sprites_from_png;       // If true, load sprites from PNG files instead of ROM
+    bool custom_sprites;         // If true, use linksprite.png instead of ROM for Link graphics
 } RestoolCompileOptions;
 
 // Compile assets from US ROM with optional additional languages

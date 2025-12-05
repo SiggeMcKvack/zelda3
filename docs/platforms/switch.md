@@ -9,7 +9,6 @@ This guide covers building and deploying Zelda3 on Nintendo Switch using DevKitP
 - **Nintendo Switch** with custom firmware (Atmosphere)
 - **DevKitPro** toolchain with Switch support
 - **SD card** for file transfer
-- **Python 3.x** with pip (optional - only needed for Python restool)
 
 ## Important Legal Notice
 

@@ -15,7 +15,7 @@ Developer documentation for the C-based asset extraction tool.
 - Palette conversion (15-bit BGR555 → 32-bit RGBA)
 - PNG output via stb_image_write
 
-**Status:** 100% complete - All 165 assets extracted, byte-perfect verified. Zero Python dependencies.
+**Status:** 100% complete - All 165 assets extracted, byte-perfect verified. Zero external dependencies beyond standard C libraries and libyaml.
 
 ## Usage
 
@@ -66,9 +66,9 @@ src/restool/
 - Standard C library (`stdc`)
 - Math library (`libm`) - for floating point operations
 
-**No External Dependencies:**
+**No External Dependencies (at runtime):**
 - No SDL2 (unlike main game)
-- No Python runtime (pure C implementation)
+- No Python (pure C implementation, no build-time or runtime Python required)
 - No image processing libraries (PNG handled by lodepng)
 - No text processing libraries (compression in pure C)
 
@@ -369,19 +369,16 @@ Compare output PNGs with Python tool results for pixel-perfect accuracy.
 - ✅ Phase 8: Asset compilation to zelda3_assets.dat (byte-perfect)
 - ✅ Phase 9: Full CLI integration
 - ✅ Phase 10: Pure C dialogue extraction (zero Python dependency)
+- ✅ Phase 11: Multi-language support (12 languages from ROMs)
+- ✅ Phase 12: Font extraction from ROMs (no PNG files required)
 
 **Byte-Perfect Verification:**
 - 100% match with Python reference implementation
-- 679,700 bytes total asset data
-- 668KB zelda3_assets.dat file
+- ~680KB zelda3_assets.dat file (US-only)
+- ~1MB with multiple languages
 - Zero differences via binary comparison
 
 ## Potential Future Enhancements
-
-**Multi-Language Support:**
-- Current: US language dialogue only
-- Potential: Add DE/FR/EN/ES language support (~200 lines per language)
-- Requires: Porting alphabet/dictionary/encoder data structures from Python
 
 **Compression:**
 - Current: Decompression only

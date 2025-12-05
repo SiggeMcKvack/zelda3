@@ -26,7 +26,6 @@ Complete build instructions for Zelda3 on all supported platforms.
 - **libyaml** development library (required for building C restool)
 - **CMake 3.10+**
 - **C Compiler** (GCC, Clang, or MSVC)
-- **Python 3.x** with pip (optional - only needed for Python restool)
 
 ### Platform-Specific Dependencies
 
@@ -49,7 +48,7 @@ Before building or running Zelda3, you must extract game assets from your ROM.
 
 ### Method 1: C Restool (Recommended)
 
-The C-based restool is faster and requires no Python dependencies:
+The C-based restool is faster and requires no Python dependencies. All data is extracted directly from ROM addresses.
 
 ```bash
 # Build restool (built automatically with CMake)
@@ -57,11 +56,15 @@ mkdir build && cd build
 cmake ..
 cmake --build . -j$(nproc)
 
-# Extract and compile assets
-./zelda3-restool --extract-from-rom ../zelda3.sfc --compile
+# Extract and compile assets (ROM-only extraction)
+./zelda3-restool --extract-from-rom ../zelda3.sfc
 ```
 
-This creates `zelda3_assets.dat` (~680KB) in the parent directory.
+This creates `zelda3_assets.dat` (~680KB for US-only, ~1MB with multiple languages).
+
+**Optional flags:**
+- `--languages de,fr,es` - Include additional language dialogue
+- `--custom-sprites` - Use custom `linksprite.png` instead of ROM graphics
 
 See [C Restool Guide](RESTOOL_C.md) for detailed options and multi-language support.
 
@@ -307,17 +310,16 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y libsdl2-dev libopus-dev cmake build-essential python3 python3-pip
-          python3 -m pip install -r requirements.txt
-
-      - name: Extract Assets
-        run: python3 assets/restool.py --extract-from-rom -r zelda3.sfc
+          sudo apt install -y libsdl2-dev libopus-dev libyaml-dev cmake build-essential
 
       - name: Build
         run: |
           mkdir build && cd build
           cmake .. -DCMAKE_BUILD_TYPE=Release
           cmake --build . -j$(nproc)
+
+      - name: Extract Assets
+        run: ./build/zelda3-restool --extract-from-rom zelda3.sfc --compile
 
       - name: Test
         run: ./build/zelda3 --version

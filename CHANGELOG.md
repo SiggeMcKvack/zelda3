@@ -4,6 +4,47 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## December 2025
 
+### ROM-Only Asset Extraction (C Restool)
+
+**Major Change:** The C restool now extracts all assets directly from ROM by default, with no dependency on intermediate files or embedded assets.
+
+**Problem Solved:**
+- Release builds previously failed on clean systems (like Steam Deck) because YAML/PNG files extracted from ROM were git-ignored and not included in releases
+- Error: "Failed to load assets/sound_intro" when running release builds
+
+**Changes:**
+- All extraction now reads directly from ROM addresses (no YAML/PNG intermediate files required)
+- Link graphics extracted from ROM at `$90:8000` by default
+- Sound banks, dungeon data, overworld data, sprites all extracted from ROM
+- Fonts use PNG with ROM fallback (required for non-US language fonts)
+
+**New Flag: `--custom-sprites`**
+- Use `--custom-sprites` to load Link graphics from `linksprite.png` instead of ROM
+- Useful for custom sprite modifications and ROM hacking
+- Without flag: Always uses ROM data (default, recommended)
+- With flag: Requires `linksprite.png` in assets directory
+
+**Usage:**
+```bash
+# Standard extraction (ROM-only, recommended)
+./zelda3-restool --extract-from-rom zelda3.sfc
+
+# With custom Link sprites
+./zelda3-restool --extract-from-rom zelda3.sfc --custom-sprites
+```
+
+**Multi-Language Verification:**
+- Tested with 10 languages: us, de, en, es, fr, fr-c, pl, pt, redux, retrans-kal
+- Byte-perfect reproducibility verified (identical output on repeated runs)
+- All 165 assets extracted correctly
+
+**Files Modified:**
+- `src/restool/main.c` - ROM-only extraction for all asset types
+- `src/restool/cli.c` - Added `--custom-sprites` flag
+- `src/restool/restool_lib.h` - Added `custom_sprites` option to `RestoolCompileOptions`
+- `src/restool/restool_lib.c` - Pass custom_sprites to extraction
+- `src/restool/extract.h` - Updated `ExtractLinkGraphics` signature
+
 ### Windows Launcher Support
 
 The GTK3 launcher is now included in Windows CI builds and releases.
