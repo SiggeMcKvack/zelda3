@@ -3,14 +3,8 @@
 #include "asset_reader.h"
 #include "../logging.h"
 
-// Load YAML from embedded assets or filesystem
+// Load YAML from filesystem
 YamlDoc* LoadAssetYaml(const char *path) {
-  size_t size;
-  const uint8_t *embedded = AssetReader_GetEmbedded(path, &size);
-  if (embedded) {
-    return Yaml_LoadString(embedded, size);
-  }
-  // Fall back to filesystem
   return Yaml_LoadFile(path);
 }
 

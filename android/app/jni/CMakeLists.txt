@@ -18,7 +18,6 @@ add_subdirectory(yaml)
 set(ZELDA3_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../src)
 set(ZELDA3_SNES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../snes)
 set(ZELDA3_THIRD_PARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party)
-set(ZELDA3_ASSETS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../assets)
 
 # Collect all game source files from main repo
 file(GLOB GAME_SOURCES
@@ -54,27 +53,11 @@ set(RESTOOL_SOURCES
     ${ZELDA3_THIRD_PARTY_DIR}/sha256/sha256.c
 )
 
-# Generate embedded assets at build time
-find_package(Python3 REQUIRED COMPONENTS Interpreter)
-set(EMBEDDED_ASSETS_C "${CMAKE_CURRENT_BINARY_DIR}/embedded_assets.c")
-set(EMBEDDED_ASSETS_H "${CMAKE_CURRENT_BINARY_DIR}/embedded_assets.h")
-add_custom_command(
-    OUTPUT ${EMBEDDED_ASSETS_C} ${EMBEDDED_ASSETS_H}
-    COMMAND ${Python3_EXECUTABLE}
-        ${ZELDA3_SRC_DIR}/restool/generate_embedded_assets.py
-        ${ZELDA3_ASSETS_DIR}
-        ${EMBEDDED_ASSETS_C}
-        ${EMBEDDED_ASSETS_H}
-    DEPENDS ${ZELDA3_SRC_DIR}/restool/generate_embedded_assets.py
-    COMMENT "Generating embedded assets for restool..."
-)
-
 # Create main shared library
 add_library(main SHARED
     ${GAME_SOURCES}
     ${ANDROID_SOURCES}
     ${RESTOOL_SOURCES}
-    ${EMBEDDED_ASSETS_C}
     ${ZELDA3_THIRD_PARTY_DIR}/gl_core/gl_core_3_1.c
 )
 

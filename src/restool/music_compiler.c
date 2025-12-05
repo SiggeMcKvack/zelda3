@@ -1040,16 +1040,7 @@ static bool parse_text_file(const char *path, SymbolTable *st, EntityList *el) {
 static bool load_music_info(const char *path, MusicInfo *info) {
     memset(info, 0, sizeof(*info));
 
-    // Try to load from embedded assets first
-    size_t yaml_size;
-    const uint8_t *yaml_data = AssetReader_GetEmbedded(path, &yaml_size);
-    YamlDoc *doc;
-    if (yaml_data) {
-        doc = Yaml_LoadString(yaml_data, yaml_size);
-    } else {
-        doc = Yaml_LoadFile(path);
-    }
-
+    YamlDoc *doc = Yaml_LoadFile(path);
     if (!doc) {
         LogError("Failed to load %s: %s", path, Yaml_GetLastError());
         return false;
