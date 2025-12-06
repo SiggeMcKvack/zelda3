@@ -446,12 +446,12 @@ GlslShader *GlslShader_CreateFromFile(const char *filename, bool opengl_es) {
     glGetProgramiv(p->gl_program, GL_LINK_STATUS, &link_status);
     buffer[0] = 0;
     glGetProgramInfoLog(p->gl_program, sizeof(buffer), NULL, buffer);
-    if (link_status != GL_TRUE || buffer[0]) {
-      const char *severity = link_status != GL_TRUE ? "Error" : "While";
-      LogError("%s linking shader in file '%s':\n%s", severity, p->filename, buffer);
-    }
-    if (link_status != GL_TRUE)
+    if (link_status != GL_TRUE) {
+      LogError("Error linking shader in file '%s':\n%s", p->filename, buffer);
       goto FAIL;
+    } else if (buffer[0]) {
+      LogWarn("Shader link warning in '%s':\n%s", p->filename, buffer);
+    }
     glGenFramebuffers(1, &p->gl_fbo);
     glGenTextures(1, &p->gl_texture);
   }

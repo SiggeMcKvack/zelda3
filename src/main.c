@@ -22,6 +22,10 @@
 #include <unistd.h>
 #endif
 
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+
 #include "snes/ppu.h"
 
 #include "types.h"
@@ -43,6 +47,7 @@ static bool g_run_without_emu = 0;
 // Forwards
 static bool LoadRom(const char *filename);
 static void LoadLinkGraphics();
+static void SwitchToExecutableDirectory();
 static void RenderNumber(uint8 *dst, size_t pitch, int n, bool big);
 static void HandleInput(int keyCode, int modCode, bool pressed);
 static void HandleCommand(uint32 j, bool pressed);
@@ -52,7 +57,6 @@ static void HandleGamepadAxisInput(int gamepad_id, int axis, int value);
 static void OpenOneGamepad(int i);
 static void HandleVolumeAdjustment(int volume_adjustment);
 static void LoadAssets();
-static void SwitchDirectory();
 
 enum {
   kDefaultFullscreen = 0,
@@ -360,7 +364,7 @@ int main(int argc, char** argv) {
                           "SDL_AndroidGetExternalStoragePath returned NULL");
     }
 #else
-    SwitchDirectory();
+    SwitchToExecutableDirectory();
 #endif
   }
 #ifdef PLATFORM_ANDROID
@@ -1050,37 +1054,67 @@ static void LoadAssets() {
   }
 }
 
-// Go some steps up and find zelda3.ini
-static void SwitchDirectory() {
-  char buf[4096];
-  if (!getcwd(buf, sizeof(buf) - 32))
-    return;
-  size_t pos = strlen(buf);
+// Check if required game files exist in current directory
+static bool HasGameFiles() {
+  FILE *f = fopen("zelda3_assets.dat", "rb");
+  if (f) {
+    fclose(f);
+    return true;
+  }
+  return false;
+}
 
-  // Use platform-appropriate path separator
-#ifdef PLATFORM_WINDOWS
-  const char *ini_file = "\\zelda3.ini";
+// Get directory containing the executable and chdir to it
+// Also looks in parent directory for assets (for development builds where exe is in build/)
+static void SwitchToExecutableDirectory() {
+  char buf[4096];
+
+#ifdef __APPLE__
+  uint32_t size = sizeof(buf);
+  if (_NSGetExecutablePath(buf, &size) == 0) {
+    char *last_slash = strrchr(buf, '/');
+    if (last_slash) *last_slash = '\0';
+  } else {
+    return;  // Failed, stay in current directory
+  }
+#elif defined(__linux__)
+  ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+  if (len != -1) {
+    buf[len] = '\0';
+    char *last_slash = strrchr(buf, '/');
+    if (last_slash) *last_slash = '\0';
+  } else {
+    return;  // Failed, stay in current directory
+  }
+#elif defined(PLATFORM_WINDOWS)
+  if (GetModuleFileNameA(NULL, buf, sizeof(buf)) > 0) {
+    char *last_slash = strrchr(buf, '\\');
+    if (last_slash) *last_slash = '\0';
+  } else {
+    return;  // Failed, stay in current directory
+  }
 #else
-  const char *ini_file = "/zelda3.ini";
+  return;  // Unknown platform, stay in current directory
 #endif
 
-  for (int step = 0; pos != 0 && step < 3; step++) {
-    strcpy(buf + pos, ini_file);
-    FILE *f = fopen(buf, "rb");
-    if (f) {
-      fclose(f);
-      buf[pos] = 0;
-      if (step != 0) {
-        LogInfo("Found zelda3.ini in %s", buf);
-        int err = chdir(buf);
-        (void)err;
-      }
+  // First try: exe directory
+  if (chdir(buf) == 0) {
+    if (HasGameFiles()) {
+      LogInfo("Using executable directory: %s", buf);
       return;
     }
-    pos--;
-    // Accept both separators when scanning backwards for cross-platform paths
-    while (pos != 0 && buf[pos] != '/' && buf[pos] != '\\')
-      pos--;
+    // Second try: parent directory (for development builds where exe is in build/)
+    if (chdir("..") == 0) {
+      if (HasGameFiles()) {
+        char cwd[4096];
+        if (getcwd(cwd, sizeof(cwd)))
+          LogInfo("Using parent directory: %s", cwd);
+        return;
+      }
+      // Not found in parent, go back to exe directory
+      chdir(buf);
+    }
+    LogInfo("Using executable directory: %s", buf);
   }
 }
 

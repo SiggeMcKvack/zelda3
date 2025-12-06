@@ -4,6 +4,30 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## December 2025
 
+### Fixed: Shader/Config Not Loading via Launcher
+
+**Problem:** When launching the game via the launcher (especially from Finder/desktop), shaders and other configuration settings weren't being applied. The game would fall back to defaults.
+
+**Root Cause:** The game searched for `zelda3.ini` starting from the current working directory (CWD), which could be unrelated to where the executable is located when launched from GUI environments.
+
+**Solution:**
+- Game now always looks for config/assets relative to the executable's directory
+- Falls back to parent directory for development builds (where exe is in `build/`)
+- Launcher now explicitly sets working directory before launching game
+
+**Files Modified:**
+- `src/main.c` - Replaced `SwitchDirectory()` with `SwitchToExecutableDirectory()`
+- `src/launcher/launcher_main.c` - Added `chdir()` before `execl()`
+
+### Fixed: Shader Warnings Logged as Errors
+
+**Problem:** Harmless OpenGL driver warnings about unused shader outputs were logged as `[ERROR]`, causing confusion.
+
+**Solution:** Shader link warnings are now logged as `[WARN]` when linking succeeds. Actual link failures remain `[ERROR]`.
+
+**Files Modified:**
+- `src/glsl_shader.c` - Changed log level for successful links with warnings
+
 ### ROM-Only Asset Extraction (C Restool)
 
 **Major Change:** The C restool now extracts all assets directly from ROM by default, with no dependency on intermediate files or embedded assets.

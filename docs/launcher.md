@@ -88,7 +88,7 @@ From the build directory:
 ./zelda3-launcher
 ```
 
-The launcher looks for `zelda3.ini` in the current directory. If no configuration file exists, it will create one with default settings.
+The launcher looks for `zelda3.ini` in the same directory as the launcher executable. If no configuration file exists, it will create one with default settings.
 
 ### Buttons
 
@@ -98,7 +98,7 @@ The launcher looks for `zelda3.ini` in the current directory. If no configuratio
 
 ### Configuration File Location
 
-The launcher operates on `./zelda3.ini` in the current working directory. This is the same file the game uses, so any changes made in the launcher will be reflected when you run the game.
+The launcher and game both use `zelda3.ini` from the executable's directory (not the current working directory). This means you can run the game from any location and it will find its configuration file correctly.
 
 ## Settings Tabs
 
@@ -297,9 +297,9 @@ Each gamepad binding has a "Clear" button to remove the assignment without rebin
 
 When you run the launcher for the first time:
 
-1. The launcher checks for `zelda3.ini` in the current directory
+1. The launcher checks for `zelda3.ini` in its executable directory
 2. If not found, it creates a new config file with default settings
-3. You'll see: `✓ Created default config at ./zelda3.ini`
+3. You'll see: `✓ Created default config at <path>/zelda3.ini`
 4. The launcher window opens with all default values loaded
 5. Adjust any settings you want, then click "Save & Launch" to start the game
 
@@ -329,7 +329,7 @@ When you run the launcher for the first time:
 **Problem:** Changes don't persist after closing the launcher
 
 **Solution:**
-- Check file permissions in the current directory
+- Check file permissions in the executable's directory
 - Make sure you clicked "Save" or "Save & Launch", not "Cancel"
 - Verify `zelda3.ini` exists and is writable
 - Check the terminal output for error messages

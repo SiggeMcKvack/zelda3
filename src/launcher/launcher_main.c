@@ -218,6 +218,9 @@ static bool launch_game(void) {
                     if (devnull > 2) close(devnull);
                 }
 
+                // Change to game directory so it finds zelda3.ini and assets
+                chdir(launcher_dir);
+
                 // Execute game
                 execl(game_exe, "zelda3", NULL);
                 // If execl returns, it failed
