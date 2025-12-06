@@ -1,4 +1,5 @@
 #include "launcher_ui.h"
+#include "launcher_ui_internal.h"
 #include "../config.h"
 #include "../game_features.h"
 #include "launcher_gamepad.h"
@@ -35,13 +36,8 @@ static int g_lang_rom_count = 0;
 #endif
 
 // UI Constants (NUM_SNES_BUTTONS and NUM_SAVE_SLOTS defined in launcher_ui.h)
-#define NUM_STATE_TYPES         3   // Load, Save, Replay
-#define NUM_CHEAT_KEYS          3
-#define NUM_SYSTEM_KEYS         14
-
-#define BUTTON_WIDTH            150
-#define BUTTON_HEIGHT           35
-#define CLEAR_BUTTON_WIDTH      80
+// NUM_STATE_TYPES, NUM_CHEAT_KEYS, NUM_SYSTEM_KEYS, BUTTON_WIDTH, BUTTON_HEIGHT,
+// CLEAR_BUTTON_WIDTH are defined in launcher_ui_internal.h
 
 #define LAUNCHER_DEFAULT_WIDTH  500
 #define LAUNCHER_DEFAULT_HEIGHT 500
@@ -103,8 +99,8 @@ char *g_gamepad_volume_down = NULL;
 char *g_gamepad_display_perf = NULL;
 char *g_gamepad_toggle_renderer = NULL;
 
-// Control names for UI
-static const char *kControlNames[12] = {
+// Control names for UI (extern declaration in launcher_ui_internal.h)
+const char *kControlNames[NUM_SNES_BUTTONS] = {
     "Up", "Down", "Left", "Right", "Select", "Start", "A", "B", "X", "Y", "L", "R"
 };
 
@@ -200,15 +196,9 @@ static struct {
     GtkWidget *feat_pokemode;
     GtkWidget *feat_zelda_helps;
 
-    // Keyboard subtab grids (for accessing entry widgets)
-    GtkWidget *kbd_states_grid;
-    GtkWidget *kbd_cheats_grid;
-    GtkWidget *kbd_system_grid;
-
-    // Gamepad subtab grids (for accessing button widgets)
-    GtkWidget *gamepad_states_grid;
-    GtkWidget *gamepad_cheats_grid;
-    GtkWidget *gamepad_system_grid;
+    // Note: Keyboard/Gamepad subtab grids are global variables in launcher_ui_input.c
+    // (g_kbd_states_grid, g_kbd_cheats_grid, g_kbd_system_grid,
+    //  g_gamepad_states_grid, g_gamepad_cheats_grid, g_gamepad_system_grid)
 
     // Path selection widgets
     GtkWidget *msu_path_entry;
@@ -218,6 +208,70 @@ static struct {
     GtkWidget *encode_opus_btn;
 #endif
 } g_widgets;
+
+// Helper: Create standard grid with consistent spacing/margins
+// (declared in launcher_ui_internal.h for sharing with launcher_ui_input.c)
+GtkWidget* create_standard_grid(void) {
+    GtkWidget *grid = gtk_grid_new();
+    gtk_grid_set_row_spacing(GTK_GRID(grid), 5);
+    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
+    gtk_container_set_border_width(GTK_CONTAINER(grid), 10);
+    return grid;
+}
+
+// Helper: Wrap widget in scrolled window (vertical scroll only)
+static GtkWidget* wrap_in_scrolled_window(GtkWidget *content) {
+    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_container_add(GTK_CONTAINER(scrolled), content);
+    return scrolled;
+}
+
+// Note: get_display_value() is defined as inline in launcher_ui_internal.h
+
+// Helper: Show file chooser dialog and return selected path (caller owns result)
+// Returns NULL if cancelled. filter_patterns is a NULL-terminated array.
+static char* show_file_chooser(const char *title, const char *filter_name,
+                                const char **filter_patterns, GtkWidget *entry) {
+    GtkWidget *dialog = gtk_file_chooser_dialog_new(
+        title, NULL, GTK_FILE_CHOOSER_ACTION_OPEN,
+        "Cancel", GTK_RESPONSE_CANCEL,
+        "Open", GTK_RESPONSE_ACCEPT,
+        NULL);
+
+    // Add file type filter
+    if (filter_name && filter_patterns) {
+        GtkFileFilter *filter = gtk_file_filter_new();
+        gtk_file_filter_set_name(filter, filter_name);
+        for (int i = 0; filter_patterns[i] != NULL; i++) {
+            gtk_file_filter_add_pattern(filter, filter_patterns[i]);
+        }
+        gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+    }
+
+    // Add "All files" filter
+    GtkFileFilter *filter_all = gtk_file_filter_new();
+    gtk_file_filter_set_name(filter_all, "All files");
+    gtk_file_filter_add_pattern(filter_all, "*");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter_all);
+
+    // Set current file if one is already set in the entry
+    if (entry) {
+        const char *current_path = gtk_entry_get_text(GTK_ENTRY(entry));
+        if (current_path && *current_path) {
+            gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), current_path);
+        }
+    }
+
+    char *result = NULL;
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        result = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+    }
+
+    gtk_widget_destroy(dialog);
+    return result;
+}
 
 // Helper: Create labeled combo box
 static GtkWidget* create_combo_box_with_label(GtkWidget *grid, int row,
@@ -281,14 +335,11 @@ static GtkWidget* create_hscale_with_label(GtkWidget *grid, int row, const char 
     return scale;
 }
 
-// Parse comma-separated control string into array (keyboard controls)
-void LauncherUI_ParseControlString(const char *str, char **controls) {
+// Internal: Parse comma-separated control string into array with given defaults
+static void parse_control_string_internal(const char *str, char **controls,
+                                           const char **defaults) {
     if (!str || !*str) {
-        // Set defaults if no string
-        const char *defaults[NUM_SNES_BUTTONS] = {
-            "Up", "Down", "Left", "Right", "Right Shift", "Return",
-            "X", "Z", "S", "A", "C", "V"
-        };
+        // Use defaults if no string provided
         for (int i = 0; i < NUM_SNES_BUTTONS; i++) {
             controls[i] = strdup(defaults[i]);
             if (!controls[i]) controls[i] = strdup("");
@@ -339,51 +390,26 @@ void LauncherUI_ParseControlString(const char *str, char **controls) {
     }
 }
 
+// Default keyboard mappings
+static const char *kDefaultKeyboardControls[NUM_SNES_BUTTONS] = {
+    "Up", "Down", "Left", "Right", "Right Shift", "Return",
+    "X", "Z", "S", "A", "C", "V"
+};
+
+// Default gamepad mappings (Xbox-style controller layout)
+static const char *kDefaultGamepadControls[NUM_SNES_BUTTONS] = {
+    "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Back", "Start",
+    "B", "A", "Y", "X", "L1", "R1"
+};
+
+// Parse comma-separated control string into array (keyboard controls)
+void LauncherUI_ParseControlString(const char *str, char **controls) {
+    parse_control_string_internal(str, controls, kDefaultKeyboardControls);
+}
+
 // Parse comma-separated control string into array (gamepad controls)
 void LauncherUI_ParseGamepadControlString(const char *str, char **controls) {
-    if (!str || !*str) {
-        // Set gamepad defaults if no string
-        // Mapping: Up, Down, Left, Right, Select, Start, A, B, X, Y, L, R
-        // Xbox-style controller layout (positional mapping for SNES buttons)
-        const char *defaults[NUM_SNES_BUTTONS] = {
-            "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Back", "Start",
-            "B", "A", "Y", "X", "L1", "R1"
-        };
-        for (int i = 0; i < NUM_SNES_BUTTONS; i++) {
-            controls[i] = strdup(defaults[i]);
-            if (!controls[i]) controls[i] = strdup("");
-        }
-        return;
-    }
-
-    // Parse comma-separated values
-    char *copy = strdup(str);
-    if (!copy) {
-        // Allocation failed, use defaults
-        for (int i = 0; i < NUM_SNES_BUTTONS; i++) {
-            controls[i] = strdup("");
-        }
-        return;
-    }
-    char *token = strtok(copy, ",");
-    int i = 0;
-    while (token && i < NUM_SNES_BUTTONS) {
-        // Trim whitespace
-        while (isspace((unsigned char)*token)) token++;
-        char *end = token + strlen(token) - 1;
-        while (end > token && isspace((unsigned char)*end)) end--;
-        end[1] = '\0';
-
-        controls[i++] = strdup(token);
-        token = strtok(NULL, ",");
-    }
-
-    // Fill remaining with empty strings
-    while (i < NUM_SNES_BUTTONS) {
-        controls[i++] = strdup("");
-    }
-
-    free(copy);
+    parse_control_string_internal(str, controls, kDefaultGamepadControls);
 }
 
 // Format control array into comma-separated string
@@ -459,82 +485,28 @@ static void on_aspect_ratio_changed(GtkComboBox *combo, gpointer user_data) {
 static void on_shader_path_browse_clicked(GtkButton *button, gpointer user_data) {
     (void)button;
     (void)user_data;
-
-    GtkWidget *dialog = gtk_file_chooser_dialog_new(
-        "Select Shader File",
-        NULL,
-        GTK_FILE_CHOOSER_ACTION_OPEN,
-        "Cancel", GTK_RESPONSE_CANCEL,
-        "Open", GTK_RESPONSE_ACCEPT,
-        NULL);
-
-    // Add file filter for shader files
-    GtkFileFilter *filter = gtk_file_filter_new();
-    gtk_file_filter_set_name(filter, "Shader files (*.glsl, *.glslp)");
-    gtk_file_filter_add_pattern(filter, "*.glsl");
-    gtk_file_filter_add_pattern(filter, "*.glslp");
-    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
-
-    // Add "All files" filter
-    GtkFileFilter *filter_all = gtk_file_filter_new();
-    gtk_file_filter_set_name(filter_all, "All files");
-    gtk_file_filter_add_pattern(filter_all, "*");
-    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter_all);
-
-    // Set current file if one is already set
-    const char *current_path = gtk_entry_get_text(GTK_ENTRY(g_widgets.shader_path_entry));
-    if (current_path && *current_path) {
-        gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), current_path);
-    }
-
-    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-        char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+    static const char *patterns[] = {"*.glsl", "*.glslp", NULL};
+    char *filename = show_file_chooser("Select Shader File",
+                                        "Shader files (*.glsl, *.glslp)",
+                                        patterns, g_widgets.shader_path_entry);
+    if (filename) {
         gtk_entry_set_text(GTK_ENTRY(g_widgets.shader_path_entry), filename);
         g_free(filename);
     }
-
-    gtk_widget_destroy(dialog);
 }
 
 // Signal handler for Link graphics browse button
 static void on_link_graphics_browse_clicked(GtkButton *button, gpointer user_data) {
     (void)button;
     (void)user_data;
-
-    GtkWidget *dialog = gtk_file_chooser_dialog_new(
-        "Select Link Sprite File",
-        NULL,
-        GTK_FILE_CHOOSER_ACTION_OPEN,
-        "Cancel", GTK_RESPONSE_CANCEL,
-        "Open", GTK_RESPONSE_ACCEPT,
-        NULL);
-
-    // Add file filter for ZSPR files
-    GtkFileFilter *filter = gtk_file_filter_new();
-    gtk_file_filter_set_name(filter, "ZSPR Sprite Files (*.zspr)");
-    gtk_file_filter_add_pattern(filter, "*.zspr");
-    gtk_file_filter_add_pattern(filter, "*.ZSPR");
-    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
-
-    // Add "All files" filter
-    GtkFileFilter *filter_all = gtk_file_filter_new();
-    gtk_file_filter_set_name(filter_all, "All files");
-    gtk_file_filter_add_pattern(filter_all, "*");
-    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter_all);
-
-    // Set current file if one is already set
-    const char *current_path = gtk_entry_get_text(GTK_ENTRY(g_widgets.link_graphics_entry));
-    if (current_path && *current_path) {
-        gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), current_path);
-    }
-
-    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-        char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+    static const char *patterns[] = {"*.zspr", "*.ZSPR", NULL};
+    char *filename = show_file_chooser("Select Link Sprite File",
+                                        "ZSPR Sprite Files (*.zspr)",
+                                        patterns, g_widgets.link_graphics_entry);
+    if (filename) {
         gtk_entry_set_text(GTK_ENTRY(g_widgets.link_graphics_entry), filename);
         g_free(filename);
     }
-
-    gtk_widget_destroy(dialog);
 }
 
 // MSU detection result
@@ -1483,35 +1455,14 @@ static void refresh_lang_roms_list(void) {
 static void on_rom_browse_clicked(GtkButton *button, gpointer user_data) {
     (void)button;
     (void)user_data;
-
-    GtkWidget *dialog = gtk_file_chooser_dialog_new(
-        "Select ROM File",
-        NULL,
-        GTK_FILE_CHOOSER_ACTION_OPEN,
-        "Cancel", GTK_RESPONSE_CANCEL,
-        "Open", GTK_RESPONSE_ACCEPT,
-        NULL);
-
-    // Add file filter for ROM files
-    GtkFileFilter *filter = gtk_file_filter_new();
-    gtk_file_filter_set_name(filter, "SNES ROM files (*.sfc, *.smc)");
-    gtk_file_filter_add_pattern(filter, "*.sfc");
-    gtk_file_filter_add_pattern(filter, "*.smc");
-    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
-
-    // Add "All files" filter
-    GtkFileFilter *filter_all = gtk_file_filter_new();
-    gtk_file_filter_set_name(filter_all, "All files");
-    gtk_file_filter_add_pattern(filter_all, "*");
-    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter_all);
-
-    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
-        char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+    static const char *patterns[] = {"*.sfc", "*.smc", NULL};
+    char *filename = show_file_chooser("Select ROM File",
+                                        "SNES ROM files (*.sfc, *.smc)",
+                                        patterns, g_widgets.rom_path_entry);
+    if (filename) {
         gtk_entry_set_text(GTK_ENTRY(g_widgets.rom_path_entry), filename);
         g_free(filename);
     }
-
-    gtk_widget_destroy(dialog);
 }
 
 // Cleanup temporary dialogue files after asset creation
@@ -1738,11 +1689,7 @@ static void refresh_language_dropdown(const char *current_lang) {
 
 // Create General tab
 static GtkWidget* create_general_tab(const Config *config) {
-    GtkWidget *grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 5);
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(grid), 10);
-
+    GtkWidget *grid = create_standard_grid();
     int row = 0;
 
     // === Asset File Section ===
@@ -1883,20 +1830,12 @@ static GtkWidget* create_general_tab(const Config *config) {
     gtk_widget_set_halign(g_widgets.make_dat_status, GTK_ALIGN_START);
     gtk_grid_attach(GTK_GRID(grid), g_widgets.make_dat_status, 1, row++, 1, 1);
 
-    // Wrap in scrolled window
-    GtkWidget *tab_scrolled = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(tab_scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-    gtk_container_add(GTK_CONTAINER(tab_scrolled), grid);
-    return tab_scrolled;
+    return wrap_in_scrolled_window(grid);
 }
 
 // Create Graphics tab
 static GtkWidget* create_graphics_tab(const Config *config) {
-    GtkWidget *grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 5);
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(grid), 10);
-
+    GtkWidget *grid = create_standard_grid();
     int row = 0;
 
     // Output method
@@ -2108,20 +2047,12 @@ static GtkWidget* create_graphics_tab(const Config *config) {
     gtk_grid_attach(GTK_GRID(grid), link_gfx_hbox, 1, row, 1, 1);
     row++;
 
-    // Wrap in scrolled window
-    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-    gtk_container_add(GTK_CONTAINER(scrolled), grid);
-    return scrolled;
+    return wrap_in_scrolled_window(grid);
 }
 
 // Create Sound tab
 static GtkWidget* create_sound_tab(const Config *config) {
-    GtkWidget *grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 5);
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(grid), 10);
-
+    GtkWidget *grid = create_standard_grid();
     int row = 0;
 
     g_widgets.enable_audio = create_checkbox(grid, row++, "Enable Audio");
@@ -2227,11 +2158,7 @@ static GtkWidget* create_sound_tab(const Config *config) {
     row++;
 #endif
 
-    // Wrap in scrolled window
-    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-    gtk_container_add(GTK_CONTAINER(scrolled), grid);
-    return scrolled;
+    return wrap_in_scrolled_window(grid);
 }
 
 // Helper: Add a section header to the grid
@@ -2248,11 +2175,7 @@ static void add_section_header(GtkWidget *grid, int *row, const char *title, boo
 
 // Create Features tab
 static GtkWidget* create_features_tab(const Config *config) {
-    GtkWidget *grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 5);
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(grid), 10);
-
+    GtkWidget *grid = create_standard_grid();
     int row = 0;
     uint32 features = config->features0;
 
@@ -2341,780 +2264,7 @@ static GtkWidget* create_features_tab(const Config *config) {
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_widgets.feat_zelda_helps),
         features & kFeatures0_PrincessZeldaHelps);
 
-    // Wrap in scrolled window
-    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-    gtk_container_add(GTK_CONTAINER(scrolled), grid);
-    return scrolled;
-}
-
-// Keyboard capture: global state for dialog
-static int g_captured_control_index = -1;
-static GtkWidget *g_capture_dialog = NULL;
-static bool g_key_captured = false;
-
-// Key press event handler for capture dialog
-static gboolean on_key_press_capture(GtkWidget *widget, GdkEventKey *event, gpointer user_data) {
-    (void)widget;
-    GtkWidget *button = (GtkWidget*)user_data;
-
-    // Get GDK key name and convert to SDL scancode name
-    const char *gdk_name = gdk_keyval_name(event->keyval);
-
-    // Skip if this is a modifier key itself (don't capture Ctrl, Shift, Alt alone)
-    if (gdk_name && (strstr(gdk_name, "Control") || strstr(gdk_name, "Shift") ||
-                     strstr(gdk_name, "Alt") || strstr(gdk_name, "Meta") ||
-                     strstr(gdk_name, "Super"))) {
-        return TRUE;  // Ignore modifier keys
-    }
-
-    // GDK to SDL key name mapping table
-    // GDK returns verbose names (e.g. "minus"), SDL expects symbols (e.g. "-")
-    static const struct {
-        const char *gdk;
-        const char *sdl;
-    } key_mapping[] = {
-        // Punctuation and symbols
-        {"minus", "-"},
-        {"equal", "="},
-        {"plus", "+"},
-        {"comma", ","},
-        {"period", "."},
-        {"slash", "/"},
-        {"backslash", "\\"},
-        {"semicolon", ";"},
-        {"apostrophe", "'"},
-        {"grave", "`"},
-        {"bracketleft", "["},
-        {"bracketright", "]"},
-        {"space", "Space"},
-        // Keep localized keys as-is (e.g., German "section" key)
-        // GDK "section" → SDL "section"
-        {NULL, NULL}  // Sentinel
-    };
-
-    // Map GDK key name to SDL scancode name
-    // SDL uses uppercase single letters, GDK uses lowercase
-    char key_name[64] = {0};
-    if (gdk_name) {
-        // Check mapping table first
-        const char *mapped_name = NULL;
-        for (int i = 0; key_mapping[i].gdk != NULL; i++) {
-            if (strcmp(gdk_name, key_mapping[i].gdk) == 0) {
-                mapped_name = key_mapping[i].sdl;
-                break;
-            }
-        }
-
-        if (mapped_name) {
-            // Use mapped name
-            strncpy(key_name, mapped_name, sizeof(key_name) - 1);
-        } else if (strlen(gdk_name) == 1 && gdk_name[0] >= 'a' && gdk_name[0] <= 'z') {
-            // Capitalize single letters
-            key_name[0] = gdk_name[0] - 'a' + 'A';
-            key_name[1] = '\0';
-        } else {
-            // For other keys, use GDK name as-is (F1, Return, etc. match SDL names)
-            strncpy(key_name, gdk_name, sizeof(key_name) - 1);
-        }
-    }
-
-    if (key_name[0]) {
-        // Build full key string with modifiers
-        char full_key[128] = {0};
-
-        // Add modifiers (Ctrl, Shift, Alt)
-        if (event->state & GDK_CONTROL_MASK) {
-            strcat(full_key, "Ctrl+");
-        }
-        if (event->state & GDK_SHIFT_MASK) {
-            strcat(full_key, "Shift+");
-        }
-        if (event->state & GDK_MOD1_MASK) {  // Alt key
-            strcat(full_key, "Alt+");
-        }
-
-        // Append the base key
-        strcat(full_key, key_name);
-
-        // Update control mapping if this is for indexed controls
-        if (g_captured_control_index >= 0) {
-            if (g_kbd_controls[g_captured_control_index]) {
-                free(g_kbd_controls[g_captured_control_index]);
-            }
-            g_kbd_controls[g_captured_control_index] = strdup(full_key);
-        }
-
-        // Update individual variable if attached (for Cheats/System buttons)
-        char **var_ptr = (char**)g_object_get_data(G_OBJECT(button), "variable_ptr");
-        if (var_ptr) {
-            if (*var_ptr) {
-                free(*var_ptr);
-            }
-            *var_ptr = strdup(full_key);
-        }
-
-        // Update button label
-        gtk_button_set_label(GTK_BUTTON(button), full_key);
-
-        g_key_captured = true;
-        gtk_dialog_response(GTK_DIALOG(g_capture_dialog), GTK_RESPONSE_OK);
-    }
-
-    return TRUE;
-}
-
-// Generic keyboard button click handler
-static void on_key_button_clicked(GtkWidget *button, gpointer user_data) {
-    const char *prompt = (const char*)user_data;
-
-    // Create capture dialog
-    GtkWidget *parent = gtk_widget_get_toplevel(button);
-    g_capture_dialog = gtk_dialog_new_with_buttons(
-        "Capture Key",
-        GTK_WINDOW(parent),
-        GTK_DIALOG_MODAL,
-        "Cancel", GTK_RESPONSE_CANCEL,
-        NULL
-    );
-
-    GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(g_capture_dialog));
-    GtkWidget *label = gtk_label_new(NULL);
-    char markup[256];
-    snprintf(markup, sizeof(markup), "<big><b>Press a key for: %s</b></big>\n\n(supports Ctrl+, Shift+, Alt+ modifiers)\n(or Cancel to abort)", prompt);
-    gtk_label_set_markup(GTK_LABEL(label), markup);
-    gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
-    gtk_container_add(GTK_CONTAINER(content), label);
-
-    // Connect key press handler
-    g_signal_connect(g_capture_dialog, "key-press-event", G_CALLBACK(on_key_press_capture), button);
-
-    gtk_widget_show_all(g_capture_dialog);
-    gtk_dialog_run(GTK_DIALOG(g_capture_dialog));
-    gtk_widget_destroy(g_capture_dialog);
-
-    g_capture_dialog = NULL;
-}
-
-// Structure to pass data to clear button handler
-typedef struct {
-    GtkWidget *button;  // The binding button to update
-    char **variable;    // Pointer to the variable to clear
-} ClearButtonData;
-
-// Clear button click handler
-static void on_clear_button_clicked(GtkWidget *widget, gpointer user_data) {
-    (void)widget;
-    ClearButtonData *data = (ClearButtonData*)user_data;
-
-    // Clear the variable (set to empty string)
-    if (data->variable && *data->variable) {
-        free(*data->variable);
-    }
-    *data->variable = strdup("");
-
-    // Update button label
-    gtk_button_set_label(GTK_BUTTON(data->button), "(not set)");
-}
-
-// Keyboard button click handler for controls
-static void on_keyboard_button_clicked(GtkWidget *button, gpointer user_data) {
-    int index = GPOINTER_TO_INT(user_data);
-    g_captured_control_index = index;
-    g_key_captured = false;
-
-    on_key_button_clicked(button, (gpointer)kControlNames[index]);
-}
-
-// Create KeyMap tab with interactive buttons
-static GtkWidget* create_keymap_tab(const Config *config) {
-    (void)config;
-
-    // Create notebook for subtabs
-    GtkWidget *notebook = gtk_notebook_new();
-    gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_TOP);
-
-    // --- Controls Subtab ---
-    GtkWidget *controls_scroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(controls_scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-
-    GtkWidget *controls_grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(controls_grid), 5);
-    gtk_grid_set_column_spacing(GTK_GRID(controls_grid), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(controls_grid), 10);
-
-    GtkWidget *controls_title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(controls_title), "<b>SNES Controller</b>");
-    gtk_widget_set_halign(controls_title, GTK_ALIGN_START);
-    gtk_grid_attach(GTK_GRID(controls_grid), controls_title, 0, 0, 3, 1);
-
-    for (int i = 0; i < NUM_SNES_BUTTONS; i++) {
-        // Create label for control name
-        char label_text[64];
-        snprintf(label_text, sizeof(label_text), "%s:", kControlNames[i]);
-        GtkWidget *label = gtk_label_new(label_text);
-        gtk_widget_set_halign(label, GTK_ALIGN_END);
-        gtk_grid_attach(GTK_GRID(controls_grid), label, 0, i + 1, 1, 1);
-
-        // Create button showing only the key
-        const char *key = g_kbd_controls[i] ? g_kbd_controls[i] : "(not set)";
-        GtkWidget *button = gtk_button_new_with_label(key);
-        gtk_widget_set_size_request(button, BUTTON_WIDTH, BUTTON_HEIGHT);
-        g_signal_connect(button, "clicked", G_CALLBACK(on_keyboard_button_clicked), GINT_TO_POINTER(i));
-        gtk_grid_attach(GTK_GRID(controls_grid), button, 1, i + 1, 1, 1);
-
-        // Add Clear button
-        GtkWidget *clear_button = gtk_button_new_with_label("Clear");
-        gtk_widget_set_size_request(clear_button, CLEAR_BUTTON_WIDTH, BUTTON_HEIGHT);
-        ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
-        if (clear_data) {
-            clear_data->button = button;
-            clear_data->variable = &g_kbd_controls[i];
-            g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
-            g_signal_connect_swapped(clear_button, "destroy", G_CALLBACK(free), clear_data);
-        }
-        gtk_grid_attach(GTK_GRID(controls_grid), clear_button, 2, i + 1, 1, 1);
-    }
-
-    gtk_container_add(GTK_CONTAINER(controls_scroll), controls_grid);
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), controls_scroll, gtk_label_new("Controls"));
-
-    // --- Save States Subtab ---
-    GtkWidget *states_scroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(states_scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-
-    g_widgets.kbd_states_grid = gtk_grid_new();
-    GtkWidget *states_grid = g_widgets.kbd_states_grid;
-    gtk_grid_set_row_spacing(GTK_GRID(states_grid), 5);
-    gtk_grid_set_column_spacing(GTK_GRID(states_grid), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(states_grid), 10);
-
-    GtkWidget *states_title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(states_title), "<b>Save States</b>");
-    gtk_widget_set_halign(states_title, GTK_ALIGN_START);
-    gtk_grid_attach(GTK_GRID(states_grid), states_title, 0, 0, 2, 1);
-
-    int row = 1;
-    const char *state_labels[] = {"Load", "Save", "Replay"};
-    char **state_arrays[] = {g_kbd_load, g_kbd_save, g_kbd_replay};
-
-    for (int type = 0; type < 3; type++) {
-        GtkWidget *type_label = gtk_label_new(NULL);
-        char markup[64];
-        snprintf(markup, sizeof(markup), "<b>%s:</b>", state_labels[type]);
-        gtk_label_set_markup(GTK_LABEL(type_label), markup);
-        gtk_widget_set_halign(type_label, GTK_ALIGN_START);
-        gtk_grid_attach(GTK_GRID(states_grid), type_label, 0, row++, 3, 1);
-
-        for (int i = 0; i < NUM_SAVE_SLOTS; i++) {
-            char slot_label[64];
-            snprintf(slot_label, sizeof(slot_label), "%s Slot %d:", state_labels[type], i + 1);
-            GtkWidget *label = gtk_label_new(slot_label);
-            gtk_widget_set_halign(label, GTK_ALIGN_END);
-            gtk_grid_attach(GTK_GRID(states_grid), label, 0, row, 1, 1);
-
-            const char *value;
-            if (!state_arrays[type][i] || !*state_arrays[type][i]) {
-                value = "(not set)";
-            } else {
-                value = state_arrays[type][i];
-            }
-            GtkWidget *button = gtk_button_new_with_label(value);
-            gtk_widget_set_size_request(button, BUTTON_WIDTH, BUTTON_HEIGHT);
-            g_signal_connect(button, "clicked", G_CALLBACK(on_key_button_clicked), slot_label);
-            gtk_grid_attach(GTK_GRID(states_grid), button, 1, row, 1, 1);
-            g_object_set_data(G_OBJECT(states_grid), g_strdup_printf("state_%d_%d", type, i), button);
-
-            // Attach variable pointer to button for key capture
-            g_object_set_data(G_OBJECT(button), "variable_ptr", &state_arrays[type][i]);
-
-            // Add Clear button
-            GtkWidget *clear_button = gtk_button_new_with_label("Clear");
-            gtk_widget_set_size_request(clear_button, CLEAR_BUTTON_WIDTH, BUTTON_HEIGHT);
-            ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
-            if (clear_data) {
-                clear_data->button = button;
-                clear_data->variable = &state_arrays[type][i];
-                g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
-                g_signal_connect_swapped(clear_button, "destroy", G_CALLBACK(free), clear_data);
-            }
-            gtk_grid_attach(GTK_GRID(states_grid), clear_button, 2, row, 1, 1);
-
-            row++;
-        }
-    }
-
-    gtk_container_add(GTK_CONTAINER(states_scroll), states_grid);
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), states_scroll, gtk_label_new("Save States"));
-
-    // --- Cheats Subtab ---
-    GtkWidget *cheats_scroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(cheats_scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-
-    g_widgets.kbd_cheats_grid = gtk_grid_new();
-    GtkWidget *cheats_grid = g_widgets.kbd_cheats_grid;
-    gtk_grid_set_row_spacing(GTK_GRID(cheats_grid), 5);
-    gtk_grid_set_column_spacing(GTK_GRID(cheats_grid), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(cheats_grid), 10);
-
-    GtkWidget *cheats_title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(cheats_title), "<b>Cheats</b>");
-    gtk_widget_set_halign(cheats_title, GTK_ALIGN_START);
-    gtk_grid_attach(GTK_GRID(cheats_grid), cheats_title, 0, 0, 3, 1);
-
-    row = 1;
-    struct { const char *label; char **ptr; const char *def; } cheats[] = {
-        {"Refill Health & Magic:", &g_kbd_cheat_life, "W"},
-        {"Set key count to 1:", &g_kbd_cheat_keys, "O"},
-        {"Toggle Walk Through Walls:", &g_kbd_cheat_walkthrough, "Ctrl+E"}
-    };
-
-    for (int i = 0; i < 3; i++) {
-        GtkWidget *label = gtk_label_new(cheats[i].label);
-        gtk_widget_set_halign(label, GTK_ALIGN_END);
-        gtk_grid_attach(GTK_GRID(cheats_grid), label, 0, row, 1, 1);
-
-        const char *value;
-        if (!*cheats[i].ptr || !**cheats[i].ptr) {
-            value = "(not set)";
-        } else {
-            value = *cheats[i].ptr;
-        }
-        GtkWidget *button = gtk_button_new_with_label(value);
-        gtk_widget_set_size_request(button, BUTTON_WIDTH, BUTTON_HEIGHT);
-        g_signal_connect(button, "clicked", G_CALLBACK(on_key_button_clicked), (gpointer)cheats[i].label);
-        gtk_grid_attach(GTK_GRID(cheats_grid), button, 1, row, 1, 1);
-        g_object_set_data(G_OBJECT(cheats_grid), g_strdup_printf("cheat_%d", i), button);
-
-        // Attach variable pointer to button for key capture
-        g_object_set_data(G_OBJECT(button), "variable_ptr", cheats[i].ptr);
-
-        // Add Clear button
-        GtkWidget *clear_button = gtk_button_new_with_label("Clear");
-        gtk_widget_set_size_request(clear_button, CLEAR_BUTTON_WIDTH, BUTTON_HEIGHT);
-        ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
-        if (clear_data) {
-            clear_data->button = button;
-            clear_data->variable = cheats[i].ptr;
-            g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
-            g_signal_connect_swapped(clear_button, "destroy", G_CALLBACK(free), clear_data);
-        }
-        gtk_grid_attach(GTK_GRID(cheats_grid), clear_button, 2, row, 1, 1);
-
-        row++;
-    }
-
-    gtk_container_add(GTK_CONTAINER(cheats_scroll), cheats_grid);
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), cheats_scroll, gtk_label_new("Cheats"));
-
-    // --- System Subtab ---
-    GtkWidget *system_scroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(system_scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-
-    g_widgets.kbd_system_grid = gtk_grid_new();
-    GtkWidget *system_grid = g_widgets.kbd_system_grid;
-    gtk_grid_set_row_spacing(GTK_GRID(system_grid), 5);
-    gtk_grid_set_column_spacing(GTK_GRID(system_grid), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(system_grid), 10);
-
-    GtkWidget *system_title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(system_title), "<b>System Controls</b>");
-    gtk_widget_set_halign(system_title, GTK_ALIGN_START);
-    gtk_grid_attach(GTK_GRID(system_grid), system_title, 0, 0, 3, 1);
-
-    row = 1;
-    struct { const char *label; char **ptr; const char *def; } system_keys[] = {
-        {"Toggle Fullscreen:", &g_kbd_fullscreen, "Alt+Return"},
-        {"Reset:", &g_kbd_reset, "Ctrl+R"},
-        {"Pause (Dimmed):", &g_kbd_pause_dimmed, "P"},
-        {"Pause:", &g_kbd_pause, "Shift+P"},
-        {"Turbo:", &g_kbd_turbo, "Tab"},
-        {"Replay Turbo:", &g_kbd_replay_turbo, "T"},
-        {"Window Bigger:", &g_kbd_window_bigger, "Ctrl+Up"},
-        {"Window Smaller:", &g_kbd_window_smaller, "Ctrl+Down"},
-        {"Volume Up:", &g_kbd_volume_up, "Shift+="},
-        {"Volume Down:", &g_kbd_volume_down, "Shift+-"},
-        {"Display FPS:", &g_kbd_display_perf, "F"},
-        {"Toggle Renderer:", &g_kbd_toggle_renderer, "R"},
-        {"Stop Replay:", &g_kbd_stop_replay, ""},
-        {"Clear input recording log (debug):", &g_kbd_clear_keylog, ""}
-    };
-
-    for (int i = 0; i < NUM_SYSTEM_KEYS; i++) {
-        GtkWidget *label = gtk_label_new(system_keys[i].label);
-        gtk_widget_set_halign(label, GTK_ALIGN_END);
-        gtk_grid_attach(GTK_GRID(system_grid), label, 0, row, 1, 1);
-
-        const char *value;
-        if (!*system_keys[i].ptr || !**system_keys[i].ptr) {
-            value = "(not set)";
-        } else {
-            value = *system_keys[i].ptr;
-        }
-        GtkWidget *button = gtk_button_new_with_label(value);
-        gtk_widget_set_size_request(button, BUTTON_WIDTH, BUTTON_HEIGHT);
-        g_signal_connect(button, "clicked", G_CALLBACK(on_key_button_clicked), (gpointer)system_keys[i].label);
-        gtk_grid_attach(GTK_GRID(system_grid), button, 1, row, 1, 1);
-        g_object_set_data(G_OBJECT(system_grid), g_strdup_printf("system_%d", i), button);
-
-        // Attach variable pointer to button for key capture
-        g_object_set_data(G_OBJECT(button), "variable_ptr", system_keys[i].ptr);
-
-        // Add Clear button
-        GtkWidget *clear_button = gtk_button_new_with_label("Clear");
-        gtk_widget_set_size_request(clear_button, CLEAR_BUTTON_WIDTH, BUTTON_HEIGHT);
-        ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
-        if (clear_data) {
-            clear_data->button = button;
-            clear_data->variable = system_keys[i].ptr;
-            g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
-            g_signal_connect_swapped(clear_button, "destroy", G_CALLBACK(free), clear_data);
-        }
-        gtk_grid_attach(GTK_GRID(system_grid), clear_button, 2, row, 1, 1);
-
-        row++;
-    }
-
-    gtk_container_add(GTK_CONTAINER(system_scroll), system_grid);
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), system_scroll, gtk_label_new("System"));
-
-    return notebook;
-}
-
-// Gamepad button click handler
-static void on_gamepad_button_clicked(GtkWidget *button, gpointer user_data) {
-    // Check if this is for indexed controls or individual variable
-    char **var_ptr = (char**)g_object_get_data(G_OBJECT(button), "variable_ptr");
-    const char *prompt = (const char*)g_object_get_data(G_OBJECT(button), "prompt");
-    int index = -1;
-
-    if (!var_ptr) {
-        // Indexed control (original behavior)
-        index = GPOINTER_TO_INT(user_data);
-        prompt = kControlNames[index];
-    }
-
-    // Get first gamepad
-    GamepadInfo gamepads[1];
-    int num_pads = LauncherGamepad_ListControllers(gamepads, 1);
-    if (num_pads == 0) {
-        GtkWidget *parent = gtk_widget_get_toplevel(button);
-        GtkWidget *dialog = gtk_message_dialog_new(
-            GTK_WINDOW(parent),
-            GTK_DIALOG_MODAL,
-            GTK_MESSAGE_ERROR,
-            GTK_BUTTONS_OK,
-            "No gamepad detected!\n\nPlease connect a gamepad and try again."
-        );
-        gtk_dialog_run(GTK_DIALOG(dialog));
-        gtk_widget_destroy(dialog);
-        return;
-    }
-
-    // Create capture dialog
-    GtkWidget *parent = gtk_widget_get_toplevel(button);
-    GtkWidget *dialog = gtk_dialog_new_with_buttons(
-        "Capture Button",
-        GTK_WINDOW(parent),
-        GTK_DIALOG_MODAL,
-        "Cancel", GTK_RESPONSE_CANCEL,
-        NULL
-    );
-
-    GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
-    GtkWidget *label = gtk_label_new(NULL);
-    char markup[256];
-    snprintf(markup, sizeof(markup), "<big><b>Press a button/axis for: %s</b></big>\n\n(5 second timeout or Cancel)",
-             prompt);
-    gtk_label_set_markup(GTK_LABEL(label), markup);
-    gtk_label_set_justify(GTK_LABEL(label), GTK_JUSTIFY_CENTER);
-    gtk_container_add(GTK_CONTAINER(content), label);
-
-    gtk_widget_show_all(dialog);
-
-    // Detect input with timeout (non-blocking)
-    DetectedInput input = LauncherGamepad_DetectInput(gamepads[0].controller, 5000);
-
-    const char *captured_name = NULL;
-    if (input.type == INPUT_TYPE_BUTTON) {
-        captured_name = LauncherGamepad_ButtonToString(input.button);
-    } else if (input.type == INPUT_TYPE_AXIS) {
-        captured_name = LauncherGamepad_AxisToString(input.axis, input.axis_value);
-    }
-
-    if (captured_name) {
-        // Update the appropriate variable
-        if (var_ptr) {
-            // Individual variable (cheats, system controls, save states)
-            if (*var_ptr) free(*var_ptr);
-            *var_ptr = strdup(captured_name);
-            gtk_button_set_label(GTK_BUTTON(button), captured_name);
-        } else {
-            // Indexed control (SNES buttons)
-            if (g_gamepad_controls[index]) free(g_gamepad_controls[index]);
-            g_gamepad_controls[index] = strdup(captured_name);
-
-            // Update button label
-            char btn_label[128];
-            snprintf(btn_label, sizeof(btn_label), "%s: %s", kControlNames[index], captured_name);
-            gtk_button_set_label(GTK_BUTTON(button), btn_label);
-        }
-    }
-
-    LauncherGamepad_Close(gamepads[0].controller);
-    gtk_widget_destroy(dialog);
-}
-
-// Create GamepadMap tab with interactive buttons
-static GtkWidget* create_gamepadmap_tab(const Config *config) {
-    (void)config;
-
-    // Create notebook for subtabs
-    GtkWidget *notebook = gtk_notebook_new();
-    gtk_notebook_set_tab_pos(GTK_NOTEBOOK(notebook), GTK_POS_TOP);
-
-    // --- Controls Subtab ---
-    GtkWidget *controls_scroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(controls_scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-
-    GtkWidget *controls_grid = gtk_grid_new();
-    gtk_grid_set_row_spacing(GTK_GRID(controls_grid), 5);
-    gtk_grid_set_column_spacing(GTK_GRID(controls_grid), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(controls_grid), 10);
-
-    GtkWidget *controls_title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(controls_title), "<b>SNES Controller</b>");
-    gtk_widget_set_halign(controls_title, GTK_ALIGN_START);
-    gtk_grid_attach(GTK_GRID(controls_grid), controls_title, 0, 0, 3, 1);
-
-    for (int i = 0; i < NUM_SNES_BUTTONS; i++) {
-        // Create label for control name
-        char label_text[64];
-        snprintf(label_text, sizeof(label_text), "%s:", kControlNames[i]);
-        GtkWidget *label = gtk_label_new(label_text);
-        gtk_widget_set_halign(label, GTK_ALIGN_END);
-        gtk_grid_attach(GTK_GRID(controls_grid), label, 0, i + 1, 1, 1);
-
-        // Create button showing the gamepad button
-        const char *btn = g_gamepad_controls[i] ? g_gamepad_controls[i] : "(not set)";
-        GtkWidget *button = gtk_button_new_with_label(btn);
-        gtk_widget_set_size_request(button, BUTTON_WIDTH, BUTTON_HEIGHT);
-        g_signal_connect(button, "clicked", G_CALLBACK(on_gamepad_button_clicked), GINT_TO_POINTER(i));
-        gtk_grid_attach(GTK_GRID(controls_grid), button, 1, i + 1, 1, 1);
-
-        // Add Clear button
-        GtkWidget *clear_button = gtk_button_new_with_label("Clear");
-        gtk_widget_set_size_request(clear_button, CLEAR_BUTTON_WIDTH, BUTTON_HEIGHT);
-        ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
-        if (clear_data) {
-            clear_data->button = button;
-            clear_data->variable = &g_gamepad_controls[i];
-            g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
-            g_signal_connect_swapped(clear_button, "destroy", G_CALLBACK(free), clear_data);
-        }
-        gtk_grid_attach(GTK_GRID(controls_grid), clear_button, 2, i + 1, 1, 1);
-    }
-
-    gtk_container_add(GTK_CONTAINER(controls_scroll), controls_grid);
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), controls_scroll, gtk_label_new("Controls"));
-
-    // --- Save States Subtab ---
-    GtkWidget *states_scroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(states_scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-
-    g_widgets.gamepad_states_grid = gtk_grid_new();
-    GtkWidget *states_grid = g_widgets.gamepad_states_grid;
-    gtk_grid_set_row_spacing(GTK_GRID(states_grid), 5);
-    gtk_grid_set_column_spacing(GTK_GRID(states_grid), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(states_grid), 10);
-
-    GtkWidget *states_title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(states_title), "<b>Save States</b>");
-    gtk_widget_set_halign(states_title, GTK_ALIGN_START);
-    gtk_grid_attach(GTK_GRID(states_grid), states_title, 0, 0, 2, 1);
-
-    int row = 1;
-    const char *state_labels[] = {"Load", "Save", "Replay"};
-    char **state_arrays[] = {g_gamepad_load, g_gamepad_save, g_gamepad_replay};
-
-    for (int type = 0; type < 3; type++) {
-        GtkWidget *type_label = gtk_label_new(NULL);
-        char markup[64];
-        snprintf(markup, sizeof(markup), "<b>%s:</b>", state_labels[type]);
-        gtk_label_set_markup(GTK_LABEL(type_label), markup);
-        gtk_widget_set_halign(type_label, GTK_ALIGN_START);
-        gtk_grid_attach(GTK_GRID(states_grid), type_label, 0, row++, 3, 1);
-
-        for (int i = 0; i < NUM_SAVE_SLOTS; i++) {
-            char slot_label[64];
-            snprintf(slot_label, sizeof(slot_label), "%s Slot %d:", state_labels[type], i + 1);
-            GtkWidget *label = gtk_label_new(slot_label);
-            gtk_widget_set_halign(label, GTK_ALIGN_END);
-            gtk_grid_attach(GTK_GRID(states_grid), label, 0, row, 1, 1);
-
-            const char *value;
-            if (!state_arrays[type][i] || !*state_arrays[type][i]) {
-                value = "(not set)";
-            } else {
-                value = state_arrays[type][i];
-            }
-            GtkWidget *button = gtk_button_new_with_label(value);
-            gtk_widget_set_size_request(button, BUTTON_WIDTH, BUTTON_HEIGHT);
-            g_signal_connect(button, "clicked", G_CALLBACK(on_gamepad_button_clicked), NULL);
-            g_object_set_data(G_OBJECT(button), "variable_ptr", &state_arrays[type][i]);
-            g_object_set_data(G_OBJECT(button), "prompt", slot_label);
-            gtk_grid_attach(GTK_GRID(states_grid), button, 1, row, 1, 1);
-            g_object_set_data(G_OBJECT(states_grid), g_strdup_printf("state_%d_%d", type, i), button);
-
-            // Add Clear button
-            GtkWidget *clear_button = gtk_button_new_with_label("Clear");
-            gtk_widget_set_size_request(clear_button, CLEAR_BUTTON_WIDTH, BUTTON_HEIGHT);
-            ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
-            if (clear_data) {
-                clear_data->button = button;
-                clear_data->variable = &state_arrays[type][i];
-                g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
-                g_signal_connect_swapped(clear_button, "destroy", G_CALLBACK(free), clear_data);
-            }
-            gtk_grid_attach(GTK_GRID(states_grid), clear_button, 2, row, 1, 1);
-
-            row++;
-        }
-    }
-
-    gtk_container_add(GTK_CONTAINER(states_scroll), states_grid);
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), states_scroll, gtk_label_new("Save States"));
-
-    // --- Cheats Subtab ---
-    GtkWidget *cheats_scroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(cheats_scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-
-    g_widgets.gamepad_cheats_grid = gtk_grid_new();
-    GtkWidget *cheats_grid = g_widgets.gamepad_cheats_grid;
-    gtk_grid_set_row_spacing(GTK_GRID(cheats_grid), 5);
-    gtk_grid_set_column_spacing(GTK_GRID(cheats_grid), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(cheats_grid), 10);
-
-    GtkWidget *cheats_title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(cheats_title), "<b>Cheats</b>");
-    gtk_widget_set_halign(cheats_title, GTK_ALIGN_START);
-    gtk_grid_attach(GTK_GRID(cheats_grid), cheats_title, 0, 0, 3, 1);
-
-    row = 1;
-    struct { const char *label; char **ptr; } cheats[] = {
-        {"Refill Health & Magic:", &g_gamepad_cheat_life},
-        {"Set key count to 1:", &g_gamepad_cheat_keys},
-        {"Toggle Walk Through Walls:", &g_gamepad_cheat_walkthrough}
-    };
-
-    for (int i = 0; i < 3; i++) {
-        GtkWidget *label = gtk_label_new(cheats[i].label);
-        gtk_widget_set_halign(label, GTK_ALIGN_END);
-        gtk_grid_attach(GTK_GRID(cheats_grid), label, 0, row, 1, 1);
-
-        const char *value;
-        if (!*cheats[i].ptr || !**cheats[i].ptr) {
-            value = "(not set)";
-        } else {
-            value = *cheats[i].ptr;
-        }
-        GtkWidget *button = gtk_button_new_with_label(value);
-        gtk_widget_set_size_request(button, BUTTON_WIDTH, BUTTON_HEIGHT);
-        g_signal_connect(button, "clicked", G_CALLBACK(on_gamepad_button_clicked), NULL);
-        g_object_set_data(G_OBJECT(button), "variable_ptr", cheats[i].ptr);
-        g_object_set_data(G_OBJECT(button), "prompt", (gpointer)cheats[i].label);
-        gtk_grid_attach(GTK_GRID(cheats_grid), button, 1, row, 1, 1);
-        g_object_set_data(G_OBJECT(cheats_grid), g_strdup_printf("cheat_%d", i), button);
-
-        // Add Clear button
-        GtkWidget *clear_button = gtk_button_new_with_label("Clear");
-        gtk_widget_set_size_request(clear_button, CLEAR_BUTTON_WIDTH, BUTTON_HEIGHT);
-        ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
-        if (clear_data) {
-            clear_data->button = button;
-            clear_data->variable = cheats[i].ptr;
-            g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
-            g_signal_connect_swapped(clear_button, "destroy", G_CALLBACK(free), clear_data);
-        }
-        gtk_grid_attach(GTK_GRID(cheats_grid), clear_button, 2, row, 1, 1);
-
-        row++;
-    }
-
-    gtk_container_add(GTK_CONTAINER(cheats_scroll), cheats_grid);
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), cheats_scroll, gtk_label_new("Cheats"));
-
-    // --- System Subtab ---
-    GtkWidget *system_scroll = gtk_scrolled_window_new(NULL, NULL);
-    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(system_scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
-
-    g_widgets.gamepad_system_grid = gtk_grid_new();
-    GtkWidget *system_grid = g_widgets.gamepad_system_grid;
-    gtk_grid_set_row_spacing(GTK_GRID(system_grid), 5);
-    gtk_grid_set_column_spacing(GTK_GRID(system_grid), 10);
-    gtk_container_set_border_width(GTK_CONTAINER(system_grid), 10);
-
-    GtkWidget *system_title = gtk_label_new(NULL);
-    gtk_label_set_markup(GTK_LABEL(system_title), "<b>System Controls</b>");
-    gtk_widget_set_halign(system_title, GTK_ALIGN_START);
-    gtk_grid_attach(GTK_GRID(system_grid), system_title, 0, 0, 3, 1);
-
-    row = 1;
-    struct { const char *label; char **ptr; } system_keys[] = {
-        {"Toggle Fullscreen:", &g_gamepad_fullscreen},
-        {"Reset:", &g_gamepad_reset},
-        {"Pause (Dimmed):", &g_gamepad_pause_dimmed},
-        {"Pause:", &g_gamepad_pause},
-        {"Turbo:", &g_gamepad_turbo},
-        {"Replay Turbo:", &g_gamepad_replay_turbo},
-        {"Window Bigger:", &g_gamepad_window_bigger},
-        {"Window Smaller:", &g_gamepad_window_smaller},
-        {"Volume Up:", &g_gamepad_volume_up},
-        {"Volume Down:", &g_gamepad_volume_down},
-        {"Display FPS:", &g_gamepad_display_perf},
-        {"Toggle Renderer:", &g_gamepad_toggle_renderer},
-        {"Stop Replay:", &g_gamepad_stop_replay},
-        {"Clear input recording log (debug):", &g_gamepad_clear_keylog}
-    };
-
-    for (int i = 0; i < NUM_SYSTEM_KEYS; i++) {
-        GtkWidget *label = gtk_label_new(system_keys[i].label);
-        gtk_widget_set_halign(label, GTK_ALIGN_END);
-        gtk_grid_attach(GTK_GRID(system_grid), label, 0, row, 1, 1);
-
-        const char *value;
-        if (!*system_keys[i].ptr || !**system_keys[i].ptr) {
-            value = "(not set)";
-        } else {
-            value = *system_keys[i].ptr;
-        }
-        GtkWidget *button = gtk_button_new_with_label(value);
-        gtk_widget_set_size_request(button, BUTTON_WIDTH, BUTTON_HEIGHT);
-        g_signal_connect(button, "clicked", G_CALLBACK(on_gamepad_button_clicked), NULL);
-        g_object_set_data(G_OBJECT(button), "variable_ptr", system_keys[i].ptr);
-        g_object_set_data(G_OBJECT(button), "prompt", (gpointer)system_keys[i].label);
-        gtk_grid_attach(GTK_GRID(system_grid), button, 1, row, 1, 1);
-        g_object_set_data(G_OBJECT(system_grid), g_strdup_printf("system_%d", i), button);
-
-        // Add Clear button
-        GtkWidget *clear_button = gtk_button_new_with_label("Clear");
-        gtk_widget_set_size_request(clear_button, CLEAR_BUTTON_WIDTH, BUTTON_HEIGHT);
-        ClearButtonData *clear_data = malloc(sizeof(ClearButtonData));
-        if (clear_data) {
-            clear_data->button = button;
-            clear_data->variable = system_keys[i].ptr;
-            g_signal_connect(clear_button, "clicked", G_CALLBACK(on_clear_button_clicked), clear_data);
-            g_signal_connect_swapped(clear_button, "destroy", G_CALLBACK(free), clear_data);
-        }
-        gtk_grid_attach(GTK_GRID(system_grid), clear_button, 2, row, 1, 1);
-
-        row++;
-    }
-
-    gtk_container_add(GTK_CONTAINER(system_scroll), system_grid);
-    gtk_notebook_append_page(GTK_NOTEBOOK(notebook), system_scroll, gtk_label_new("System"));
-
-    return notebook;
+    return wrap_in_scrolled_window(grid);
 }
 
 // Create main window with tabs
@@ -3268,42 +2418,35 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
     if (config->msu_path) free((void*)config->msu_path);
     config->msu_path = (msu_path_text && *msu_path_text) ? strdup(msu_path_text) : NULL;
 
-    // Features
+    // Features (autosave is separate, not a feature flag)
     config->autosave = gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_autosave));
+
+    // Feature flags: table-driven to reduce repetition
+    static const struct { GtkWidget **widget; uint32 flag; } kFeatureMap[] = {
+        {&g_widgets.feat_switch_lr,       kFeatures0_SwitchLR},
+        {&g_widgets.feat_switch_lr_limit, kFeatures0_SwitchLRLimit},
+        {&g_widgets.feat_turn_dash,       kFeatures0_TurnWhileDashing},
+        {&g_widgets.feat_mirror_dw,       kFeatures0_MirrorToDarkworld},
+        {&g_widgets.feat_sword_collect,   kFeatures0_CollectItemsWithSword},
+        {&g_widgets.feat_more_bombs,      kFeatures0_MoreActiveBombs},
+        {&g_widgets.feat_more_rupees,     kFeatures0_CarryMoreRupees},
+        {&g_widgets.feat_cancel_bird,     kFeatures0_CancelBirdTravel},
+        {&g_widgets.feat_no_beep,         kFeatures0_DisableLowHealthBeep},
+        {&g_widgets.feat_skip_intro,      kFeatures0_SkipIntroOnKeypress},
+        {&g_widgets.feat_yellow_items,    kFeatures0_ShowMaxItemsInYellow},
+        {&g_widgets.feat_misc_bugs,       kFeatures0_MiscBugFixes},
+        {&g_widgets.feat_game_bugs,       kFeatures0_GameChangingBugFixes},
+        {&g_widgets.feat_pokemode,        kFeatures0_Pokemode},
+        {&g_widgets.feat_zelda_helps,     kFeatures0_PrincessZeldaHelps},
+        {&g_widgets.dim_flashes,          kFeatures0_DimFlashes},
+    };
     config->features0 = 0;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_switch_lr)))
-        config->features0 |= kFeatures0_SwitchLR;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_switch_lr_limit)))
-        config->features0 |= kFeatures0_SwitchLRLimit;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_turn_dash)))
-        config->features0 |= kFeatures0_TurnWhileDashing;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_mirror_dw)))
-        config->features0 |= kFeatures0_MirrorToDarkworld;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_sword_collect)))
-        config->features0 |= kFeatures0_CollectItemsWithSword;
+    for (size_t i = 0; i < sizeof(kFeatureMap) / sizeof(kFeatureMap[0]); i++) {
+        if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(*kFeatureMap[i].widget)))
+            config->features0 |= kFeatureMap[i].flag;
+    }
+    // Sword pots is a combo box, not a checkbox
     config->break_pots_min_sword = gtk_combo_box_get_active(GTK_COMBO_BOX(g_widgets.feat_sword_pots));
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_more_bombs)))
-        config->features0 |= kFeatures0_MoreActiveBombs;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_more_rupees)))
-        config->features0 |= kFeatures0_CarryMoreRupees;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_cancel_bird)))
-        config->features0 |= kFeatures0_CancelBirdTravel;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_no_beep)))
-        config->features0 |= kFeatures0_DisableLowHealthBeep;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_skip_intro)))
-        config->features0 |= kFeatures0_SkipIntroOnKeypress;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_yellow_items)))
-        config->features0 |= kFeatures0_ShowMaxItemsInYellow;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_misc_bugs)))
-        config->features0 |= kFeatures0_MiscBugFixes;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_game_bugs)))
-        config->features0 |= kFeatures0_GameChangingBugFixes;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_pokemode)))
-        config->features0 |= kFeatures0_Pokemode;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.feat_zelda_helps)))
-        config->features0 |= kFeatures0_PrincessZeldaHelps;
-    if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(g_widgets.dim_flashes)))
-        config->features0 |= kFeatures0_DimFlashes;
 
     // Read keyboard save state bindings (30 buttons)
     char **state_arrays[] = {g_kbd_load, g_kbd_save, g_kbd_replay};
@@ -3311,7 +2454,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         for (int i = 0; i < NUM_SAVE_SLOTS; i++) {
             char key[32];
             snprintf(key, sizeof(key), "state_%d_%d", type, i);
-            GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.kbd_states_grid), key);
+            GtkWidget *button = g_object_get_data(G_OBJECT(g_kbd_states_grid), key);
             if (button) {
                 if (state_arrays[type][i]) free(state_arrays[type][i]);
                 state_arrays[type][i] = label_to_value(gtk_button_get_label(GTK_BUTTON(button)));
@@ -3324,7 +2467,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
     for (int i = 0; i < 3; i++) {
         char key[32];
         snprintf(key, sizeof(key), "cheat_%d", i);
-        GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.kbd_cheats_grid), key);
+        GtkWidget *button = g_object_get_data(G_OBJECT(g_kbd_cheats_grid), key);
         if (button) {
             if (*cheat_ptrs[i]) free(*cheat_ptrs[i]);
             *cheat_ptrs[i] = label_to_value(gtk_button_get_label(GTK_BUTTON(button)));
@@ -3351,7 +2494,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
     for (int i = 0; i < NUM_SYSTEM_KEYS; i++) {
         char key[32];
         snprintf(key, sizeof(key), "system_%d", i);
-        GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.kbd_system_grid), key);
+        GtkWidget *button = g_object_get_data(G_OBJECT(g_kbd_system_grid), key);
         if (button) {
             if (*system_ptrs[i]) free(*system_ptrs[i]);
             *system_ptrs[i] = label_to_value(gtk_button_get_label(GTK_BUTTON(button)));
@@ -3364,7 +2507,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
         for (int i = 0; i < NUM_SAVE_SLOTS; i++) {
             char key[32];
             snprintf(key, sizeof(key), "state_%d_%d", type, i);
-            GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.gamepad_states_grid), key);
+            GtkWidget *button = g_object_get_data(G_OBJECT(g_gamepad_states_grid), key);
             if (button) {
                 if (gamepad_state_arrays[type][i]) free(gamepad_state_arrays[type][i]);
                 gamepad_state_arrays[type][i] = label_to_value(gtk_button_get_label(GTK_BUTTON(button)));
@@ -3377,7 +2520,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
     for (int i = 0; i < 3; i++) {
         char key[32];
         snprintf(key, sizeof(key), "cheat_%d", i);
-        GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.gamepad_cheats_grid), key);
+        GtkWidget *button = g_object_get_data(G_OBJECT(g_gamepad_cheats_grid), key);
         if (button) {
             if (*gamepad_cheat_ptrs[i]) free(*gamepad_cheat_ptrs[i]);
             *gamepad_cheat_ptrs[i] = label_to_value(gtk_button_get_label(GTK_BUTTON(button)));
@@ -3404,7 +2547,7 @@ void LauncherUI_UpdateConfigFromUI(Config *config) {
     for (int i = 0; i < NUM_SYSTEM_KEYS; i++) {
         char key[32];
         snprintf(key, sizeof(key), "system_%d", i);
-        GtkWidget *button = g_object_get_data(G_OBJECT(g_widgets.gamepad_system_grid), key);
+        GtkWidget *button = g_object_get_data(G_OBJECT(g_gamepad_system_grid), key);
         if (button) {
             if (*gamepad_system_ptrs[i]) free(*gamepad_system_ptrs[i]);
             *gamepad_system_ptrs[i] = label_to_value(gtk_button_get_label(GTK_BUTTON(button)));

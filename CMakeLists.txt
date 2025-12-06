@@ -260,6 +260,7 @@ if(HAVE_GTK3)
     set(LAUNCHER_SOURCES
         src/launcher/launcher_main.c
         src/launcher/launcher_ui.c
+        src/launcher/launcher_ui_input.c
         src/launcher/launcher_gamepad.c
         src/launcher/config_writer.c
         src/launcher/config_reader.c
