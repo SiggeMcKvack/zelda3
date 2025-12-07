@@ -1,0 +1,3 @@
+[submodule "android/app/jni/glslang"]
+	path = android/app/jni/glslang
+	url = https://github.com/KhronosGroup/glslang

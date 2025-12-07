@@ -4,6 +4,37 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## December 2025
 
+### Android: Vulkan Slang Shader Support
+
+**New Feature:** Slang shaders (RetroArch-compatible `.slangp` presets) now work on Android with the Vulkan renderer.
+
+**Setup:**
+1. Place shader files in your zelda3 folder under `shaders/` (e.g., `/sdcard/zelda3/shaders/shaders_slang/crt/crt-geom.slangp`)
+2. Set `Shader = shaders/shaders_slang/crt/crt-geom.slangp` in zelda3.ini
+3. Enable Vulkan renderer: `OutputMethod = Vulkan`
+
+**Technical Details:**
+- Shaders loaded via Android Storage Access Framework (SAF) from user-selected folder
+- Push constant layout automatically parsed from shader source to match exact struct order
+- Full multi-pass rendering pipeline with intermediate framebuffers
+- UBO contains MVP matrix, OutputSize, OriginalSize, SourceSize
+- Push constants contain FrameCount and shader-specific parameters
+
+**Files Modified:**
+- `src/slang_shader.c` - Push constant layout parsing, parameter lookup by name
+- `src/slang_shader.h` - Extended SlangOutputTarget with viewport fields
+- `android/app/src/main/java/com/dishii/zelda3/MainActivity.kt` - Nested path traversal for SAF
+
+### Fixed: Vulkan Aspect Ratio Not Respected
+
+**Problem:** Vulkan renderer stretched the image to fill the entire window regardless of the `IgnoreAspectRatio` setting.
+
+**Solution:** Added viewport calculation to Vulkan renderer matching the OpenGL implementation. Both shader and non-shader rendering paths now properly respect aspect ratio settings.
+
+**Files Modified:**
+- `src/vulkan.c` - Added `CalculateViewport()` helper, applied to shader and non-shader paths
+- `src/slang_shader.c` - Final pass uses aspect-corrected viewport, intermediate passes use full framebuffer
+
 ### Fixed: Shader/Config Not Loading via Launcher
 
 **Problem:** When launching the game via the launcher (especially from Finder/desktop), shaders and other configuration settings weren't being applied. The game would fall back to defaults.

@@ -559,7 +559,43 @@ Zelda3 runs at 60 FPS. For best performance:
 **Vulkan:**
 - Requires Vulkan 1.0+ support (most devices since 2016)
 - Better performance on supported hardware
+- Supports slang shaders (CRT effects, scanlines, etc.)
 - Check device compatibility: `adb shell dumpsys | grep vulkan`
+
+### Slang Shader Support (Vulkan only)
+
+The Vulkan renderer supports RetroArch-compatible slang shaders for visual effects like CRT simulation.
+
+**Setup:**
+
+1. Create a `shaders` folder in your Zelda3 folder:
+   ```bash
+   adb shell mkdir -p /sdcard/zelda3/shaders
+   ```
+
+2. Copy slang shader presets (e.g., from [libretro/slang-shaders](https://github.com/libretro/slang-shaders)):
+   ```bash
+   # Example: Copy crt-geom shader
+   adb push shaders_slang/crt /sdcard/zelda3/shaders/shaders_slang/crt
+   ```
+
+3. Configure in `zelda3.ini`:
+   ```ini
+   Renderer = vulkan
+   Shader = shaders/shaders_slang/crt/crt-geom.slangp
+   ```
+
+**Supported shader features:**
+- Single and multi-pass shaders
+- Push constants with shader parameters
+- UBO for MVP/size uniforms
+- Texture sampling at binding 2
+- Shader parameter presets from `.slangp` files
+
+**Notes:**
+- Shaders only work with Vulkan renderer (not OpenGL ES)
+- Shader files are read from the user-selected Zelda3 folder via SAF
+- Complex shaders may impact performance on older devices
 
 ## Troubleshooting
 

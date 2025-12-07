@@ -401,10 +401,11 @@ class MainActivity : SDLActivity() {
                 return -1
             }
 
-            var subdirFile = rootDir.findFile(subdir)
-            if (subdirFile == null) {
+            // Start from the base subdirectory
+            var currentDir = rootDir.findFile(subdir)
+            if (currentDir == null) {
                 if (createIfMissing) {
-                    subdirFile = rootDir.createDirectory(subdir) ?: run {
+                    currentDir = rootDir.createDirectory(subdir) ?: run {
                         Log.e(TAG, "openFileInSubdir: Failed to create $subdir directory")
                         return -1
                     }
@@ -414,11 +415,35 @@ class MainActivity : SDLActivity() {
                 }
             }
 
-            var file = subdirFile.findFile(filename)
+            // Handle nested paths: split "subdir1/subdir2/file.ext" by "/"
+            val pathParts = filename.split("/")
+
+            // Navigate through intermediate directories
+            var targetDir: DocumentFile = currentDir
+            for (i in 0 until pathParts.size - 1) {
+                val dirName = pathParts[i]
+                var nextDir = targetDir.findFile(dirName)
+                if (nextDir == null) {
+                    if (createIfMissing) {
+                        nextDir = targetDir.createDirectory(dirName) ?: run {
+                            Log.e(TAG, "openFileInSubdir: Failed to create $dirName directory")
+                            return -1
+                        }
+                    } else {
+                        Log.d(TAG, "openFileInSubdir: Directory not found: $dirName in path $subdir/$filename")
+                        return -1
+                    }
+                }
+                targetDir = nextDir
+            }
+
+            // Find or create the final file
+            val finalFileName = pathParts.last()
+            var file = targetDir.findFile(finalFileName)
             if (file == null) {
                 if (createIfMissing) {
-                    file = subdirFile.createFile("application/octet-stream", filename) ?: run {
-                        Log.e(TAG, "openFileInSubdir: Failed to create $filename")
+                    file = targetDir.createFile("application/octet-stream", finalFileName) ?: run {
+                        Log.e(TAG, "openFileInSubdir: Failed to create $finalFileName")
                         return -1
                     }
                 } else {

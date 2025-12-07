@@ -103,6 +103,33 @@ if(VULKAN_LIBRARY)
     message(STATUS "Found Vulkan library: ${VULKAN_LIBRARY}")
     target_link_libraries(main ${VULKAN_LIBRARY})
     target_compile_definitions(main PRIVATE VULKAN_AVAILABLE=1)
+
+    # Check for glslang for slang shader support
+    # glslang must be added as a submodule in android/app/jni/glslang
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/glslang/CMakeLists.txt")
+        message(STATUS "Building glslang for slang shader support")
+
+        # Disable features we don't need
+        set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+        set(ENABLE_SPVREMAPPER OFF CACHE BOOL "" FORCE)
+        set(ENABLE_HLSL OFF CACHE BOOL "" FORCE)
+        set(ENABLE_CTEST OFF CACHE BOOL "" FORCE)
+        set(ENABLE_OPT OFF CACHE BOOL "" FORCE)
+        set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+
+        add_subdirectory(glslang)
+
+        target_link_libraries(main glslang SPIRV glslang-default-resource-limits)
+        target_include_directories(main PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/glslang
+            ${CMAKE_CURRENT_BINARY_DIR}/glslang/include
+        )
+        target_compile_definitions(main PRIVATE SLANG_SHADERS_AVAILABLE=1)
+        message(STATUS "Slang shader support enabled")
+    else()
+        message(STATUS "glslang not found - slang shader support disabled")
+        message(STATUS "To enable: git submodule add https://github.com/KhronosGroup/glslang android/app/jni/glslang")
+    endif()
 else()
     message(STATUS "Vulkan library not found - Vulkan renderer will not be available")
 endif()

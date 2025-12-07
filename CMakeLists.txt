@@ -46,6 +46,31 @@ else()
     set(HAVE_VULKAN OFF)
 endif()
 
+# Find glslang (optional, for slang shader support - requires Vulkan)
+option(ENABLE_SLANG_SHADERS "Enable slang shader support (requires glslang)" ON)
+if(HAVE_VULKAN AND ENABLE_SLANG_SHADERS)
+    find_package(glslang CONFIG QUIET)
+    if(glslang_FOUND)
+        message(STATUS "Found glslang: slang shader support enabled")
+        set(HAVE_SLANG_SHADERS ON)
+    else()
+        # Try pkg-config as fallback
+        if(PkgConfig_FOUND)
+            pkg_check_modules(GLSLANG QUIET glslang)
+        endif()
+        if(GLSLANG_FOUND)
+            message(STATUS "Found glslang via pkg-config: slang shader support enabled")
+            set(HAVE_SLANG_SHADERS ON)
+        else()
+            message(STATUS "glslang not found - slang shader support disabled")
+            message(STATUS "  Install via: brew install glslang (macOS) or apt install glslang-dev (Linux)")
+            set(HAVE_SLANG_SHADERS OFF)
+        endif()
+    endif()
+else()
+    set(HAVE_SLANG_SHADERS OFF)
+endif()
+
 # Option to build launcher (manual override)
 option(BUILD_LAUNCHER "Build GTK3 launcher" ON)
 
@@ -176,6 +201,23 @@ endif()
 if(HAVE_VULKAN)
     target_link_libraries(zelda3 PRIVATE Vulkan::Vulkan)
     target_compile_definitions(zelda3 PRIVATE VULKAN_AVAILABLE=1)
+endif()
+
+# Link glslang for slang shader support
+if(HAVE_SLANG_SHADERS)
+    if(glslang_FOUND)
+        # CMake config-based glslang (modern approach)
+        target_link_libraries(zelda3 PRIVATE
+            glslang::glslang
+            glslang::SPIRV
+            glslang::glslang-default-resource-limits
+        )
+    else()
+        # pkg-config based glslang
+        target_include_directories(zelda3 PRIVATE ${GLSLANG_INCLUDE_DIRS})
+        target_link_libraries(zelda3 PRIVATE ${GLSLANG_LIBRARIES})
+    endif()
+    target_compile_definitions(zelda3 PRIVATE SLANG_SHADERS_AVAILABLE=1)
 endif()
 
 # Windows-specific libraries
@@ -353,6 +395,7 @@ message(STATUS "SDL2 Found: ${SDL2_FOUND}")
 message(STATUS "Opus Found: ${Opus_FOUND}")
 message(STATUS "OpenGL Found: ${HAVE_OPENGL}")
 message(STATUS "Vulkan Found: ${HAVE_VULKAN}")
+message(STATUS "Slang Shaders: ${HAVE_SLANG_SHADERS}")
 message(STATUS "GTK3 Found: ${HAVE_GTK3}")
 message(STATUS "Launcher: ${HAVE_GTK3}")
 message(STATUS "Platform: ${CMAKE_SYSTEM_NAME}")

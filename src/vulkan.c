@@ -4,6 +4,7 @@
 #include "platform.h"
 #include "platform_detect.h"
 #include "logging.h"
+#include "slang_shader.h"
 #include <SDL.h>
 #include <stdio.h>
 #include <string.h>
@@ -357,6 +358,11 @@ typedef struct {
 
   // Swapchain recreation pending (window resizing/fullscreen transition)
   bool swapchain_needs_recreation;
+
+  // Slang shader (optional, for multi-pass shaders)
+#ifdef SLANG_SHADERS_AVAILABLE
+  SlangShader *slang_shader;
+#endif
 } VulkanState;
 
 static VulkanState vk = {0};
@@ -1409,6 +1415,27 @@ static bool VulkanRenderer_Init(SDL_Window *window) {
   VK_LOG("CreateSyncObjects starting");
   if (!CreateSyncObjects()) { VK_ERR("CreateSyncObjects failed"); return false; }
 
+  // Initialize slang shader if configured
+#ifdef SLANG_SHADERS_AVAILABLE
+  if (g_config.shader && IsSlangPreset(g_config.shader)) {
+    VK_LOG("Loading slang shader: %s", g_config.shader);
+    SlangVulkanContext vk_ctx = {
+      .device = vk.device,
+      .physical_device = vk.physical_device,
+      .command_pool = (uint64_t)(uintptr_t)vk.command_pool,
+      .graphics_queue = vk.graphics_queue,
+      .graphics_family = vk.graphics_queue_family,
+      .swapchain_format = (uint32_t)vk.swapchain_format
+    };
+    vk.slang_shader = SlangShader_CreateFromFile(g_config.shader, &vk_ctx);
+    if (vk.slang_shader) {
+      VK_LOG("Slang shader loaded successfully");
+    } else {
+      VK_ERR("Failed to load slang shader - continuing without shader");
+    }
+  }
+#endif
+
   VK_LOG("Vulkan renderer initialized successfully");
   return true;
 }
@@ -1417,6 +1444,14 @@ static void VulkanRenderer_Destroy() {
   if (vk.device) {
     vkDeviceWaitIdle(vk.device);
   }
+
+  // Destroy slang shader
+#ifdef SLANG_SHADERS_AVAILABLE
+  if (vk.slang_shader) {
+    SlangShader_Destroy(vk.slang_shader);
+    vk.slang_shader = NULL;
+  }
+#endif
 
   for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     if (vk.image_available_semaphores) vkDestroySemaphore(vk.device, vk.image_available_semaphores[i], NULL);
@@ -1475,6 +1510,29 @@ static void VulkanRenderer_Destroy() {
   free(vk.pixel_buffer);
 
   memset(&vk, 0, sizeof(vk));
+}
+
+// Calculate viewport dimensions respecting aspect ratio setting
+static void CalculateViewport(int src_width, int src_height, int dst_width, int dst_height,
+                              int *vp_x, int *vp_y, int *vp_width, int *vp_height) {
+  *vp_width = dst_width;
+  *vp_height = dst_height;
+  *vp_x = 0;
+  *vp_y = 0;
+
+  if (!g_config.ignore_aspect_ratio) {
+    // Maintain aspect ratio
+    if (*vp_width * src_height < *vp_height * src_width) {
+      // Width is limiting factor, reduce height
+      *vp_height = *vp_width * src_height / src_width;
+    } else {
+      // Height is limiting factor, reduce width
+      *vp_width = *vp_height * src_width / src_height;
+    }
+    // Center the viewport
+    *vp_x = (dst_width - *vp_width) / 2;
+    *vp_y = (dst_height - *vp_height) / 2;
+  }
 }
 
 static void VulkanRenderer_BeginDraw(int width, int height, uint8_t **pixels, int *pitch) {
@@ -1603,50 +1661,81 @@ static void VulkanRenderer_EndDraw() {
                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
                       0, NULL, 0, NULL, 1, &barrier);
 
-  // Begin render pass
-  VkRenderPassBeginInfo render_pass_info = {0};
-  render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-  render_pass_info.renderPass = vk.render_pass;
-  render_pass_info.framebuffer = vk.framebuffers[image_index];
-  render_pass_info.renderArea.offset.x = 0;
-  render_pass_info.renderArea.offset.y = 0;
-  render_pass_info.renderArea.extent = vk.swapchain_extent;
+  // Calculate viewport respecting aspect ratio
+  int vp_x, vp_y, vp_width, vp_height;
+  CalculateViewport(vk.texture_width, vk.texture_height,
+                    vk.swapchain_extent.width, vk.swapchain_extent.height,
+                    &vp_x, &vp_y, &vp_width, &vp_height);
 
-  VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
-  render_pass_info.clearValueCount = 1;
-  render_pass_info.pClearValues = &clear_color;
+#ifdef SLANG_SHADERS_AVAILABLE
+  if (vk.slang_shader) {
+    // Use slang shader for multi-pass rendering
+    SlangInputImage input = {
+      .image = (uint64_t)(uintptr_t)vk.texture_image,
+      .image_view = (uint64_t)(uintptr_t)vk.texture_image_view,
+      .width = (uint16_t)vk.texture_width,
+      .height = (uint16_t)vk.texture_height
+    };
+    SlangOutputTarget output = {
+      .framebuffer = (uint64_t)(uintptr_t)vk.framebuffers[image_index],
+      .render_pass = (uint64_t)(uintptr_t)vk.render_pass,
+      .width = (uint16_t)vk.swapchain_extent.width,
+      .height = (uint16_t)vk.swapchain_extent.height,
+      .viewport_x = (int16_t)vp_x,
+      .viewport_y = (int16_t)vp_y,
+      .viewport_w = (uint16_t)vp_width,
+      .viewport_h = (uint16_t)vp_height
+    };
+    SlangShader_Render(vk.slang_shader, cmd, &input, &output);
+  } else
+#endif
+  {
+    // Default single-pass rendering
+    VkRenderPassBeginInfo render_pass_info = {0};
+    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    render_pass_info.renderPass = vk.render_pass;
+    render_pass_info.framebuffer = vk.framebuffers[image_index];
+    render_pass_info.renderArea.offset.x = 0;
+    render_pass_info.renderArea.offset.y = 0;
+    render_pass_info.renderArea.extent = vk.swapchain_extent;
 
-  vkCmdBeginRenderPass(cmd, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+    VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+    render_pass_info.clearValueCount = 1;
+    render_pass_info.pClearValues = &clear_color;
 
-  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.graphics_pipeline);
+    vkCmdBeginRenderPass(cmd, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
 
-  // Set dynamic viewport and scissor to current swapchain extent
-  VkViewport viewport = {0};
-  viewport.x = 0.0f;
-  viewport.y = 0.0f;
-  viewport.width = (float)vk.swapchain_extent.width;
-  viewport.height = (float)vk.swapchain_extent.height;
-  viewport.minDepth = 0.0f;
-  viewport.maxDepth = 1.0f;
-  vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.graphics_pipeline);
 
-  VkRect2D scissor = {0};
-  scissor.offset.x = 0;
-  scissor.offset.y = 0;
-  scissor.extent = vk.swapchain_extent;
-  vkCmdSetScissor(cmd, 0, 1, &scissor);
+    // Set dynamic viewport and scissor respecting aspect ratio
+    VkViewport viewport = {0};
+    viewport.x = (float)vp_x;
+    viewport.y = (float)vp_y;
+    viewport.width = (float)vp_width;
+    viewport.height = (float)vp_height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
 
-  VkBuffer vertex_buffers[] = {vk.vertex_buffer};
-  VkDeviceSize offsets[] = {0};
-  vkCmdBindVertexBuffers(cmd, 0, 1, vertex_buffers, offsets);
-  vkCmdBindIndexBuffer(cmd, vk.index_buffer, 0, VK_INDEX_TYPE_UINT16);
+    VkRect2D scissor = {0};
+    scissor.offset.x = vp_x;
+    scissor.offset.y = vp_y;
+    scissor.extent.width = vp_width;
+    scissor.extent.height = vp_height;
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-  vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout,
-                         0, 1, &vk.descriptor_set, 0, NULL);
+    VkBuffer vertex_buffers[] = {vk.vertex_buffer};
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(cmd, 0, 1, vertex_buffers, offsets);
+    vkCmdBindIndexBuffer(cmd, vk.index_buffer, 0, VK_INDEX_TYPE_UINT16);
 
-  vkCmdDrawIndexed(cmd, ARRAY_SIZE(g_quad_indices), 1, 0, 0, 0);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vk.pipeline_layout,
+                           0, 1, &vk.descriptor_set, 0, NULL);
 
-  vkCmdEndRenderPass(cmd);
+    vkCmdDrawIndexed(cmd, ARRAY_SIZE(g_quad_indices), 1, 0, 0, 0);
+
+    vkCmdEndRenderPass(cmd);
+  }
 
   vkEndCommandBuffer(cmd);
 
