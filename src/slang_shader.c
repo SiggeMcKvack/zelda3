@@ -28,6 +28,18 @@ enum {
   kSlangMaxParams = 64,
 };
 
+// Standard RetroArch slang texture binding slots
+// See: https://github.com/libretro/slang-shaders/blob/master/slang-spec.md
+enum {
+  SLANG_BIND_UBO = 0,                   // Uniform buffer binding
+  SLANG_BIND_PUSH_CONSTANT = 1,         // Push constant binding (not a descriptor)
+  SLANG_BIND_SOURCE = 2,                // Source texture (input to current pass)
+  SLANG_BIND_ORIGINAL = 3,              // Original game framebuffer
+  SLANG_BIND_PASS_OUTPUT_BASE = 4,      // PassOutput0-7 at bindings 4-11
+  SLANG_BIND_USER_BASE = 12,            // User/LUT textures start at binding 12
+  SLANG_MAX_TEXTURE_BINDINGS = 20,      // Maximum texture bindings per pass
+};
+
 // Scale types (matching GLSL shader conventions)
 typedef enum SlangScaleType {
   SLANG_SCALE_NONE = 0,
@@ -74,6 +86,36 @@ typedef struct SlangPassConfig {
   uint32_t frame_count_mod;
 } SlangPassConfig;
 
+// Maximum push constant size (128 bytes is Vulkan minimum guaranteed)
+#define SLANG_MAX_PUSH_CONSTANT_SIZE 128
+
+// Maximum members in push constant block
+#define SLANG_MAX_PUSH_CONST_MEMBERS 32
+
+// Push constant / UBO member types
+typedef enum UniformMemberType {
+  UNI_TYPE_FLOAT,   // single float (4 bytes)
+  UNI_TYPE_UINT,    // uint32_t (4 bytes)
+  UNI_TYPE_INT,     // int32_t (4 bytes)
+  UNI_TYPE_VEC4,    // vec4 (16 bytes)
+  UNI_TYPE_MAT4,    // mat4 (64 bytes)
+} UniformMemberType;
+
+// Legacy alias for push constants
+typedef UniformMemberType PushConstType;
+#define PC_TYPE_FLOAT UNI_TYPE_FLOAT
+#define PC_TYPE_UINT UNI_TYPE_UINT
+#define PC_TYPE_INT UNI_TYPE_INT
+#define PC_TYPE_VEC4 UNI_TYPE_VEC4
+
+// Push constant member - tracks name, type, and computed offset
+typedef struct PushConstMember {
+  char *name;
+  PushConstType type;
+  uint16_t offset;    // byte offset in push constant block
+  uint16_t size;      // size in bytes
+} PushConstMember;
+
 // Vulkan resources for a single pass
 typedef struct SlangPass {
   SlangPassConfig config;
@@ -107,31 +149,26 @@ typedef struct SlangPass {
   // Push constant size (from shader reflection or default)
   uint32_t push_constant_size;
 
-  // Push constant member names in order (for parameter lookup)
-  char **push_const_names;
+  // Push constant members with types and offsets
+  PushConstMember *push_const_members;
   int push_const_count;
+
+  // UBO members with types and offsets (for dynamic layout)
+  PushConstMember *ubo_members;
+  int ubo_count;
+  uint32_t ubo_size;  // Total UBO size in bytes
 } SlangPass;
 
 // Standard UBO layout matching RetroArch slang spec
 // Must match std140 layout rules
 typedef struct SlangUBO {
-  float mvp[16];         // mat4 MVP
-  float output_size[4];  // vec4 OutputSize (w, h, 1/w, 1/h)
-  float source_size[4];  // vec4 SourceSize (w, h, 1/w, 1/h)
-  uint32_t frame_count;  // uint FrameCount
-  float padding[3];      // Padding to 16-byte alignment
+  float mvp[16];           // mat4 MVP (offset 0)
+  float output_size[4];    // vec4 OutputSize (offset 64)
+  float original_size[4];  // vec4 OriginalSize (offset 80)
+  float source_size[4];    // vec4 SourceSize (offset 96)
+  uint32_t frame_count;    // uint FrameCount (offset 112)
+  float padding[3];        // Padding to 16-byte alignment
 } SlangUBO;
-
-// Maximum push constant size (128 bytes is Vulkan minimum guaranteed)
-#define SLANG_MAX_PUSH_CONSTANT_SIZE 128
-
-// Push constant data - crt-geom layout
-// Most slang shaders put FrameCount first, then shader parameters
-// Size info (SourceSize, OutputSize) comes from UBO, not push constants
-typedef struct SlangPushConstants {
-  uint32_t frame_count;     // uint FrameCount (offset 0)
-  float params[31];         // Shader-specific parameters (CRTgamma, monitorgamma, etc.)
-} SlangPushConstants;
 
 // LUT texture
 typedef struct SlangTexture {
@@ -142,6 +179,7 @@ typedef struct SlangTexture {
   SlangFilterMode filter;
   SlangWrapMode wrap_mode;
   bool mipmap;
+  int binding;             // Descriptor binding slot (SLANG_BIND_USER_BASE + index)
 
   // Vulkan resources
   VkImage image;
@@ -201,8 +239,27 @@ struct SlangShader {
   VkBuffer index_buffer;
   VkDeviceMemory index_buffer_memory;
 
-  // Frame counter
+  // Frame counter and timing
   uint32_t frame_count;
+  int32_t frame_direction;     // 1 = forward, -1 = reverse (for rewind)
+  uint32_t rotation;           // 0, 90, 180, 270 degrees
+  float original_aspect;       // Original content aspect ratio
+
+  // Original input size (before any scaling)
+  uint16_t original_width;
+  uint16_t original_height;
+
+  // Final viewport size (may differ from output size due to aspect ratio)
+  uint16_t final_viewport_width;
+  uint16_t final_viewport_height;
+
+  // Original texture (copy of first pass input for Original semantic)
+  // This is the game framebuffer before any shader passes are applied
+  VkImage original_image;
+  VkDeviceMemory original_memory;
+  VkImageView original_view;
+  VkSampler original_sampler;
+  bool original_valid;  // True if original texture has been captured this frame
 
   // Base path for resolving relative paths
   char *base_path;
@@ -230,6 +287,17 @@ static VkSamplerAddressMode SlangWrapModeToVk(SlangWrapMode mode) {
 static VkFilter SlangFilterModeToVk(SlangFilterMode mode) __attribute__((unused));
 static VkFilter SlangFilterModeToVk(SlangFilterMode mode) {
   return (mode == SLANG_FILTER_LINEAR) ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
+}
+
+// Calculate number of mip levels for a texture
+static uint32_t CalculateMipLevels(uint32_t width, uint32_t height) {
+  uint32_t levels = 1;
+  uint32_t size = width > height ? width : height;
+  while (size > 1) {
+    size >>= 1;
+    levels++;
+  }
+  return levels;
 }
 
 // ============================================================================
@@ -294,6 +362,7 @@ static void ParseTextures(SlangShader *ss, char *value) {
     }
     t->wrap_mode = SLANG_WRAP_CLAMP_TO_BORDER;
     t->filter = SLANG_FILTER_NEAREST;
+    t->binding = SLANG_BIND_USER_BASE + num;  // Assign binding slot (12, 13, 14, ...)
     *nextp = t;
     nextp = &t->next;
   }
@@ -362,6 +431,27 @@ static void SlangPassConfig_Initialize(SlangPassConfig *config) {
   config->scale_y = 1.0f;
   config->wrap_mode = SLANG_WRAP_CLAMP_TO_BORDER;
   config->format = VK_FORMAT_R8G8B8A8_UNORM;
+}
+
+// Determine actual VkFormat based on config flags (srgb, float)
+// Called after parsing is complete to apply srgb_framebuffer and float_framebuffer flags
+static VkFormat DeterminePassFormat(SlangPassConfig *config) {
+  // If format was explicitly set via #pragma format, use that
+  if (config->format != VK_FORMAT_R8G8B8A8_UNORM) {
+    return config->format;
+  }
+
+  // Apply float_framebuffer flag (higher priority than srgb)
+  if (config->float_framebuffer) {
+    return VK_FORMAT_R16G16B16A16_SFLOAT;
+  }
+
+  // Apply srgb_framebuffer flag
+  if (config->srgb_framebuffer) {
+    return VK_FORMAT_R8G8B8A8_SRGB;
+  }
+
+  return VK_FORMAT_R8G8B8A8_UNORM;
 }
 
 static bool SlangShader_InitializePasses(SlangShader *ss, int passes) {
@@ -493,9 +583,14 @@ typedef struct SlangShaderSource {
   ByteArray fragment_source;
   char *name;
   VkFormat format;
-  // Push constant member names in struct order (excluding FrameCount)
-  char **push_const_names;
+  // Push constant members with types
+  PushConstMember *push_const_members;
   int push_const_count;
+  uint32_t push_const_size;  // Total size in bytes
+  // UBO members with types
+  PushConstMember *ubo_members;
+  int ubo_count;
+  uint32_t ubo_size;  // Total UBO size in bytes
 } SlangShaderSource;
 
 static void SlangShaderSource_Init(SlangShaderSource *src) {
@@ -508,13 +603,40 @@ static void SlangShaderSource_Destroy(SlangShaderSource *src) {
   ByteArray_Destroy(&src->fragment_source);
   free(src->name);
   for (int i = 0; i < src->push_const_count; i++) {
-    free(src->push_const_names[i]);
+    free(src->push_const_members[i].name);
   }
-  free(src->push_const_names);
+  free(src->push_const_members);
+  for (int i = 0; i < src->ubo_count; i++) {
+    free(src->ubo_members[i].name);
+  }
+  free(src->ubo_members);
 }
 
-// Parse push constant struct from shader source to get member names in order
+// Helper to get size for a GLSL type
+static uint16_t GetGlslTypeSize(UniformMemberType type) {
+  switch (type) {
+    case UNI_TYPE_MAT4: return 64;
+    case UNI_TYPE_VEC4: return 16;
+    case UNI_TYPE_UINT:
+    case UNI_TYPE_INT:
+    case UNI_TYPE_FLOAT:
+    default: return 4;
+  }
+}
+
+// Helper to parse GLSL type string
+static UniformMemberType ParseGlslType(const char *type_str, size_t len) {
+  if (len == 4 && memcmp(type_str, "mat4", 4) == 0) return UNI_TYPE_MAT4;
+  if (len == 4 && memcmp(type_str, "vec4", 4) == 0) return UNI_TYPE_VEC4;
+  if (len == 4 && memcmp(type_str, "uint", 4) == 0) return UNI_TYPE_UINT;
+  if (len == 3 && memcmp(type_str, "int", 3) == 0) return UNI_TYPE_INT;
+  // float and unknown types treated as 4-byte float
+  return UNI_TYPE_FLOAT;
+}
+
+// Parse push constant struct from shader source to get member names, types, and offsets
 // This is needed because push constant layout order != #pragma parameter order
+// and different shaders have different layouts (some put vec4 sizes, some put FrameCount first)
 static void ParsePushConstantLayout(const char *shader_src, SlangShaderSource *result) {
   // Find "layout(push_constant)" and then the struct body
   const char *pc = strstr(shader_src, "layout(push_constant)");
@@ -529,13 +651,15 @@ static void ParsePushConstantLayout(const char *shader_src, SlangShaderSource *r
   const char *end_brace = strchr(brace, '}');
   if (!end_brace) return;
 
-  // Allocate space for names (max 32 should be plenty)
-  result->push_const_names = calloc(32, sizeof(char *));
+  // Allocate space for members
+  result->push_const_members = calloc(SLANG_MAX_PUSH_CONST_MEMBERS, sizeof(PushConstMember));
   result->push_const_count = 0;
+
+  uint16_t current_offset = 0;
 
   // Parse each line between braces
   const char *p = brace;
-  while (p < end_brace && result->push_const_count < 32) {
+  while (p < end_brace && result->push_const_count < SLANG_MAX_PUSH_CONST_MEMBERS) {
     // Skip whitespace
     while (p < end_brace && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) p++;
     if (p >= end_brace) break;
@@ -544,8 +668,8 @@ static void ParsePushConstantLayout(const char *shader_src, SlangShaderSource *r
     const char *semi = strchr(p, ';');
     if (!semi || semi > end_brace) break;
 
-    // Parse "type name;" - we want the name (last word before semicolon)
-    // Skip type (uint, float, vec4, etc)
+    // Parse "type name;" - get both type and name
+    const char *type_start = p;
     const char *type_end = p;
     while (type_end < semi && *type_end != ' ' && *type_end != '\t') type_end++;
 
@@ -557,22 +681,144 @@ static void ParsePushConstantLayout(const char *shader_src, SlangShaderSource *r
     const char *name_end = semi;
     while (name_end > name_start && (*(name_end-1) == ' ' || *(name_end-1) == '\t')) name_end--;
 
-    if (name_end > name_start) {
+    if (type_end > type_start && name_end > name_start) {
+      size_t type_len = type_end - type_start;
       size_t name_len = name_end - name_start;
-      char *name = malloc(name_len + 1);
-      memcpy(name, name_start, name_len);
-      name[name_len] = '\0';
 
-      // Skip FrameCount - it's handled separately
-      if (strcmp(name, "FrameCount") != 0) {
-        result->push_const_names[result->push_const_count++] = name;
-      } else {
-        free(name);
+      // Get type
+      PushConstType type = ParseGlslType(type_start, type_len);
+      uint16_t size = GetGlslTypeSize(type);
+
+      // Align offset (vec4 needs 16-byte alignment)
+      if (type == PC_TYPE_VEC4 && (current_offset % 16) != 0) {
+        current_offset = (current_offset + 15) & ~15;
       }
+
+      // Create member
+      PushConstMember *m = &result->push_const_members[result->push_const_count];
+      m->name = malloc(name_len + 1);
+      memcpy(m->name, name_start, name_len);
+      m->name[name_len] = '\0';
+      m->type = type;
+      m->offset = current_offset;
+      m->size = size;
+
+      LogInfo("ParsePushConstant: member '%s' type=%d offset=%u size=%u",
+              m->name, (int)type, current_offset, size);
+
+      result->push_const_count++;
+      current_offset += size;
     }
 
     p = semi + 1;
   }
+
+  result->push_const_size = current_offset;
+  LogInfo("ParsePushConstant: total_size=%u, count=%d", current_offset, result->push_const_count);
+}
+
+// Get alignment for a type (std140 rules)
+static uint16_t GetGlslTypeAlignment(UniformMemberType type) {
+  switch (type) {
+    case UNI_TYPE_MAT4: return 16;  // mat4 columns align to vec4
+    case UNI_TYPE_VEC4: return 16;
+    case UNI_TYPE_UINT:
+    case UNI_TYPE_FLOAT:
+    default: return 4;
+  }
+}
+
+// Maximum UBO members
+#define SLANG_MAX_UBO_MEMBERS 64
+
+// Parse UBO struct from shader source to get member names, types, and offsets
+// This is needed because shaders can have non-standard UBO layouts
+// (e.g., MVP + parameters instead of MVP + sizes)
+static void ParseUBOLayout(const char *shader_src, SlangShaderSource *result) {
+  // Find "uniform UBO" with layout qualifier - look for the pattern
+  // layout(std140, set = 0, binding = 0) uniform UBO
+  const char *ubo = strstr(shader_src, "uniform UBO");
+  if (!ubo) return;
+
+  // Find opening brace
+  const char *brace = strchr(ubo, '{');
+  if (!brace) return;
+  brace++;
+
+  // Find closing brace
+  const char *end_brace = strchr(brace, '}');
+  if (!end_brace) return;
+
+  // Allocate space for members
+  result->ubo_members = calloc(SLANG_MAX_UBO_MEMBERS, sizeof(PushConstMember));
+  result->ubo_count = 0;
+
+  uint16_t current_offset = 0;
+
+  // Parse each line between braces
+  const char *p = brace;
+  while (p < end_brace && result->ubo_count < SLANG_MAX_UBO_MEMBERS) {
+    // Skip whitespace
+    while (p < end_brace && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) p++;
+    if (p >= end_brace) break;
+
+    // Find end of line (semicolon)
+    const char *semi = strchr(p, ';');
+    if (!semi || semi > end_brace) break;
+
+    // Parse "type name;" - get both type and name
+    const char *type_start = p;
+    const char *type_end = p;
+    while (type_end < semi && *type_end != ' ' && *type_end != '\t') type_end++;
+
+    // Skip whitespace after type
+    const char *name_start = type_end;
+    while (name_start < semi && (*name_start == ' ' || *name_start == '\t')) name_start++;
+
+    // Find end of name (before semicolon, skip any trailing whitespace)
+    const char *name_end = semi;
+    while (name_end > name_start && (*(name_end-1) == ' ' || *(name_end-1) == '\t')) name_end--;
+
+    if (type_end > type_start && name_end > name_start) {
+      size_t type_len = type_end - type_start;
+      size_t name_len = name_end - name_start;
+
+      // Get type
+      UniformMemberType type = ParseGlslType(type_start, type_len);
+      uint16_t size = GetGlslTypeSize(type);
+      uint16_t alignment = GetGlslTypeAlignment(type);
+
+      // Align offset according to std140 rules
+      if ((current_offset % alignment) != 0) {
+        current_offset = (current_offset + alignment - 1) & ~(alignment - 1);
+      }
+
+      // Create member
+      PushConstMember *m = &result->ubo_members[result->ubo_count];
+      m->name = malloc(name_len + 1);
+      memcpy(m->name, name_start, name_len);
+      m->name[name_len] = '\0';
+      m->type = type;
+      m->offset = current_offset;
+      m->size = size;
+
+      LogInfo("ParseUBO: member '%s' type=%d offset=%u size=%u",
+              m->name, (int)type, current_offset, size);
+
+      result->ubo_count++;
+      current_offset += size;
+    }
+
+    p = semi + 1;
+  }
+
+  // Round up to 16-byte alignment for final size (std140 struct rule)
+  if ((current_offset % 16) != 0) {
+    current_offset = (current_offset + 15) & ~15;
+  }
+
+  result->ubo_size = current_offset;
+  LogInfo("ParseUBO: total_size=%u, count=%d", current_offset, result->ubo_count);
 }
 
 // Parse a .slang file and extract vertex/fragment sources
@@ -588,8 +834,9 @@ static bool SlangShader_ReadSlangFile(SlangShader *ss, const char *filename, Sla
 
   SlangShaderSource_Init(result);
 
-  // Parse push constant layout BEFORE modifying the buffer with NextDelim
+  // Parse push constant and UBO layout BEFORE modifying the buffer with NextDelim
   ParsePushConstantLayout(data, result);
+  ParseUBOLayout(data, result);
 
   // Track if we've seen a #pragma stage directive yet
   // Lines before any stage directive are "preamble" that goes to both shaders
@@ -845,9 +1092,10 @@ static bool CreateDescriptorPool(SlangShader *ss) {
   pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
   pool_sizes[0].descriptorCount = (uint32_t)(ss->n_pass + 1);
 
-  // Sampler descriptors (one per pass + LUT textures)
+  // Sampler descriptors: each pass can have Source + Original + up to 8 PassOutputs + LUTs
+  // Conservative estimate: SLANG_MAX_TEXTURE_BINDINGS per pass + LUT textures
   pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-  pool_sizes[1].descriptorCount = (uint32_t)(ss->n_pass * 2 + kSlangMaxTextures);
+  pool_sizes[1].descriptorCount = (uint32_t)(ss->n_pass * SLANG_MAX_TEXTURE_BINDINGS + kSlangMaxTextures);
 
   VkDescriptorPoolCreateInfo pool_info = {0};
   pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -913,17 +1161,20 @@ static bool CreatePassRenderPass(SlangShader *ss, int pass_idx, VkFormat format,
 static bool CreatePassUBO(SlangShader *ss, int pass_idx) {
   SlangPass *pass = &ss->pass[pass_idx];
 
+  // Use dynamic UBO size from shader parsing, or default to SlangUBO size
+  VkDeviceSize ubo_buffer_size = pass->ubo_size > 0 ? pass->ubo_size : sizeof(SlangUBO);
+
   // Create UBO buffer (host-visible for easy updates)
-  if (!CreateBuffer(ss, sizeof(SlangUBO),
+  if (!CreateBuffer(ss, ubo_buffer_size,
                     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                     &pass->ubo_buffer, &pass->ubo_memory)) {
-    LogError("Failed to create UBO buffer for pass %d", pass_idx);
+    LogError("Failed to create UBO buffer for pass %d (size=%lu)", pass_idx, (unsigned long)ubo_buffer_size);
     return false;
   }
 
-  // Set default push constant size (shader may override via reflection)
-  pass->push_constant_size = SLANG_MAX_PUSH_CONSTANT_SIZE;
+  LogInfo("Created UBO buffer for pass %d: size=%lu, ubo_count=%d",
+          pass_idx, (unsigned long)ubo_buffer_size, pass->ubo_count);
 
   return true;
 }
@@ -931,24 +1182,63 @@ static bool CreatePassUBO(SlangShader *ss, int pass_idx) {
 static bool CreatePassDescriptorSetLayout(SlangShader *ss, int pass_idx) {
   SlangPass *pass = &ss->pass[pass_idx];
 
-  // Two bindings: UBO at binding 0, sampler at binding 2 (standard slang layout)
-  VkDescriptorSetLayoutBinding bindings[2] = {0};
+  // Create bindings for all texture slots:
+  // - Binding 0: UBO
+  // - Binding 2: Source texture
+  // - Binding 3: Original texture
+  // - Bindings 4-11: PassOutput0-7 (previous pass outputs)
+  // - Bindings 12+: User/LUT textures (if needed)
+  VkDescriptorSetLayoutBinding bindings[SLANG_MAX_TEXTURE_BINDINGS] = {0};
+  int binding_count = 0;
 
   // Binding 0: UBO (accessed by both vertex and fragment)
-  bindings[0].binding = 0;
-  bindings[0].descriptorCount = 1;
-  bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-  bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+  bindings[binding_count].binding = SLANG_BIND_UBO;
+  bindings[binding_count].descriptorCount = 1;
+  bindings[binding_count].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  bindings[binding_count].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+  binding_count++;
 
-  // Binding 2: Combined image sampler for Source texture (slang convention)
-  bindings[1].binding = 2;
-  bindings[1].descriptorCount = 1;
-  bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-  bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+  // Binding 2: Source texture (input to current pass)
+  bindings[binding_count].binding = SLANG_BIND_SOURCE;
+  bindings[binding_count].descriptorCount = 1;
+  bindings[binding_count].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  bindings[binding_count].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+  binding_count++;
+
+  // Binding 3: Original texture (game framebuffer before any passes)
+  bindings[binding_count].binding = SLANG_BIND_ORIGINAL;
+  bindings[binding_count].descriptorCount = 1;
+  bindings[binding_count].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  bindings[binding_count].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+  binding_count++;
+
+  // Bindings 4-11: PassOutput0-7 (previous pass outputs)
+  // Only add bindings for passes that exist before this one
+  int max_pass_outputs = pass_idx < 8 ? pass_idx : 8;
+  for (int i = 0; i < max_pass_outputs; i++) {
+    bindings[binding_count].binding = SLANG_BIND_PASS_OUTPUT_BASE + i;
+    bindings[binding_count].descriptorCount = 1;
+    bindings[binding_count].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[binding_count].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    binding_count++;
+  }
+
+  // Bindings 12+: LUT/User textures
+  for (SlangTexture *tex = ss->first_texture; tex != NULL; tex = tex->next) {
+    if (binding_count >= SLANG_MAX_TEXTURE_BINDINGS) {
+      LogWarn("Too many texture bindings, some LUT textures may not be bound");
+      break;
+    }
+    bindings[binding_count].binding = tex->binding;
+    bindings[binding_count].descriptorCount = 1;
+    bindings[binding_count].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[binding_count].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    binding_count++;
+  }
 
   VkDescriptorSetLayoutCreateInfo layout_info = {0};
   layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-  layout_info.bindingCount = 2;
+  layout_info.bindingCount = binding_count;
   layout_info.pBindings = bindings;
 
   if (vkCreateDescriptorSetLayout(ss->device, &layout_info, NULL, &pass->descriptor_set_layout) != VK_SUCCESS) {
@@ -1409,7 +1699,9 @@ static bool LoadLutTexture(SlangShader *ss, SlangTexture *tex) {
   sampler_info.addressModeV = SlangWrapModeToVk(tex->wrap_mode);
   sampler_info.addressModeW = SlangWrapModeToVk(tex->wrap_mode);
   sampler_info.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
-  sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+  // Use linear mipmap filtering if mipmap is requested
+  sampler_info.mipmapMode = tex->mipmap ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+  sampler_info.maxLod = tex->mipmap ? VK_LOD_CLAMP_NONE : 0.0f;
 
   if (vkCreateSampler(ss->device, &sampler_info, NULL, &tex->sampler) != VK_SUCCESS) {
     LogError("Failed to create LUT sampler: %s", tex->id);
@@ -1444,19 +1736,34 @@ static bool SlangShader_CompilePass(SlangShader *ss, int pass_idx) {
     return false;
   }
 
-  // Override format from shader if specified
+  // Override format from shader's #pragma format if specified
   if (source.format != VK_FORMAT_R8G8B8A8_UNORM) {
     pass->config.format = source.format;
   }
 
-  // Copy push constant member names to pass (for parameter lookup)
-  pass->push_const_names = source.push_const_names;
+  // Apply srgb_framebuffer/float_framebuffer flags from preset
+  // (only if format wasn't explicitly set by #pragma format)
+  pass->config.format = DeterminePassFormat(&pass->config);
+  LogInfo("Pass %d format: %d (srgb=%d, float=%d)",
+          pass_idx, pass->config.format, pass->config.srgb_framebuffer, pass->config.float_framebuffer);
+
+  // Transfer push constant members to pass (for parameter lookup)
+  pass->push_const_members = source.push_const_members;
   pass->push_const_count = source.push_const_count;
-  source.push_const_names = NULL;  // Transfer ownership
+  pass->push_constant_size = source.push_const_size > 0 ? source.push_const_size : SLANG_MAX_PUSH_CONSTANT_SIZE;
+  source.push_const_members = NULL;  // Transfer ownership
   source.push_const_count = 0;
 
-  LogInfo("Compiling pass %d vertex shader (%zu bytes), %d push const params",
-          pass_idx, source.vertex_source.size, pass->push_const_count);
+  // Transfer UBO members to pass (for dynamic UBO layout)
+  pass->ubo_members = source.ubo_members;
+  pass->ubo_count = source.ubo_count;
+  pass->ubo_size = source.ubo_size > 0 ? source.ubo_size : sizeof(SlangUBO);
+  source.ubo_members = NULL;  // Transfer ownership
+  source.ubo_count = 0;
+
+  LogInfo("Compiling pass %d vertex shader (%zu bytes), %d push const members, size=%u, %d UBO members, UBO size=%u",
+          pass_idx, source.vertex_source.size, pass->push_const_count, pass->push_constant_size,
+          pass->ubo_count, pass->ubo_size);
 
   // Compile vertex shader
   SlangCompileResult vert_result = SlangCompiler_Compile(
@@ -1554,6 +1861,11 @@ SlangShader *SlangShader_CreateFromFile(const char *filename, const SlangVulkanC
   ss->graphics_queue = (VkQueue)vk_ctx->graphics_queue;
   ss->graphics_family = vk_ctx->graphics_family;
   ss->swapchain_format = (VkFormat)vk_ctx->swapchain_format;
+
+  // Initialize semantic defaults
+  ss->frame_direction = 1;  // forward playback
+  ss->rotation = 0;         // no rotation
+  ss->original_aspect = 256.0f / 224.0f;  // SNES aspect ratio default
 
   // Parse preset file
   if (!SlangShader_ReadPresetFile(ss, filename)) {
@@ -1659,11 +1971,16 @@ void SlangShader_Destroy(SlangShader *ss) {
 
       free(pass->config.filename);
       free(pass->config.alias);
-      // Free push constant names
+      // Free push constant members
       for (int j = 0; j < pass->push_const_count; j++) {
-        free(pass->push_const_names[j]);
+        free(pass->push_const_members[j].name);
       }
-      free(pass->push_const_names);
+      free(pass->push_const_members);
+      // Free UBO members
+      for (int j = 0; j < pass->ubo_count; j++) {
+        free(pass->ubo_members[j].name);
+      }
+      free(pass->ubo_members);
     }
     free(ss->pass);
 
@@ -1687,6 +2004,12 @@ void SlangShader_Destroy(SlangShader *ss) {
       if (ss->prev_frame[i].image) vkDestroyImage(ss->device, ss->prev_frame[i].image, NULL);
       if (ss->prev_frame[i].memory) vkFreeMemory(ss->device, ss->prev_frame[i].memory, NULL);
     }
+
+    // Destroy original texture
+    if (ss->original_view) vkDestroyImageView(ss->device, ss->original_view, NULL);
+    if (ss->original_image) vkDestroyImage(ss->device, ss->original_image, NULL);
+    if (ss->original_memory) vkFreeMemory(ss->device, ss->original_memory, NULL);
+    if (ss->original_sampler) vkDestroySampler(ss->device, ss->original_sampler, NULL);
 
     // Destroy shared resources
     if (ss->descriptor_pool) vkDestroyDescriptorPool(ss->device, ss->descriptor_pool, NULL);
@@ -1759,35 +2082,114 @@ static void UpdatePassDescriptorSet(SlangShader *ss, int pass_idx, VkImageView i
   VkDescriptorBufferInfo buffer_info = {0};
   buffer_info.buffer = pass->ubo_buffer;
   buffer_info.offset = 0;
-  buffer_info.range = sizeof(SlangUBO);
+  buffer_info.range = pass->ubo_size > 0 ? pass->ubo_size : sizeof(SlangUBO);
 
-  // Sampler descriptor (binding 2 - standard slang layout)
-  VkDescriptorImageInfo image_info = {0};
-  image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  image_info.imageView = input_view;
-  image_info.sampler = sampler;
-
-  VkWriteDescriptorSet writes[2] = {0};
+  // Image info array for all texture bindings
+  // Max: Source + Original + 8 PassOutputs = 10 texture bindings
+  VkDescriptorImageInfo image_infos[SLANG_MAX_TEXTURE_BINDINGS] = {0};
+  VkWriteDescriptorSet writes[SLANG_MAX_TEXTURE_BINDINGS + 1] = {0};  // +1 for UBO
+  int write_count = 0;
 
   // Write 0: UBO at binding 0
-  writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-  writes[0].dstSet = pass->descriptor_set;
-  writes[0].dstBinding = 0;
-  writes[0].dstArrayElement = 0;
-  writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-  writes[0].descriptorCount = 1;
-  writes[0].pBufferInfo = &buffer_info;
+  writes[write_count].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  writes[write_count].dstSet = pass->descriptor_set;
+  writes[write_count].dstBinding = SLANG_BIND_UBO;
+  writes[write_count].dstArrayElement = 0;
+  writes[write_count].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  writes[write_count].descriptorCount = 1;
+  writes[write_count].pBufferInfo = &buffer_info;
+  write_count++;
 
-  // Write 1: Sampler at binding 2 (slang convention)
-  writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-  writes[1].dstSet = pass->descriptor_set;
-  writes[1].dstBinding = 2;
-  writes[1].dstArrayElement = 0;
-  writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-  writes[1].descriptorCount = 1;
-  writes[1].pImageInfo = &image_info;
+  // Binding 2: Source texture (current pass input)
+  image_infos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  image_infos[0].imageView = input_view;
+  image_infos[0].sampler = sampler;
+  writes[write_count].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  writes[write_count].dstSet = pass->descriptor_set;
+  writes[write_count].dstBinding = SLANG_BIND_SOURCE;
+  writes[write_count].dstArrayElement = 0;
+  writes[write_count].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  writes[write_count].descriptorCount = 1;
+  writes[write_count].pImageInfo = &image_infos[0];
+  write_count++;
 
-  vkUpdateDescriptorSets(ss->device, 2, writes, 0, NULL);
+  // Binding 3: Original texture (game framebuffer before any passes)
+  // Use the original texture if valid, otherwise fallback to input (first pass input)
+  VkImageView original_view = input_view;
+  VkSampler original_sampler = sampler;
+  if (ss->original_valid && ss->original_view) {
+    original_view = ss->original_view;
+    original_sampler = ss->original_sampler ? ss->original_sampler : sampler;
+  }
+  image_infos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  image_infos[1].imageView = original_view;
+  image_infos[1].sampler = original_sampler;
+  writes[write_count].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  writes[write_count].dstSet = pass->descriptor_set;
+  writes[write_count].dstBinding = SLANG_BIND_ORIGINAL;
+  writes[write_count].dstArrayElement = 0;
+  writes[write_count].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+  writes[write_count].descriptorCount = 1;
+  writes[write_count].pImageInfo = &image_infos[1];
+  write_count++;
+
+  // Bindings 4-11: PassOutput0-7 (previous pass outputs)
+  int max_pass_outputs = pass_idx < 8 ? pass_idx : 8;
+  for (int i = 0; i < max_pass_outputs; i++) {
+    int img_idx = 2 + i;  // Start after Source and Original
+    SlangPass *prev_pass = &ss->pass[i];
+
+    // Use the previous pass's output view if available, otherwise fallback to input
+    VkImageView pass_view = input_view;
+    VkSampler pass_sampler = sampler;
+    if (prev_pass->output_view) {
+      pass_view = prev_pass->output_view;
+      pass_sampler = prev_pass->sampler ? prev_pass->sampler : sampler;
+    }
+
+    image_infos[img_idx].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_infos[img_idx].imageView = pass_view;
+    image_infos[img_idx].sampler = pass_sampler;
+
+    writes[write_count].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[write_count].dstSet = pass->descriptor_set;
+    writes[write_count].dstBinding = SLANG_BIND_PASS_OUTPUT_BASE + i;
+    writes[write_count].dstArrayElement = 0;
+    writes[write_count].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[write_count].descriptorCount = 1;
+    writes[write_count].pImageInfo = &image_infos[img_idx];
+    write_count++;
+  }
+
+  // Bindings 12+: LUT/User textures
+  int lut_img_idx = 2 + max_pass_outputs;  // Start after Source, Original, and PassOutputs
+  for (SlangTexture *tex = ss->first_texture; tex != NULL; tex = tex->next) {
+    // Only bind textures that have been successfully loaded
+    if (!tex->view || !tex->sampler) {
+      continue;
+    }
+    if (write_count >= SLANG_MAX_TEXTURE_BINDINGS + 1 ||
+        lut_img_idx >= SLANG_MAX_TEXTURE_BINDINGS) {
+      LogWarn("Too many texture bindings in descriptor write");
+      break;
+    }
+
+    image_infos[lut_img_idx].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_infos[lut_img_idx].imageView = tex->view;
+    image_infos[lut_img_idx].sampler = tex->sampler;
+
+    writes[write_count].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[write_count].dstSet = pass->descriptor_set;
+    writes[write_count].dstBinding = tex->binding;
+    writes[write_count].dstArrayElement = 0;
+    writes[write_count].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[write_count].descriptorCount = 1;
+    writes[write_count].pImageInfo = &image_infos[lut_img_idx];
+    write_count++;
+    lut_img_idx++;
+  }
+
+  vkUpdateDescriptorSets(ss->device, write_count, writes, 0, NULL);
 }
 
 // Transition image layout (may be needed for explicit barriers in later phases)
@@ -1843,12 +2245,227 @@ static void BuildMVP(float *mvp) {
   mvp[15] = 1.0f;  // m[3][3]
 }
 
+// Find parameter value by name
+static float FindParamValue(SlangShader *ss, const char *name) {
+  for (SlangParam *p = ss->first_param; p; p = p->next) {
+    if (strcmp(p->id, name) == 0) {
+      return p->value;
+    }
+  }
+  return 0.0f;  // Default if not found
+}
+
+// Try to parse pass output size semantic (e.g., "PassOutput0Size", "Pass1Size")
+// Returns pass index if found, -1 otherwise
+static int TryParsePassOutputSize(const char *name) {
+  // Try "PassOutputNSize" format (RetroArch standard)
+  if (strncmp(name, "PassOutput", 10) == 0) {
+    const char *p = name + 10;
+    if (*p >= '0' && *p <= '9') {
+      int idx = *p - '0';
+      p++;
+      if (*p >= '0' && *p <= '9') {
+        idx = idx * 10 + (*p - '0');
+        p++;
+      }
+      if (strcmp(p, "Size") == 0) {
+        return idx;
+      }
+    }
+  }
+  // Try "PassNSize" format (alternative)
+  if (strncmp(name, "Pass", 4) == 0) {
+    const char *p = name + 4;
+    if (*p >= '0' && *p <= '9') {
+      int idx = *p - '0';
+      p++;
+      if (*p >= '0' && *p <= '9') {
+        idx = idx * 10 + (*p - '0');
+        p++;
+      }
+      if (strcmp(p, "Size") == 0) {
+        return idx;
+      }
+    }
+  }
+  return -1;
+}
+
+// Find a LUT texture by name and return it
+static SlangTexture *FindLutTexture(SlangShader *ss, const char *name) {
+  for (SlangTexture *tex = ss->first_texture; tex != NULL; tex = tex->next) {
+    if (tex->id && strcmp(tex->id, name) == 0) {
+      return tex;
+    }
+  }
+  return NULL;
+}
+
+// Try to parse LUT/User texture size semantic (e.g., "TextureNameSize")
+// Returns the SlangTexture if found, NULL otherwise
+// Also handles "UserSizeN" format for indexed lookups
+static SlangTexture *TryParseLutSizeTexture(SlangShader *ss, const char *name) {
+  // Check if name ends with "Size" and strip it to get texture name
+  size_t len = strlen(name);
+  if (len > 4 && strcmp(name + len - 4, "Size") == 0) {
+    // Extract texture name (everything before "Size")
+    char tex_name[128];
+    size_t tex_name_len = len - 4;
+    if (tex_name_len >= sizeof(tex_name)) {
+      return NULL;
+    }
+    strncpy(tex_name, name, tex_name_len);
+    tex_name[tex_name_len] = '\0';
+
+    // Look up texture by name
+    return FindLutTexture(ss, tex_name);
+  }
+  return NULL;
+}
+
+// Legacy function that returns index - kept for backward compatibility
+static int TryParseLutSize(SlangShader *ss, const char *name) {
+  SlangTexture *tex = TryParseLutSizeTexture(ss, name);
+  if (tex) {
+    return tex->binding - SLANG_BIND_USER_BASE;
+  }
+  return -1;
+}
+
 // Update UBO with current frame data
+// If shader has dynamic UBO layout, fill members according to parsed layout
+// Otherwise, use standard SlangUBO layout
 static void UpdatePassUBOData(SlangShader *ss, int pass_idx,
                               uint16_t source_w, uint16_t source_h,
                               uint16_t output_w, uint16_t output_h) {
   SlangPass *pass = &ss->pass[pass_idx];
 
+  // Use dynamic buffer for shaders with parsed UBO layout
+  if (pass->ubo_count > 0 && pass->ubo_size > 0) {
+    // Allocate buffer on stack (max reasonable UBO size)
+    uint8_t ubo_buffer[1024];
+    if (pass->ubo_size > sizeof(ubo_buffer)) {
+      LogError("UBO size %u exceeds maximum %zu", pass->ubo_size, sizeof(ubo_buffer));
+      return;
+    }
+    memset(ubo_buffer, 0, pass->ubo_size);
+
+    // Precompute vec4 values for built-in semantics
+    float source_size[4] = {
+      (float)source_w, (float)source_h,
+      1.0f / (float)source_w, 1.0f / (float)source_h
+    };
+    float output_size[4] = {
+      (float)output_w, (float)output_h,
+      1.0f / (float)output_w, 1.0f / (float)output_h
+    };
+    // Use stored original size if available, otherwise fall back to source
+    float orig_w = ss->original_width > 0 ? (float)ss->original_width : (float)source_w;
+    float orig_h = ss->original_height > 0 ? (float)ss->original_height : (float)source_h;
+    float original_size[4] = { orig_w, orig_h, 1.0f / orig_w, 1.0f / orig_h };
+
+    // FinalViewportSize may differ from OutputSize due to aspect ratio letterboxing
+    float final_vp_w = ss->final_viewport_width > 0 ? (float)ss->final_viewport_width : (float)output_w;
+    float final_vp_h = ss->final_viewport_height > 0 ? (float)ss->final_viewport_height : (float)output_h;
+    float final_viewport_size[4] = { final_vp_w, final_vp_h, 1.0f / final_vp_w, 1.0f / final_vp_h };
+
+    float mvp[16];
+    BuildMVP(mvp);
+
+    // Fill each UBO member based on its name and type
+    for (int i = 0; i < pass->ubo_count; i++) {
+      PushConstMember *m = &pass->ubo_members[i];
+      void *dst = ubo_buffer + m->offset;
+
+      // Handle built-in semantics
+      if (strcmp(m->name, "MVP") == 0 && m->type == UNI_TYPE_MAT4) {
+        memcpy(dst, mvp, 64);
+      } else if (strcmp(m->name, "SourceSize") == 0 && m->type == UNI_TYPE_VEC4) {
+        memcpy(dst, source_size, 16);
+      } else if (strcmp(m->name, "OriginalSize") == 0 && m->type == UNI_TYPE_VEC4) {
+        memcpy(dst, original_size, 16);
+      } else if (strcmp(m->name, "OutputSize") == 0 && m->type == UNI_TYPE_VEC4) {
+        memcpy(dst, output_size, 16);
+      } else if (strcmp(m->name, "FinalViewportSize") == 0 && m->type == UNI_TYPE_VEC4) {
+        memcpy(dst, final_viewport_size, 16);
+      } else if (strcmp(m->name, "FrameCount") == 0 && m->type == UNI_TYPE_UINT) {
+        *(uint32_t *)dst = ss->frame_count;
+      } else if (strcmp(m->name, "FrameDirection") == 0 && m->type == UNI_TYPE_INT) {
+        *(int32_t *)dst = ss->frame_direction != 0 ? ss->frame_direction : 1;
+      } else if (strcmp(m->name, "Rotation") == 0 && m->type == UNI_TYPE_UINT) {
+        *(uint32_t *)dst = ss->rotation;
+      } else if (strcmp(m->name, "OriginalAspect") == 0 && m->type == UNI_TYPE_FLOAT) {
+        *(float *)dst = ss->original_aspect > 0.0f ? ss->original_aspect : (orig_w / orig_h);
+      } else if (strcmp(m->name, "OriginalAspectRotated") == 0 && m->type == UNI_TYPE_FLOAT) {
+        float aspect = ss->original_aspect > 0.0f ? ss->original_aspect : (orig_w / orig_h);
+        // If rotation is 90 or 270, invert aspect ratio
+        *(float *)dst = (ss->rotation == 90 || ss->rotation == 270) ? (1.0f / aspect) : aspect;
+      } else if (m->type == UNI_TYPE_VEC4) {
+        // Check for pass output size semantics (PassOutput0Size, Pass1Size, etc.)
+        int ref_pass = TryParsePassOutputSize(m->name);
+        if (ref_pass >= 0 && ref_pass < ss->n_pass) {
+          // Use the referenced pass's dimensions
+          float w = (float)ss->pass[ref_pass].width;
+          float h = (float)ss->pass[ref_pass].height;
+          // If pass hasn't rendered yet, use original size
+          if (w <= 0 || h <= 0) {
+            w = orig_w;
+            h = orig_h;
+          }
+          float pass_size[4] = { w, h, 1.0f / w, 1.0f / h };
+          memcpy(dst, pass_size, 16);
+          if (ss->frame_count < 2) {
+            LogInfo("UBO pass %d: %s = [%.0f, %.0f] (pass %d)", pass_idx, m->name, w, h, ref_pass);
+          }
+        } else {
+          // Try LUT texture size (e.g., "textureNameSize")
+          SlangTexture *lut_tex = TryParseLutSizeTexture(ss, m->name);
+          if (lut_tex && lut_tex->width > 0 && lut_tex->height > 0) {
+            float w = (float)lut_tex->width;
+            float h = (float)lut_tex->height;
+            float lut_size[4] = { w, h, 1.0f / w, 1.0f / h };
+            memcpy(dst, lut_size, 16);
+            if (ss->frame_count < 2) {
+              LogInfo("UBO pass %d: %s = [%.0f, %.0f] (LUT '%s')", pass_idx, m->name, w, h, lut_tex->id);
+            }
+          } else {
+            // Unknown vec4 - set to zero
+            memset(dst, 0, 16);
+            if (ss->frame_count < 2) {
+              LogInfo("UBO pass %d: unknown vec4 '%s'", pass_idx, m->name);
+            }
+          }
+        }
+      } else {
+        // Treat as shader parameter - look up in param list
+        float param_value = FindParamValue(ss, m->name);
+        if (m->type == UNI_TYPE_FLOAT) {
+          *(float *)dst = param_value;
+        } else if (m->type == UNI_TYPE_UINT) {
+          *(uint32_t *)dst = (uint32_t)param_value;
+        } else if (m->type == UNI_TYPE_INT) {
+          *(int32_t *)dst = (int32_t)param_value;
+        }
+        // Log parameter values on first few frames for debugging
+        if (ss->frame_count < 2) {
+          LogInfo("UBO pass %d: param '%s' = %f", pass_idx, m->name, param_value);
+        }
+      }
+    }
+
+    // Map and copy UBO data
+    void *data;
+    if (vkMapMemory(ss->device, pass->ubo_memory, 0, pass->ubo_size, 0, &data) == VK_SUCCESS) {
+      memcpy(data, ubo_buffer, pass->ubo_size);
+      vkUnmapMemory(ss->device, pass->ubo_memory);
+      if (ss->frame_count < 2) {
+        LogInfo("UBO pass %d (dynamic): size=%u, members=%d", pass_idx, pass->ubo_size, pass->ubo_count);
+      }
+    }
+    return;
+  }
+
+  // Fall back to standard SlangUBO layout
   SlangUBO ubo;
   BuildMVP(ubo.mvp);
 
@@ -1857,6 +2474,12 @@ static void UpdatePassUBOData(SlangShader *ss, int pass_idx,
   ubo.output_size[1] = (float)output_h;
   ubo.output_size[2] = 1.0f / (float)output_w;
   ubo.output_size[3] = 1.0f / (float)output_h;
+
+  // OriginalSize: same as SourceSize for now (original input before any scaling)
+  ubo.original_size[0] = (float)source_w;
+  ubo.original_size[1] = (float)source_h;
+  ubo.original_size[2] = 1.0f / (float)source_w;
+  ubo.original_size[3] = 1.0f / (float)source_h;
 
   // SourceSize: (width, height, 1/width, 1/height)
   ubo.source_size[0] = (float)source_w;
@@ -1873,36 +2496,141 @@ static void UpdatePassUBOData(SlangShader *ss, int pass_idx,
     memcpy(data, &ubo, sizeof(SlangUBO));
     vkUnmapMemory(ss->device, pass->ubo_memory);
     if (ss->frame_count < 2) {
-      LogWarn("UBO pass %d: output=%.0fx%.0f source=%.0fx%.0f",
+      LogWarn("UBO pass %d (standard): output=%.0fx%.0f source=%.0fx%.0f",
               pass_idx, ubo.output_size[0], ubo.output_size[1],
               ubo.source_size[0], ubo.source_size[1]);
     }
   }
 }
 
-// Find parameter value by name
-static float FindParamValue(SlangShader *ss, const char *name) {
-  for (SlangParam *p = ss->first_param; p; p = p->next) {
-    if (strcmp(p->id, name) == 0) {
-      return p->value;
+// Build push constants dynamically based on parsed member layout
+// buffer: output buffer (must be at least pass->push_constant_size bytes)
+// source_w/h: input texture dimensions
+// output_w/h: output framebuffer dimensions
+static void BuildPushConstantsDynamic(SlangShader *ss, SlangPass *pass, void *buffer,
+                                       uint16_t source_w, uint16_t source_h,
+                                       uint16_t output_w, uint16_t output_h) {
+  memset(buffer, 0, pass->push_constant_size);
+
+  for (int i = 0; i < pass->push_const_count; i++) {
+    PushConstMember *m = &pass->push_const_members[i];
+    void *dst = (uint8_t *)buffer + m->offset;
+
+    // Handle built-in semantics
+    if (strcmp(m->name, "FrameCount") == 0) {
+      if (m->type == PC_TYPE_UINT) {
+        *(uint32_t *)dst = ss->frame_count;
+      } else {
+        *(float *)dst = (float)ss->frame_count;
+      }
+      if (ss->frame_count < 2)
+        LogInfo("PushConst[%d] %s = %u (offset=%u)", i, m->name, ss->frame_count, m->offset);
     }
-  }
-  return 0.0f;  // Default if not found
-}
-
-// Build push constants with frame count and shader parameters in struct order
-static void BuildPushConstants(SlangShader *ss, SlangPass *pass, SlangPushConstants *pc) {
-  memset(pc, 0, sizeof(SlangPushConstants));
-
-  // FrameCount at offset 0
-  pc->frame_count = ss->frame_count;
-
-  // Fill in shader parameters in push constant struct order (not #pragma order)
-  for (int i = 0; i < pass->push_const_count && i < 31; i++) {
-    const char *name = pass->push_const_names[i];
-    pc->params[i] = FindParamValue(ss, name);
-    if (ss->frame_count < 2) {
-      LogWarn("PushConst[%d] %s = %.2f", i, name, pc->params[i]);
+    else if (strcmp(m->name, "SourceSize") == 0 && m->type == PC_TYPE_VEC4) {
+      float *v = (float *)dst;
+      v[0] = (float)source_w;
+      v[1] = (float)source_h;
+      v[2] = 1.0f / (float)source_w;
+      v[3] = 1.0f / (float)source_h;
+      if (ss->frame_count < 2)
+        LogInfo("PushConst[%d] %s = [%.1f, %.1f, %.6f, %.6f] (offset=%u)",
+                i, m->name, v[0], v[1], v[2], v[3], m->offset);
+    }
+    else if (strcmp(m->name, "OriginalSize") == 0 && m->type == PC_TYPE_VEC4) {
+      // OriginalSize = original input (same as SourceSize for single-pass or first pass)
+      float *v = (float *)dst;
+      v[0] = (float)source_w;
+      v[1] = (float)source_h;
+      v[2] = 1.0f / (float)source_w;
+      v[3] = 1.0f / (float)source_h;
+      if (ss->frame_count < 2)
+        LogInfo("PushConst[%d] %s = [%.1f, %.1f, %.6f, %.6f] (offset=%u)",
+                i, m->name, v[0], v[1], v[2], v[3], m->offset);
+    }
+    else if (strcmp(m->name, "OutputSize") == 0 && m->type == PC_TYPE_VEC4) {
+      float *v = (float *)dst;
+      v[0] = (float)output_w;
+      v[1] = (float)output_h;
+      v[2] = 1.0f / (float)output_w;
+      v[3] = 1.0f / (float)output_h;
+      if (ss->frame_count < 2)
+        LogInfo("PushConst[%d] %s = [%.1f, %.1f, %.6f, %.6f] (offset=%u)",
+                i, m->name, v[0], v[1], v[2], v[3], m->offset);
+    }
+    else if (strcmp(m->name, "FinalViewportSize") == 0 && m->type == PC_TYPE_VEC4) {
+      float *v = (float *)dst;
+      v[0] = (float)ss->final_viewport_width;
+      v[1] = (float)ss->final_viewport_height;
+      v[2] = ss->final_viewport_width > 0 ? 1.0f / (float)ss->final_viewport_width : 0.0f;
+      v[3] = ss->final_viewport_height > 0 ? 1.0f / (float)ss->final_viewport_height : 0.0f;
+      if (ss->frame_count < 2)
+        LogInfo("PushConst[%d] %s = [%.1f, %.1f, %.6f, %.6f] (offset=%u)",
+                i, m->name, v[0], v[1], v[2], v[3], m->offset);
+    }
+    else if (strcmp(m->name, "FrameDirection") == 0) {
+      if (m->type == PC_TYPE_INT) {
+        *(int32_t *)dst = ss->frame_direction;
+      } else {
+        *(float *)dst = (float)ss->frame_direction;
+      }
+      if (ss->frame_count < 2)
+        LogInfo("PushConst[%d] %s = %d (offset=%u)", i, m->name, ss->frame_direction, m->offset);
+    }
+    else if (strcmp(m->name, "Rotation") == 0) {
+      if (m->type == PC_TYPE_UINT) {
+        *(uint32_t *)dst = ss->rotation;
+      } else {
+        *(float *)dst = (float)ss->rotation;
+      }
+      if (ss->frame_count < 2)
+        LogInfo("PushConst[%d] %s = %u (offset=%u)", i, m->name, ss->rotation, m->offset);
+    }
+    else if (strcmp(m->name, "OriginalAspect") == 0) {
+      *(float *)dst = ss->original_aspect;
+      if (ss->frame_count < 2)
+        LogInfo("PushConst[%d] %s = %.4f (offset=%u)", i, m->name, ss->original_aspect, m->offset);
+    }
+    else if (strcmp(m->name, "OriginalAspectRotated") == 0) {
+      // If rotation is 90 or 270 degrees, invert the aspect ratio
+      float aspect = ss->original_aspect;
+      if (ss->rotation == 90 || ss->rotation == 270) {
+        aspect = (aspect > 0) ? 1.0f / aspect : 0.0f;
+      }
+      *(float *)dst = aspect;
+      if (ss->frame_count < 2)
+        LogInfo("PushConst[%d] %s = %.4f (offset=%u)", i, m->name, aspect, m->offset);
+    }
+    else if (m->type == PC_TYPE_VEC4) {
+      // Check for pass output size semantics (PassOutput0Size, Pass1Size, etc.)
+      int ref_pass = TryParsePassOutputSize(m->name);
+      if (ref_pass >= 0 && ref_pass < ss->n_pass) {
+        float *v = (float *)dst;
+        float w = (float)ss->pass[ref_pass].width;
+        float h = (float)ss->pass[ref_pass].height;
+        // If pass hasn't rendered yet, use source size
+        if (w <= 0 || h <= 0) {
+          w = (float)source_w;
+          h = (float)source_h;
+        }
+        v[0] = w;
+        v[1] = h;
+        v[2] = 1.0f / w;
+        v[3] = 1.0f / h;
+        if (ss->frame_count < 2)
+          LogInfo("PushConst[%d] %s = [%.0f, %.0f] (pass %d)", i, m->name, w, h, ref_pass);
+      } else {
+        // Unknown vec4 - zero fill
+        memset(dst, 0, 16);
+        if (ss->frame_count < 2)
+          LogInfo("PushConst[%d] unknown vec4 '%s' (offset=%u)", i, m->name, m->offset);
+      }
+    }
+    else {
+      // Regular parameter - look up in param list
+      float value = FindParamValue(ss, m->name);
+      *(float *)dst = value;
+      if (ss->frame_count < 2)
+        LogInfo("PushConst[%d] %s = %.2f (offset=%u)", i, m->name, value, m->offset);
     }
   }
 }
@@ -1947,6 +2675,20 @@ void SlangShader_Render(SlangShader *ss, void *cmd_handle,
   VkSampler current_input_sampler = ss->pass[0].sampler;
   uint16_t source_width = input->width;
   uint16_t source_height = input->height;
+
+  // Update semantic values for this frame
+  ss->original_width = input->width;
+  ss->original_height = input->height;
+  ss->original_aspect = (input->height > 0) ? (float)input->width / (float)input->height : 1.0f;
+
+  // Final viewport (may differ from output due to aspect ratio letterboxing)
+  if (output->viewport_w > 0 && output->viewport_h > 0) {
+    ss->final_viewport_width = output->viewport_w;
+    ss->final_viewport_height = output->viewport_h;
+  } else {
+    ss->final_viewport_width = output->width;
+    ss->final_viewport_height = output->height;
+  }
 
   // Debug: log first few frames
   if (ss->frame_count < 3) {
@@ -2043,11 +2785,13 @@ void SlangShader_Render(SlangShader *ss, void *cmd_handle,
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pass->pipeline);
 
     // Build and push constants for this pass
-    SlangPushConstants push_constants;
-    BuildPushConstants(ss, pass, &push_constants);
+    // Use dynamic buffer sized to actual push constant layout
+    uint8_t push_const_buffer[SLANG_MAX_PUSH_CONSTANT_SIZE];
+    BuildPushConstantsDynamic(ss, pass, push_const_buffer,
+                               source_width, source_height, pass_width, pass_height);
     vkCmdPushConstants(cmd, pass->pipeline_layout,
                        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                       0, pass->push_constant_size, &push_constants);
+                       0, pass->push_constant_size, push_const_buffer);
 
     // Set dynamic state
     vkCmdSetViewport(cmd, 0, 1, &viewport);

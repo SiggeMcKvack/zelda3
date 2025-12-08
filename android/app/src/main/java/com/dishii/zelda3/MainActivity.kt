@@ -62,6 +62,7 @@ class MainActivity : SDLActivity() {
         const val PREF_ZELDA3_FOLDER_PATH = "zelda3_folder_path"
         const val PREF_ZELDA3_FOLDER_URI = "zelda3_folder_uri"
         const val BUFFER_SIZE = 8192
+        const val REQUEST_SHADER_FILE = 9001
 
         /**
          * Helper to get MainActivity instance from SDLActivity context.
@@ -562,6 +563,9 @@ class MainActivity : SDLActivity() {
         get() = prefs.getString(PREF_ZELDA3_FOLDER_URI, null)
         set(value) = prefs.edit().putString(PREF_ZELDA3_FOLDER_URI, value).apply()
 
+    // Shader file picker callback
+    private var pendingShaderCallback: ((android.net.Uri?) -> Unit)? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -580,6 +584,19 @@ class MainActivity : SDLActivity() {
 
         inflateOverlay()
         setupDrawer()
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_SHADER_FILE) {
+            if (resultCode == RESULT_OK) {
+                pendingShaderCallback?.invoke(data?.data)
+            } else {
+                pendingShaderCallback?.invoke(null)
+            }
+            pendingShaderCallback = null
+        }
     }
 
     /**
@@ -1590,6 +1607,12 @@ class MainActivity : SDLActivity() {
             val switchEnhancedMode7 = dialogView.findViewById<SwitchMaterial>(R.id.switch_enhanced_mode7)
             val switchDimFlashes = dialogView.findViewById<SwitchMaterial>(R.id.switch_dim_flashes)
 
+            // Get views - Shader
+            val layoutShaderSection = dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_shader_section)
+            val textShaderPath = dialogView.findViewById<TextView>(R.id.text_shader_path)
+            val buttonShaderBrowse = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.button_shader_browse)
+            val buttonShaderClear = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.button_shader_clear)
+
             // Aspect ratio options
             val aspectRatios = arrayOf("8:7", "4:3", "3:2", "16:9", "16:10", "18:9")
             val adapter = ArrayAdapter(this, R.layout.list_item, aspectRatios)
@@ -1618,8 +1641,12 @@ class MainActivity : SDLActivity() {
                 val originalDimFlashes = kotlinx.coroutines.runBlocking {
                     ConfigManager.readBool(this@MainActivity, "Graphics", "DimFlashes", false)
                 }
+                val originalShader = kotlinx.coroutines.runBlocking {
+                    ConfigManager.readString(this@MainActivity, "Graphics", "Shader", "")
+                }
+                var selectedShader = originalShader
 
-                Log.d(TAG, "showGraphicsOptionsDialog: renderer=$currentRenderer, aspectRatio=$originalAspectRatio, extendY=$originalExtendY")
+                Log.d(TAG, "showGraphicsOptionsDialog: renderer=$currentRenderer, aspectRatio=$originalAspectRatio, extendY=$originalExtendY, shader=$originalShader")
                 Log.d(TAG, "showGraphicsOptionsDialog: disableFrameDelay=$originalDisableFrameDelay, newRenderer=$originalNewRenderer, enhancedMode7=$originalEnhancedMode7, dimFlashes=$originalDimFlashes")
 
                 // Update UI on main thread
@@ -1634,17 +1661,62 @@ class MainActivity : SDLActivity() {
                         }
                     }
 
+                    // Shader UI helpers
+                    val updateShaderUI = { path: String ->
+                        if (path.isNotEmpty()) {
+                            textShaderPath.text = path.substringAfterLast("/")
+                            buttonShaderClear.visibility = android.view.View.VISIBLE
+                        } else {
+                            textShaderPath.text = "None"
+                            buttonShaderClear.visibility = android.view.View.GONE
+                        }
+                    }
+
+                    val updateShaderVisibility = { renderer: String ->
+                        layoutShaderSection.visibility = if (renderer == "Vulkan") android.view.View.VISIBLE else android.view.View.GONE
+                    }
+
+                    // Shader browse button
+                    buttonShaderBrowse.setOnClickListener {
+                        pendingShaderCallback = { uri ->
+                            if (uri != null) {
+                                val relativePath = extractShaderRelativePath(uri)
+                                if (relativePath != null) {
+                                    selectedShader = relativePath
+                                    runOnUiThread { updateShaderUI(selectedShader) }
+                                } else {
+                                    runOnUiThread {
+                                        showToast("Invalid shader location. Place shaders in your zelda3 folder under shaders/")
+                                    }
+                                }
+                            }
+                        }
+                        val intent = android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).apply {
+                            addCategory(android.content.Intent.CATEGORY_OPENABLE)
+                            type = "*/*"
+                        }
+                        @Suppress("DEPRECATION")
+                        startActivityForResult(android.content.Intent.createChooser(intent, "Select shader preset (.slangp)"), REQUEST_SHADER_FILE)
+                    }
+
+                    // Shader clear button
+                    buttonShaderClear.setOnClickListener {
+                        selectedShader = ""
+                        updateShaderUI(selectedShader)
+                    }
+
                     // Toggle listener - add BEFORE setting initial selection
                     toggleRenderer.addOnButtonCheckedListener { _, checkedId, isChecked ->
                         if (isChecked) {
-                            val selectedRenderer = when (checkedId) {
+                            val rendererName = when (checkedId) {
                                 R.id.button_renderer_sdl -> "SDL"
                                 R.id.button_renderer_opengl_es -> "OpenGL ES"
                                 R.id.button_renderer_vulkan -> "Vulkan"
                                 else -> "SDL"
                             }
-                            Log.d(TAG, "showGraphicsOptionsDialog: Button checked changed to $selectedRenderer")
-                            updateInfoText(selectedRenderer)
+                            Log.d(TAG, "showGraphicsOptionsDialog: Button checked changed to $rendererName")
+                            updateInfoText(rendererName)
+                            updateShaderVisibility(rendererName)
                         }
                     }
 
@@ -1676,6 +1748,10 @@ class MainActivity : SDLActivity() {
                     switchNewRenderer.isChecked = originalNewRenderer
                     switchEnhancedMode7.isChecked = originalEnhancedMode7
                     switchDimFlashes.isChecked = originalDimFlashes
+
+                    // Set initial shader state
+                    updateShaderUI(selectedShader)
+                    updateShaderVisibility(currentRenderer)
 
                     // Create dialog
                     val dialog = MaterialAlertDialogBuilder(this@MainActivity)
@@ -1714,10 +1790,11 @@ class MainActivity : SDLActivity() {
                                 val newRendererChanged = selectedNewRenderer != originalNewRenderer
                                 val enhancedMode7Changed = selectedEnhancedMode7 != originalEnhancedMode7
                                 val dimFlashesChanged = selectedDimFlashes != originalDimFlashes
+                                val shaderChanged = selectedShader != originalShader
 
                                 val anyChanged = rendererChanged || aspectRatioChanged || extendYChanged ||
                                         disableFrameDelayChanged || newRendererChanged ||
-                                        enhancedMode7Changed || dimFlashesChanged
+                                        enhancedMode7Changed || dimFlashesChanged || shaderChanged
 
                                 Log.d(TAG, "showGraphicsOptionsDialog: anyChanged=$anyChanged")
 
@@ -1745,6 +1822,9 @@ class MainActivity : SDLActivity() {
                                         }
                                         if (dimFlashesChanged) {
                                             ConfigManager.writeBool(this@MainActivity, "Graphics", "DimFlashes", selectedDimFlashes)
+                                        }
+                                        if (shaderChanged) {
+                                            ConfigManager.writeString(this@MainActivity, "Graphics", "Shader", selectedShader)
                                         }
                                     }
 
@@ -1804,6 +1884,30 @@ class MainActivity : SDLActivity() {
             compoundDrawablePadding = resources.getDimensionPixelSize(android.R.dimen.app_icon_size) / 4
             setCompoundDrawableTintList(onPrimaryColor)
         }
+    }
+
+    /**
+     * Extracts a relative shader path from a content URI.
+     * Looks for "shaders/" in the path and returns everything from there.
+     */
+    private fun extractShaderRelativePath(uri: android.net.Uri): String? {
+        val path = uri.path ?: return null
+        Log.d(TAG, "extractShaderRelativePath: uri.path = $path")
+
+        // Look for "shaders/" in the path and extract from there
+        val shadersIndex = path.indexOf("shaders/")
+        if (shadersIndex >= 0) {
+            return path.substring(shadersIndex)
+        }
+
+        // Fallback: try to get filename and construct path
+        val filename = path.substringAfterLast("/")
+        if (filename.endsWith(".slangp") || filename.endsWith(".slang")) {
+            // Assume it's in shaders/ folder
+            return "shaders/$filename"
+        }
+
+        return null
     }
 
     /**
