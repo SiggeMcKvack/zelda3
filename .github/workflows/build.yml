@@ -47,10 +47,17 @@ jobs:
         echo "Skipping asset extraction (requires ROM)"
 
     - name: Configure CMake
-      run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DBUILD_TESTS=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
 
     - name: Build
       run: cmake --build build -j$(nproc)
+
+    - name: Run tests
+      if: matrix.build_type == 'Debug'
+      run: ctest --test-dir build --output-on-failure
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -87,12 +94,18 @@ jobs:
       run: |
         $env:PKG_CONFIG = "$env:VCPKG_ROOT/installed/x64-windows/tools/pkgconf/pkgconf.exe"
         $env:PKG_CONFIG_PATH = "$env:VCPKG_ROOT/installed/x64-windows/lib/pkgconfig"
+        $buildTests = if ("${{ matrix.build_type }}" -eq "Debug") { "ON" } else { "OFF" }
         cmake -B build `
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+          -DBUILD_TESTS=$buildTests `
           -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
 
     - name: Build
       run: cmake --build build --config ${{ matrix.build_type }} -j
+
+    - name: Run tests
+      if: matrix.build_type == 'Debug'
+      run: ctest --test-dir build --output-on-failure -C ${{ matrix.build_type }}
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -122,10 +135,15 @@ jobs:
       run: |
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DBUILD_TESTS=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }} \
           -DCMAKE_OSX_ARCHITECTURES=arm64
 
     - name: Build
       run: cmake --build build -j$(sysctl -n hw.ncpu)
+
+    - name: Run tests
+      if: matrix.build_type == 'Debug'
+      run: ctest --test-dir build --output-on-failure
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -155,10 +173,15 @@ jobs:
       run: |
         cmake -B build \
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DBUILD_TESTS=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }} \
           -DCMAKE_OSX_ARCHITECTURES=x86_64
 
     - name: Build
       run: cmake --build build -j$(sysctl -n hw.ncpu)
+
+    - name: Run tests
+      if: matrix.build_type == 'Debug'
+      run: ctest --test-dir build --output-on-failure
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4

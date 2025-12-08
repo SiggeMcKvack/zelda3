@@ -9,6 +9,7 @@ Complete build instructions for Zelda3 on all supported platforms.
 - [Prerequisites](#prerequisites)
 - [Asset Extraction](#asset-extraction-required)
 - [Building with CMake](#building-with-cmake)
+- [Running Tests](#running-tests)
 - **Platform-Specific Guides:**
   - [Windows](platforms/windows.md)
   - [Linux](platforms/linux.md)
@@ -141,6 +142,7 @@ cmake .. -DENABLE_WERROR=ON
 | `BUILD_RESTOOL` | ON, OFF | ON | Build asset extraction tool |
 | `BUILD_OPUS_ENCODER` | ON, OFF | ON | Build PCM to OPUZ encoder |
 | `BUILD_LAUNCHER` | ON, OFF | ON | Build GTK3 launcher |
+| `BUILD_TESTS` | ON, OFF | OFF | Build unit tests |
 | `CMAKE_C_COMPILER` | clang, gcc, etc | System default | C compiler |
 | `CMAKE_INSTALL_PREFIX` | path | `/usr/local` | Installation prefix |
 
@@ -339,6 +341,45 @@ ls -lh zelda3_assets.dat
 # Run the game
 ./zelda3
 ```
+
+## Running Tests
+
+Unit tests use the [Unity](https://github.com/ThrowTheSwitch/Unity) test framework and are integrated with CTest.
+
+### Building and Running Tests
+
+```bash
+# Configure with tests enabled
+cmake -B build -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+
+# Build
+cmake --build build -j$(nproc)
+
+# Run all tests
+ctest --test-dir build --output-on-failure
+
+# Run with verbose output
+ctest --test-dir build -V
+```
+
+### Current Test Suites
+
+| Suite | Module | Tests |
+|-------|--------|-------|
+| config_writer | launcher | 18 |
+| config_reader | launcher | 32 |
+| launcher_gamepad | launcher | 19 |
+
+Tests run automatically in CI on Debug builds for all platforms (Linux, Windows, macOS).
+
+### Adding Tests for New Modules
+
+1. Create `tests/<module>/CMakeLists.txt`
+2. Add `add_subdirectory(<module>)` to `tests/CMakeLists.txt`
+3. Write test files using Unity framework
+4. Use `#ifdef TEST_BUILD` to expose static functions if needed
+
+See `tests/launcher/` for examples.
 
 ## Next Steps
 

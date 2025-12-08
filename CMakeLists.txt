@@ -386,6 +386,17 @@ if(HAVE_GTK3)
     message(STATUS "Launcher target will be built: zelda3-launcher")
 endif()
 
+# ==============================================================================
+# Unit Tests (optional)
+# ==============================================================================
+option(BUILD_TESTS "Build unit tests" OFF)
+
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+    message(STATUS "Unit tests will be built")
+endif()
+
 # Print configuration summary
 message(STATUS "")
 message(STATUS "=== Zelda3 Build Configuration ===")
@@ -398,6 +409,7 @@ message(STATUS "Vulkan Found: ${HAVE_VULKAN}")
 message(STATUS "Slang Shaders: ${HAVE_SLANG_SHADERS}")
 message(STATUS "GTK3 Found: ${HAVE_GTK3}")
 message(STATUS "Launcher: ${HAVE_GTK3}")
+message(STATUS "Tests: ${BUILD_TESTS}")
 message(STATUS "Platform: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "===================================")
 message(STATUS "")

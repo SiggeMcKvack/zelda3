@@ -1,4 +1,5 @@
 #include "config_reader.h"
+#include "config_reader_internal.h"
 #include "config_writer.h"
 #include "launcher_ui.h"
 #include "../config.h"
@@ -13,7 +14,14 @@
 // Simple INI parser for launcher - reads values into Config struct
 // Control mappings are stored in launcher_ui.c globals
 
-static char* trim_whitespace(char *str) {
+// Make functions non-static when TEST_BUILD is defined for unit testing
+#ifdef TEST_BUILD
+#define STATIC_OR_TEST
+#else
+#define STATIC_OR_TEST static
+#endif
+
+STATIC_OR_TEST char* trim_whitespace(char *str) {
     // Trim leading
     while (isspace((unsigned char)*str)) str++;
     if (*str == 0) return str;
@@ -26,28 +34,28 @@ static char* trim_whitespace(char *str) {
     return str;
 }
 
-static int parse_bool(const char *value) {
+STATIC_OR_TEST int parse_bool(const char *value) {
     return (strcmp(value, "1") == 0 ||
             strcmp(value, "true") == 0 ||
             strcmp(value, "True") == 0);
 }
 
-static int parse_int(const char *value) {
+STATIC_OR_TEST int parse_int(const char *value) {
     return atoi(value);
 }
 
-static char* parse_string(const char *value) {
+STATIC_OR_TEST char* parse_string(const char *value) {
     if (!value || !*value) return NULL;
     return strdup(value);
 }
 
 // Helper to update a string variable (free old, set new)
-static void update_string(char **dest, const char *value) {
+STATIC_OR_TEST void update_string(char **dest, const char *value) {
     if (*dest) free(*dest);
     *dest = (value && *value) ? strdup(value) : NULL;
 }
 
-static int parse_aspect_ratio(const char *value, int *custom_w, int *custom_h) {
+STATIC_OR_TEST int parse_aspect_ratio(const char *value, int *custom_w, int *custom_h) {
     // Map aspect ratio strings to enum values
     // Check for known presets first
     if (strstr(value, "4:3")) return 0;
@@ -72,7 +80,7 @@ static int parse_aspect_ratio(const char *value, int *custom_w, int *custom_h) {
     return 0;  // default to 4:3
 }
 
-static int parse_output_method(const char *value) {
+STATIC_OR_TEST int parse_output_method(const char *value) {
     if (strcmp(value, "SDL") == 0) return kOutputMethod_SDL;
     if (strcmp(value, "SDL-Software") == 0) return kOutputMethod_SDLSoftware;
     if (strcmp(value, "OpenGL") == 0) return kOutputMethod_OpenGL;
