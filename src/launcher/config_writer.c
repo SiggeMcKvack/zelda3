@@ -243,9 +243,9 @@ static bool WriteGraphicsSection(FILE *f, const Config *config) {
     if (!WriteLine(f, "# LinkGraphics = sprites-gfx/snes/zelda3/link/sheets/megaman-x.2.zspr\n\n")) return false;
   }
 
-  if (!WriteLine(f, "# GLSL shader (OpenGL output method only)\n")) return false;
-  if (!WriteLine(f, "# (default: none, accepts: path to .glsl or .glslp file)\n")) return false;
-  if (!WriteLine(f, "# Get shaders: git clone https://github.com/snesrev/glsl-shaders\n")) return false;
+  if (!WriteLine(f, "# Shader file (GLSL for OpenGL, Slang for Vulkan)\n")) return false;
+  if (!WriteLine(f, "# (default: none, accepts: .glsl, .glslp, .slang, .slangp)\n")) return false;
+  if (!WriteLine(f, "# Get shaders: git clone https://github.com/libretro/slang-shaders\n")) return false;
   if (!WriteLine(f, "#\n")) return false;
   if (config->shader && *config->shader) {
     if (!WriteLine(f, "Shader = %s\n\n", config->shader)) return false;

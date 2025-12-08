@@ -163,9 +163,9 @@ Configure visual rendering options:
 - **Linear Filtering** - Smooth scaling (on/off)
 - **Integer Scaling** - Pixel-perfect scaling (on/off)
 
-- **Shader File** - GLSL shader for visual effects:
+- **Shader File** - Shader for visual effects:
   - Click "Browse..." to open file chooser
-  - Supports .glsl and .glslp shader files
+  - Supports .glsl/.glslp (OpenGL) and .slang/.slangp (Vulkan) formats
   - Selected path saved to zelda3.ini
 
 **Recommendations:**

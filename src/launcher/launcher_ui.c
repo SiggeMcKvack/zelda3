@@ -485,9 +485,9 @@ static void on_aspect_ratio_changed(GtkComboBox *combo, gpointer user_data) {
 static void on_shader_path_browse_clicked(GtkButton *button, gpointer user_data) {
     (void)button;
     (void)user_data;
-    static const char *patterns[] = {"*.glsl", "*.glslp", NULL};
+    static const char *patterns[] = {"*.glsl", "*.glslp", "*.slang", "*.slangp", NULL};
     char *filename = show_file_chooser("Select Shader File",
-                                        "Shader files (*.glsl, *.glslp)",
+                                        "Shader files (*.glsl, *.glslp, *.slang, *.slangp)",
                                         patterns, g_widgets.shader_path_entry);
     if (filename) {
         gtk_entry_set_text(GTK_ENTRY(g_widgets.shader_path_entry), filename);
@@ -1347,9 +1347,11 @@ static void on_shader_drag_received(GtkWidget *widget, GdkDragContext *context,
     if (uris && uris[0]) {
         gchar *path = g_filename_from_uri(uris[0], NULL, NULL);
         if (path) {
-            // Filter for .glsl/.glslp files
+            // Filter for shader files (.glsl/.glslp/.slang/.slangp)
             if (g_str_has_suffix(path, ".glsl") || g_str_has_suffix(path, ".glslp") ||
-                g_str_has_suffix(path, ".GLSL") || g_str_has_suffix(path, ".GLSLP")) {
+                g_str_has_suffix(path, ".GLSL") || g_str_has_suffix(path, ".GLSLP") ||
+                g_str_has_suffix(path, ".slang") || g_str_has_suffix(path, ".slangp") ||
+                g_str_has_suffix(path, ".SLANG") || g_str_has_suffix(path, ".SLANGP")) {
                 gtk_entry_set_text(GTK_ENTRY(widget), path);
             }
             g_free(path);
