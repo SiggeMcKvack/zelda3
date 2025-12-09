@@ -2,11 +2,13 @@
  * Unit tests for src/launcher/launcher_gamepad.c
  */
 
+/* Must be defined before any SDL headers are included (including via launcher_gamepad.h) */
+#define SDL_MAIN_HANDLED
+
 #include "unity.h"
 #include "test_utils.h"
 
 #include "launcher_gamepad.h"
-#define SDL_MAIN_HANDLED
 #include <SDL.h>
 #include <string.h>
 
