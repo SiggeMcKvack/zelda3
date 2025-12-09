@@ -1,12 +1,15 @@
-vcpkg_from_gitlab(
-    GITLAB_URL https://gitlab.gnome.org/
-    OUT_SOURCE_PATH SOURCE_PATH
-    REPO GNOME/atk
-    REF "${VERSION}"
-    HEAD_REF master
-    # Fixed hash - GitLab keeps regenerating tarballs
-    # https://github.com/microsoft/vcpkg/issues/47992
-    SHA512 79d8764f9c46b58c9dd6c3c9ec9189f69b726e2ead8b9a4cd4aa2d5f5fbb226053e5b108b23af4c1565aaf2e9dfd6f27d9200bd466a41782938336dcff51f1ac
+# Use stable GNOME release tarballs instead of GitLab-generated archives
+# GitLab keeps regenerating tarballs with different hashes (vcpkg issue #47992)
+# download.gnome.org tarballs are uploaded once and never regenerated
+vcpkg_download_distfile(ARCHIVE
+    URLS "https://download.gnome.org/sources/atk/2.38/atk-2.38.0.tar.xz"
+         "https://ftp.acc.umu.se/pub/gnome/sources/atk/2.38/atk-2.38.0.tar.xz"
+    FILENAME "atk-2.38.0.tar.xz"
+    SHA512 dffd0a0814a9183027c38a985d86cb6544858e9e7d655843e153440467957d6bc1abd9c9479a57078aea018053410438a30a9befb7414dc79020b223cd2c774b
+)
+
+vcpkg_extract_source_archive(SOURCE_PATH
+    ARCHIVE "${ARCHIVE}"
 )
 
 if("introspection" IN_LIST FEATURES)

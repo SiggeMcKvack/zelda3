@@ -6,6 +6,7 @@
 #include "test_utils.h"
 
 #include "launcher_gamepad.h"
+#define SDL_MAIN_HANDLED
 #include <SDL.h>
 #include <string.h>
 

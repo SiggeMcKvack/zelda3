@@ -6,14 +6,17 @@
  * Include this header in test files for shared macros and helpers.
  */
 
-/* Platform-specific includes FIRST to avoid redefinition issues */
-#ifdef _WIN32
+/* Platform-specific includes */
+#ifdef _MSC_VER
+/* MSVC doesn't have mkstemp, use _mktemp_s */
 #include <io.h>
 #include <fcntl.h>
+#include <string.h>
 #define mkstemp(template) _mktemp_s(template, strlen(template) + 1)
 #define test_write _write
 #define test_close _close
 #else
+/* POSIX (Linux, macOS, MinGW) */
 #include <unistd.h>
 #define test_write write
 #define test_close close

@@ -70,51 +70,55 @@ jobs:
         if-no-files-found: ignore
 
   build-windows:
-    name: Windows Latest (${{ matrix.build_type }})
+    name: Windows (${{ matrix.build_type }})
     runs-on: windows-latest
     strategy:
       matrix:
         build_type: [Debug, Release]
 
+    defaults:
+      run:
+        shell: msys2 {0}
+
     steps:
     - uses: actions/checkout@v4
 
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11.5
+    - name: Setup MSYS2
+      uses: msys2/setup-msys2@v2
       with:
-        vcpkgGitCommitId: '74e6536215718009aae747d86d84b78376bf9e09'
-
-    - name: Install dependencies
-      env:
-        VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/vcpkg-overlay
-      run: |
-        vcpkg install sdl2:x64-windows opus:x64-windows openal-soft:x64-windows libyaml:x64-windows gtk3:x64-windows pkgconf:x64-windows
+        msystem: MINGW64
+        update: true
+        install: >-
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-SDL2
+          mingw-w64-x86_64-gtk3
+          mingw-w64-x86_64-opus
+          mingw-w64-x86_64-openal
+          mingw-w64-x86_64-libyaml
 
     - name: Configure CMake
       run: |
-        $env:PKG_CONFIG = "$env:VCPKG_ROOT/installed/x64-windows/tools/pkgconf/pkgconf.exe"
-        $env:PKG_CONFIG_PATH = "$env:VCPKG_ROOT/installed/x64-windows/lib/pkgconfig"
-        $buildTests = if ("${{ matrix.build_type }}" -eq "Debug") { "ON" } else { "OFF" }
-        cmake -B build `
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
-          -DBUILD_TESTS=$buildTests `
-          -DCMAKE_TOOLCHAIN_FILE="${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+        cmake -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DBUILD_TESTS=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }}
 
     - name: Build
-      run: cmake --build build --config ${{ matrix.build_type }} -j
+      run: cmake --build build -j$(nproc)
 
     - name: Run tests
       if: matrix.build_type == 'Debug'
-      run: ctest --test-dir build --output-on-failure -C ${{ matrix.build_type }}
+      run: ctest --test-dir build --output-on-failure
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: zelda3-windows-${{ matrix.build_type }}
         path: |
-          build/${{ matrix.build_type }}/zelda3.exe
-          build/${{ matrix.build_type }}/zelda3-launcher.exe
-          build/${{ matrix.build_type }}/*.dll
+          build/zelda3.exe
+          build/zelda3-launcher.exe
+          build/*.dll
         if-no-files-found: ignore
 
   build-macos-arm64:
@@ -155,40 +159,3 @@ jobs:
           build/*.dylib
         if-no-files-found: ignore
 
-  build-macos-x86_64:
-    name: macOS x86_64 (${{ matrix.build_type }})
-    runs-on: macos-13
-    strategy:
-      matrix:
-        build_type: [Debug, Release]
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install dependencies
-      run: |
-        brew install sdl2 opus openal-soft cmake libyaml gtk+3
-
-    - name: Configure CMake
-      run: |
-        cmake -B build \
-          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-          -DBUILD_TESTS=${{ matrix.build_type == 'Debug' && 'ON' || 'OFF' }} \
-          -DCMAKE_OSX_ARCHITECTURES=x86_64
-
-    - name: Build
-      run: cmake --build build -j$(sysctl -n hw.ncpu)
-
-    - name: Run tests
-      if: matrix.build_type == 'Debug'
-      run: ctest --test-dir build --output-on-failure
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: zelda3-macos-x86_64-${{ matrix.build_type }}
-        path: |
-          build/zelda3
-          build/zelda3-launcher
-          build/*.dylib
-        if-no-files-found: ignore

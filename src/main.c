@@ -14,6 +14,7 @@
 #endif
 
 #ifdef PLATFORM_WINDOWS
+#include <windows.h>
 #include "platform/win32/volume_control.h"
 #include <direct.h>
 #else
@@ -320,9 +321,10 @@ static const struct RendererFuncs kSdlRendererFuncs  = {
 void OpenGLRenderer_Create(struct RendererFuncs *funcs, bool use_opengl_es);
 void VulkanRenderer_Create(struct RendererFuncs *funcs);
 
-// On Android, SDL needs the function to be named SDL_main, not main
-// SDL.h defines a macro that renames main to SDL_main, so don't undef it
-#ifndef PLATFORM_ANDROID
+// On Windows and Android, SDL needs the function to be named SDL_main
+// SDL.h defines a macro that renames main to SDL_main
+// Only undef on Linux/macOS where we want a standard main entry point
+#if !defined(PLATFORM_ANDROID) && !defined(PLATFORM_WINDOWS)
 #undef main
 #endif
 int main(int argc, char** argv) {
