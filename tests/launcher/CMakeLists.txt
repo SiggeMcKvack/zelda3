@@ -47,7 +47,8 @@ add_executable(test_launcher_gamepad
 )
 
 target_include_directories(test_launcher_gamepad PRIVATE ${LAUNCHER_TEST_INCLUDES})
-target_link_libraries(test_launcher_gamepad PRIVATE unity ${SDL2_LIBRARIES})
+# Use SDL2::SDL2 (not ${SDL2_LIBRARIES}) to avoid linking SDL2main which conflicts with SDL_MAIN_HANDLED
+target_link_libraries(test_launcher_gamepad PRIVATE unity SDL2::SDL2)
 target_compile_definitions(test_launcher_gamepad PRIVATE TEST_BUILD)
 
 add_test(NAME launcher_gamepad COMMAND test_launcher_gamepad)
@@ -70,9 +71,10 @@ if(HAVE_GTK3)
         ${LAUNCHER_TEST_INCLUDES}
         ${GTK3_INCLUDE_DIRS}
     )
+    # Use SDL2::SDL2 (not ${SDL2_LIBRARIES}) to avoid linking SDL2main which conflicts with SDL_MAIN_HANDLED
     target_link_libraries(test_config_reader PRIVATE
         unity
-        ${SDL2_LIBRARIES}
+        SDL2::SDL2
     )
     target_compile_definitions(test_config_reader PRIVATE TEST_BUILD)
     target_compile_options(test_config_reader PRIVATE ${GTK3_CFLAGS_OTHER})
