@@ -1,0 +1,27 @@
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-macro-parentheses,
+  -bugprone-switch-missing-default-case,
+  -bugprone-branch-clone,
+  -bugprone-assignment-in-if-condition,
+  -bugprone-signed-char-misuse,
+  -bugprone-inc-dec-in-conditions,
+  -bugprone-multi-level-implicit-pointer-conversion,
+  -bugprone-casting-through-void,
+  -bugprone-reserved-identifier,
+  -bugprone-suspicious-realloc-usage,
+  readability-misleading-indentation,
+  portability-*,
+  -portability-avoid-pragma-once,
+
+WarningsAsErrors: ''
+
+HeaderFilterRegex: '^.*/src/.*\.h$|^.*/snes/.*\.h$'
+
+CheckOptions:
+  - key: bugprone-assert-side-effect.AssertMacros
+    value: 'assert'

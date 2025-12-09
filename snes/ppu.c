@@ -591,7 +591,7 @@ static void PpuDrawBackground_2bpp_mosaic(Ppu *ppu, int y, bool sub, uint layer,
 #define SPRITE_PRIO_TO_PRIO(prio, level6) (((prio) * 4 + 2) * 16 + 4 + (level6 ? 2 : 0))
 #define SPRITE_PRIO_TO_PRIO_HI(prio) ((prio) * 4 + 2)
 
-static void PpuDrawSprites(Ppu *ppu, uint y, uint sub, bool clear_backdrop) {
+static void PpuDrawSprites(Ppu *ppu, uint y, bool sub, bool clear_backdrop) {
   int layer = 4;
   if (!IS_SCREEN_ENABLED(ppu, sub, layer))
     return;  // layer is completely hidden

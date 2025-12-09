@@ -9,6 +9,21 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+# Always generate compile_commands.json for tooling (clang-tidy, IDEs, etc.)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Optional clang-tidy integration during build
+option(ENABLE_CLANG_TIDY "Enable clang-tidy static analysis during build" OFF)
+if(ENABLE_CLANG_TIDY)
+    find_program(CLANG_TIDY_EXE NAMES clang-tidy)
+    if(CLANG_TIDY_EXE)
+        message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
+        set(CMAKE_C_CLANG_TIDY "${CLANG_TIDY_EXE}")
+    else()
+        message(WARNING "ENABLE_CLANG_TIDY is ON but clang-tidy not found")
+    endif()
+endif()
+
 # Build type defaults to Release if not specified
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)

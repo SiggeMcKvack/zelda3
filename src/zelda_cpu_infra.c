@@ -115,7 +115,7 @@ static void VerifySnapshotsEq(Snapshot *b, Snapshot *a, Snapshot *prev) {
 
   memcpy(a->ram + 0x1CDD, b->ram + 0x1CDD, 2);  // dialogue_msg_src_offs
 
-  if (memcmp(b->ram, a->ram, 0x20000)) {
+  if (memcmp(b->ram, a->ram, 0x20000) != 0) {
 #ifndef NDEBUG
     fprintf(stderr, "@%d: Memory compare failed (mine != theirs, prev):\n", frame_counter);
     int j = 0;
@@ -140,7 +140,7 @@ static void VerifySnapshotsEq(Snapshot *b, Snapshot *a, Snapshot *prev) {
 #endif  // NDEBUG
   }
 
-  if (memcmp(b->sram, a->sram, 0x2000)) {
+  if (memcmp(b->sram, a->sram, 0x2000) != 0) {
 #ifndef NDEBUG
     fprintf(stderr, "@%d: SRAM compare failed (mine != theirs, prev):\n", frame_counter);
     int j = 0;
@@ -165,7 +165,7 @@ static void VerifySnapshotsEq(Snapshot *b, Snapshot *a, Snapshot *prev) {
 #endif  // NDEBUG
   }
 
-  if (memcmp(b->vram, a->vram, sizeof(uint16) * 0x8000)) {
+  if (memcmp(b->vram, a->vram, sizeof(uint16) * 0x8000) != 0) {
 #ifndef NDEBUG
     fprintf(stderr, "@%d: VRAM compare failed (mine != theirs, prev):\n", frame_counter);
     for (size_t i = 0, j = 0; i < 0x8000; i++) {

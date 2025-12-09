@@ -4624,7 +4624,7 @@ void Guard_Main(int k) {  // 85c227
   if ((Sprite_CheckDamageToLink(k) || sprite_alert_flag) && sprite_ai_state[k] < 3) {
     sprite_ai_state[k] = 3;
     Guard_SetTimerAndAssertTileHitBox(k, 0x20);
-  } else if (sprite_F[k] != 0 && sprite_F[k] >= 4) {
+  } else if (sprite_F[k] >= 4) {
     sprite_ai_state[k] = 4;
     Guard_SetTimerAndAssertTileHitBox(k, 0x80);
   }

@@ -186,7 +186,7 @@ static void MsuPlayer_Open(MsuPlayer *mp, int orig_track, bool resume_from_snaps
   LogInfo("MsuPlayer_Open: actual_track=%d (after remap)", actual_track);
 
   if (!resume_from_snapshot) {
-    resume.tag = 0;
+    memset(&resume, 0, sizeof(resume));
     // Attempt to resume MSU playback when exiting back to the overworld.
     if (main_module_index == 9 &&
         actual_track == ((MsuPlayerResumeInfo *)msu_resume_info_alt)->actual_track && g_config.resume_msu) {

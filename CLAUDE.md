@@ -114,6 +114,7 @@ Platform files go in `src/platform/<name>/`
 ```bash
 cmake --build build -j$(nproc)
 cmake .. -DCMAKE_BUILD_TYPE=Debug
+cmake .. -DENABLE_CLANG_TIDY=ON  # Enable clang-tidy during build
 ```
 
 **Android:**
@@ -129,6 +130,7 @@ adb logcat | grep Zelda3
 - Globals: `g_prefix` (g_ram, g_r12)
 - Constants: `kConstantName`
 - Follows original SNES code structure
+- Static analysis: `clang-tidy` configured in `.clang-tidy`
 
 ## Constraints
 

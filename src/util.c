@@ -207,7 +207,7 @@ uint8 *ApplyBps(const uint8 *src, size_t src_size_in,
   const uint8 *bps, size_t bps_size, size_t *length_out) {
   const uint8 *bps_end = bps + bps_size - 12;
 
-  if (memcmp(bps, "BPS1", 4))
+  if (memcmp(bps, "BPS1", 4) != 0)
     return NULL;
   if (crc32(src, src_size_in) != *(uint32 *)(bps_end))
     return NULL;
