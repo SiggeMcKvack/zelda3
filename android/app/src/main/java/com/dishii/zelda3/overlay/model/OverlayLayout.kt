@@ -3,8 +3,10 @@
 
 package com.dishii.zelda3.overlay.model
 
-enum class OverlayLayout(val id: String) {
+enum class OverlayLayout(
+    val id: String,
+) {
     Landscape("Landscape"),
     Portrait("Portrait"),
-    Foldable("Foldable")
+    Foldable("Foldable"),
 }

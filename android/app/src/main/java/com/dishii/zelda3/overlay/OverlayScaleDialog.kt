@@ -9,17 +9,16 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.WindowManager
 import android.widget.TextView
-import com.google.android.material.button.MaterialButton
-import com.google.android.material.slider.Slider
 import com.dishii.zelda3.R
 import com.dishii.zelda3.overlay.model.OverlayControlData
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.slider.Slider
 
 class OverlayScaleDialog(
     context: Context,
     private val overlayControlData: OverlayControlData,
-    private val onScaleChanged: (Float) -> Unit
+    private val onScaleChanged: (Float) -> Unit,
 ) : Dialog(context) {
-
     private var currentScale = overlayControlData.individualScale
     private val originalScale = overlayControlData.individualScale
     private lateinit var scaleValueText: TextView
@@ -36,10 +35,11 @@ class OverlayScaleDialog(
         window?.setBackgroundDrawable(null)
 
         window?.apply {
-            attributes = attributes.apply {
-                flags = flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv()
-                flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-            }
+            attributes =
+                attributes.apply {
+                    flags = flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv()
+                    flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                }
         }
 
         scaleValueText = view.findViewById(R.id.scaleValueText)
@@ -58,15 +58,17 @@ class OverlayScaleDialog(
             }
         }
 
-        scaleSlider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
-            override fun onStartTrackingTouch(slider: Slider) {
-                // pass
-            }
+        scaleSlider.addOnSliderTouchListener(
+            object : Slider.OnSliderTouchListener {
+                override fun onStartTrackingTouch(slider: Slider) {
+                    // pass
+                }
 
-            override fun onStopTrackingTouch(slider: Slider) {
-                onScaleChanged(currentScale)
-            }
-        })
+                override fun onStopTrackingTouch(slider: Slider) {
+                    onScaleChanged(currentScale)
+                }
+            },
+        )
 
         resetButton.setOnClickListener {
             currentScale = 1.0f
@@ -92,7 +94,12 @@ class OverlayScaleDialog(
         }
     }
 
-    fun showDialog(anchorX: Int, anchorY: Int, anchorHeight: Int, anchorWidth: Int) {
+    fun showDialog(
+        anchorX: Int,
+        anchorY: Int,
+        anchorHeight: Int,
+        anchorWidth: Int,
+    ) {
         show()
 
         window?.let { window ->

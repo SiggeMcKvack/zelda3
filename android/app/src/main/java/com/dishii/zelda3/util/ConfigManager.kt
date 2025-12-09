@@ -26,34 +26,41 @@ object ConfigManager {
         context: Context,
         section: String,
         key: String,
-        default: String = ""
-    ): String = withContext(Dispatchers.IO) {
-        val configFile = getConfigFile(context) ?: return@withContext default
-        if (!configFile.exists()) return@withContext default
+        default: String = "",
+    ): String =
+        withContext(Dispatchers.IO) {
+            val configFile = getConfigFile(context) ?: return@withContext default
+            if (!configFile.exists()) return@withContext default
 
-        try {
-            var inTargetSection = false
-            configFile.readLines().forEach { line ->
-                val trimmed = line.trim()
+            try {
+                var inTargetSection = false
+                configFile.readLines().forEach { line ->
+                    val trimmed = line.trim()
 
-                when {
-                    trimmed == "[$section]" -> inTargetSection = true
-                    trimmed.startsWith("[") && trimmed.endsWith("]") -> inTargetSection = false
-                    inTargetSection && trimmed.startsWith(key, ignoreCase = true) && trimmed.contains("=") -> {
-                        val value = trimmed.substringAfter("=").trim()
-                        if (value.isNotEmpty()) {
-                            Log.d(TAG, "Read [$section] $key = $value")
-                            return@withContext value
+                    when {
+                        trimmed == "[$section]" -> {
+                            inTargetSection = true
+                        }
+
+                        trimmed.startsWith("[") && trimmed.endsWith("]") -> {
+                            inTargetSection = false
+                        }
+
+                        inTargetSection && trimmed.startsWith(key, ignoreCase = true) && trimmed.contains("=") -> {
+                            val value = trimmed.substringAfter("=").trim()
+                            if (value.isNotEmpty()) {
+                                Log.d(TAG, "Read [$section] $key = $value")
+                                return@withContext value
+                            }
                         }
                     }
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error reading [$section] $key", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error reading [$section] $key", e)
-        }
 
-        default
-    }
+            default
+        }
 
     /**
      * Reads an integer value from the config file.
@@ -62,7 +69,7 @@ object ConfigManager {
         context: Context,
         section: String,
         key: String,
-        default: Int = 0
+        default: Int = 0,
     ): Int = readString(context, section, key, default.toString()).toIntOrNull() ?: default
 
     /**
@@ -73,7 +80,7 @@ object ConfigManager {
         context: Context,
         section: String,
         key: String,
-        default: Boolean = false
+        default: Boolean = false,
     ): Boolean {
         val value = readString(context, section, key, if (default) "1" else "0")
         return value == "1" || value.equals("true", ignoreCase = true) || value.equals("yes", ignoreCase = true)
@@ -88,64 +95,68 @@ object ConfigManager {
         context: Context,
         section: String,
         key: String,
-        value: String
-    ): Boolean = withContext(Dispatchers.IO) {
-        val configFile = getConfigFile(context) ?: return@withContext false
-        if (!configFile.exists()) return@withContext false
+        value: String,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            val configFile = getConfigFile(context) ?: return@withContext false
+            if (!configFile.exists()) return@withContext false
 
-        try {
-            val lines = configFile.readLines().toMutableList()
-            var inTargetSection = false
-            var keyUpdated = false
-            var sectionEndIndex = -1
+            try {
+                val lines = configFile.readLines().toMutableList()
+                var inTargetSection = false
+                var keyUpdated = false
+                var sectionEndIndex = -1
 
-            for (i in lines.indices) {
-                val trimmed = lines[i].trim()
+                for (i in lines.indices) {
+                    val trimmed = lines[i].trim()
 
-                when {
-                    trimmed == "[$section]" -> {
-                        inTargetSection = true
-                        sectionEndIndex = i
-                    }
-                    trimmed.startsWith("[") && trimmed.endsWith("]") -> {
-                        if (inTargetSection && !keyUpdated) {
-                            // Section ended without finding key - insert before next section
-                            lines.add(sectionEndIndex + 1, "$key = $value")
-                            keyUpdated = true
-                            Log.d(TAG, "Added [$section] $key = $value")
+                    when {
+                        trimmed == "[$section]" -> {
+                            inTargetSection = true
+                            sectionEndIndex = i
                         }
-                        inTargetSection = false
-                    }
-                    inTargetSection && trimmed.startsWith(key, ignoreCase = true) && trimmed.contains("=") -> {
-                        lines[i] = "$key = $value"
-                        keyUpdated = true
-                        Log.d(TAG, "Updated [$section] $key = $value")
-                    }
-                    inTargetSection -> {
-                        sectionEndIndex = i
+
+                        trimmed.startsWith("[") && trimmed.endsWith("]") -> {
+                            if (inTargetSection && !keyUpdated) {
+                                // Section ended without finding key - insert before next section
+                                lines.add(sectionEndIndex + 1, "$key = $value")
+                                keyUpdated = true
+                                Log.d(TAG, "Added [$section] $key = $value")
+                            }
+                            inTargetSection = false
+                        }
+
+                        inTargetSection && trimmed.startsWith(key, ignoreCase = true) && trimmed.contains("=") -> {
+                            lines[i] = "$key = $value"
+                            keyUpdated = true
+                            Log.d(TAG, "Updated [$section] $key = $value")
+                        }
+
+                        inTargetSection -> {
+                            sectionEndIndex = i
+                        }
                     }
                 }
-            }
 
-            // If still in target section at EOF and key wasn't found, add it
-            if (inTargetSection && !keyUpdated) {
-                lines.add("$key = $value")
-                keyUpdated = true
-                Log.d(TAG, "Added [$section] $key = $value at end")
-            }
+                // If still in target section at EOF and key wasn't found, add it
+                if (inTargetSection && !keyUpdated) {
+                    lines.add("$key = $value")
+                    keyUpdated = true
+                    Log.d(TAG, "Added [$section] $key = $value at end")
+                }
 
-            if (!keyUpdated) {
-                Log.w(TAG, "Section [$section] not found in config file")
-                return@withContext false
-            }
+                if (!keyUpdated) {
+                    Log.w(TAG, "Section [$section] not found in config file")
+                    return@withContext false
+                }
 
-            configFile.writeText(lines.joinToString("\n"))
-            true
-        } catch (e: IOException) {
-            Log.e(TAG, "Error writing [$section] $key", e)
-            false
+                configFile.writeText(lines.joinToString("\n"))
+                true
+            } catch (e: IOException) {
+                Log.e(TAG, "Error writing [$section] $key", e)
+                false
+            }
         }
-    }
 
     /**
      * Writes an integer value to the config file.
@@ -154,7 +165,7 @@ object ConfigManager {
         context: Context,
         section: String,
         key: String,
-        value: Int
+        value: Int,
     ): Boolean = writeString(context, section, key, value.toString())
 
     /**
@@ -164,7 +175,7 @@ object ConfigManager {
         context: Context,
         section: String,
         key: String,
-        value: Boolean
+        value: Boolean,
     ): Boolean = writeString(context, section, key, if (value) "1" else "0")
 
     private fun getConfigFile(context: Context): File? {

@@ -26,7 +26,7 @@ class InputOverlayDrawableButton(
     defaultStateBitmap: Bitmap,
     pressedStateBitmap: Bitmap,
     val buttonId: OverlayControl,
-    val overlayControlData: OverlayControlData
+    val overlayControlData: OverlayControlData,
 ) {
     // The ID value what motion event is tracking
     var trackId: Int
@@ -93,7 +93,10 @@ class InputOverlayDrawableButton(
         return false
     }
 
-    fun setPosition(x: Int, y: Int) {
+    fun setPosition(
+        x: Int,
+        y: Int,
+    ) {
         buttonPositionX = x
         buttonPositionY = y
     }
@@ -125,7 +128,7 @@ class InputOverlayDrawableButton(
                     controlPositionX,
                     controlPositionY,
                     width + controlPositionX,
-                    height + controlPositionY
+                    height + controlPositionY,
                 )
                 previousTouchX = fingerPositionX
                 previousTouchY = fingerPositionY
@@ -134,7 +137,12 @@ class InputOverlayDrawableButton(
         return true
     }
 
-    fun setBounds(left: Int, top: Int, right: Int, bottom: Int) {
+    fun setBounds(
+        left: Int,
+        top: Int,
+        right: Int,
+        bottom: Int,
+    ) {
         defaultStateBitmap.setBounds(left, top, right, bottom)
         pressedStateBitmap.setBounds(left, top, right, bottom)
     }

@@ -13,6 +13,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.dishii.zelda3.util.ConfigManager
+import com.dishii.zelda3.util.FileUtils
+import com.dishii.zelda3.util.showToast
+import com.dishii.zelda3.util.stylePositiveAsFilled
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -20,17 +24,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
-import com.dishii.zelda3.util.ConfigManager
-import com.dishii.zelda3.util.FileUtils
-import com.dishii.zelda3.util.showToast
-import com.dishii.zelda3.util.stylePositiveAsFilled
 
 /**
  * First activity shown on app launch.
  * Handles asset file validation and Zelda3 folder selection using modern Android patterns.
  */
 class LauncherActivity : AppCompatActivity() {
-
     private companion object {
         const val TAG = "Zelda3Launcher"
         const val PREFS_NAME = "app_prefs"
@@ -115,9 +114,11 @@ class LauncherActivity : AppCompatActivity() {
                     Log.i(TAG, "Zelda3 folder not selected, prompting user")
                     promptForZelda3Folder()
                 }
+
                 assetsFileExists() -> {
                     startMainActivity()
                 }
+
                 else -> {
                     Log.i(TAG, "zelda3_assets.dat not found, prompting user")
                     promptForAssetsFile()
@@ -130,36 +131,37 @@ class LauncherActivity : AppCompatActivity() {
      * Sets up required directories and copies initial files.
      * Runs on IO dispatcher for non-blocking file operations.
      */
-    private suspend fun setupFilesAndDirectories(): Boolean = withContext(Dispatchers.IO) {
-        val externalDir = getExternalFilesDir(null) ?: return@withContext false
+    private suspend fun setupFilesAndDirectories(): Boolean =
+        withContext(Dispatchers.IO) {
+            val externalDir = getExternalFilesDir(null) ?: return@withContext false
 
-        val configFile = File(externalDir, "zelda3.ini")
-        val savesFolder = File(externalDir, "saves")
-        val savesRefFolder = File(savesFolder, "ref")
+            val configFile = File(externalDir, "zelda3.ini")
+            val savesFolder = File(externalDir, "saves")
+            val savesRefFolder = File(savesFolder, "ref")
 
-        // Create directories
-        savesFolder.mkdirs()
-        savesRefFolder.mkdirs()
+            // Create directories
+            savesFolder.mkdirs()
+            savesRefFolder.mkdirs()
 
-        try {
-            // Copy reference saves using suspend version
-            AssetCopyUtil.copyAssetsToExternalAsync(
-                context = this@LauncherActivity,
-                assetsFolderPath = "saves/ref",
-                externalFolderPath = savesRefFolder.absolutePath
-            )
+            try {
+                // Copy reference saves using suspend version
+                AssetCopyUtil.copyAssetsToExternalAsync(
+                    context = this@LauncherActivity,
+                    assetsFolderPath = "saves/ref",
+                    externalFolderPath = savesRefFolder.absolutePath,
+                )
 
-            // Copy zelda3.ini if it doesn't exist (only on first run)
-            if (!configFile.exists()) {
-                FileUtils.copyAssetToFile(this@LauncherActivity, "zelda3.ini", configFile)
+                // Copy zelda3.ini if it doesn't exist (only on first run)
+                if (!configFile.exists()) {
+                    FileUtils.copyAssetToFile(this@LauncherActivity, "zelda3.ini", configFile)
+                }
+
+                true
+            } catch (e: IOException) {
+                Log.e(TAG, "Failed to create config files", e)
+                false
             }
-
-            true
-        } catch (e: IOException) {
-            Log.e(TAG, "Failed to create config files", e)
-            false
         }
-    }
 
     private fun assetsFileExists(): Boolean {
         val externalDir = getExternalFilesDir(null) ?: return false
@@ -174,11 +176,11 @@ class LauncherActivity : AppCompatActivity() {
     private fun promptForAssetsFile() {
         MaterialAlertDialogBuilder(this)
             .setTitle("Game Assets Required")
-            .setMessage("zelda3_assets.dat is required to play.\n\nYou can select an existing asset file or create one from your SNES ROM(s).")
-            .setPositiveButton("Create from ROM") { _, _ ->
+            .setMessage(
+                "zelda3_assets.dat is required to play.\n\nYou can select an existing asset file or create one from your SNES ROM(s).",
+            ).setPositiveButton("Create from ROM") { _, _ ->
                 romSelectionLauncher.launch(Intent(this, RomSelectionActivity::class.java))
-            }
-            .setNeutralButton("Select .dat File") { _, _ -> openFilePicker() }
+            }.setNeutralButton("Select .dat File") { _, _ -> openFilePicker() }
             .setNegativeButton("Exit") { _, _ -> finish() }
             .setCancelable(false)
             .create()
@@ -189,10 +191,11 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun openFilePicker() {
-        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-        }
+        val intent =
+            Intent(Intent.ACTION_GET_CONTENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+            }
         assetsFilePicker.launch(Intent.createChooser(intent, "Select zelda3_assets.dat"))
     }
 
@@ -210,9 +213,12 @@ class LauncherActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val totalBytes = FileUtils.copyUriToFile(
-                    contentResolver, uri, File(externalDir, "zelda3_assets.dat")
-                )
+                val totalBytes =
+                    FileUtils.copyUriToFile(
+                        contentResolver,
+                        uri,
+                        File(externalDir, "zelda3_assets.dat"),
+                    )
 
                 Log.i(TAG, "Successfully copied zelda3_assets.dat ($totalBytes bytes)")
                 showToast("Assets file loaded successfully. Starting game...")
@@ -227,14 +233,14 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
-    private fun isExternalStorageWritable(): Boolean =
-        Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED
+    private fun isExternalStorageWritable(): Boolean = Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED
 
     private fun promptForZelda3Folder() {
         MaterialAlertDialogBuilder(this)
             .setTitle("Select Zelda3 Folder")
-            .setMessage("Choose where to store game files. Select or create a 'Zelda3' folder on internal or external storage.\n\nMSU audio files will be stored here.")
-            .setPositiveButton("Select Folder") { _, _ -> openZelda3FolderPicker() }
+            .setMessage(
+                "Choose where to store game files. Select or create a 'Zelda3' folder on internal or external storage.\n\nMSU audio files will be stored here.",
+            ).setPositiveButton("Select Folder") { _, _ -> openZelda3FolderPicker() }
             .setNegativeButton("Exit") { _, _ -> finish() }
             .setCancelable(false)
             .create()
@@ -257,7 +263,7 @@ class LauncherActivity : AppCompatActivity() {
         try {
             contentResolver.takePersistableUriPermission(
                 treeUri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
             )
         } catch (e: SecurityException) {
             Log.e(TAG, "Failed to take persistent URI permission", e)
@@ -272,30 +278,36 @@ class LauncherActivity : AppCompatActivity() {
      * Extracts real filesystem path from document tree URI.
      * Handles both primary (internal) and external storage.
      */
-    private fun getRealPathFromTreeUri(treeUri: Uri): String? {
-        return try {
+    private fun getRealPathFromTreeUri(treeUri: Uri): String? =
+        try {
             val docId = DocumentsContract.getTreeDocumentId(treeUri)
-            val (type, path) = docId.split(":").let { parts ->
-                parts[0] to (parts.getOrNull(1) ?: "")
-            }
+            val (type, path) =
+                docId.split(":").let { parts ->
+                    parts[0] to (parts.getOrNull(1) ?: "")
+                }
 
             when {
-                type.equals("primary", ignoreCase = true) ->
+                type.equals("primary", ignoreCase = true) -> {
                     "${Environment.getExternalStorageDirectory()}/$path"
-                else ->
+                }
+
+                else -> {
                     "/storage/$type/$path"
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error extracting path from tree URI", e)
             null
         }
-    }
 
     /**
      * Sets up the Zelda3 folder structure and updates configuration.
      * Creates MSU subdirectory and updates zelda3.ini with correct path.
      */
-    private fun setupZelda3Folder(folderPath: String?, treeUri: Uri) {
+    private fun setupZelda3Folder(
+        folderPath: String?,
+        treeUri: Uri,
+    ) {
         if (folderPath == null) {
             showToast("Failed to get folder path", Toast.LENGTH_LONG)
             promptForZelda3Folder()
@@ -320,7 +332,7 @@ class LauncherActivity : AppCompatActivity() {
                 zelda3FolderPath = folderPath
                 zelda3FolderUri = treeUri.toString()
                 Log.d(TAG, "Saved Zelda3 folder path: $folderPath")
-                Log.d(TAG, "Saved Zelda3 folder URI: ${treeUri.toString()}")
+                Log.d(TAG, "Saved Zelda3 folder URI: $treeUri")
 
                 // Update zelda3.ini MSUPath
                 val msuPath = "$folderPath/MSU/alttp_msu-"
@@ -347,5 +359,4 @@ class LauncherActivity : AppCompatActivity() {
             }
         }
     }
-
 }

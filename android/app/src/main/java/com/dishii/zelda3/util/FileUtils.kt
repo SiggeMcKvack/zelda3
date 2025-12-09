@@ -25,24 +25,26 @@ object FileUtils {
     suspend fun copyUriToFile(
         contentResolver: ContentResolver,
         uri: Uri,
-        destFile: File
-    ): Long = withContext(Dispatchers.IO) {
-        val inputStream = contentResolver.openInputStream(uri)
-            ?: throw IOException("Could not open input stream")
+        destFile: File,
+    ): Long =
+        withContext(Dispatchers.IO) {
+            val inputStream =
+                contentResolver.openInputStream(uri)
+                    ?: throw IOException("Could not open input stream")
 
-        var totalBytes = 0L
-        inputStream.use { input ->
-            destFile.outputStream().use { output ->
-                val buffer = ByteArray(BUFFER_SIZE)
-                var length: Int
-                while (input.read(buffer).also { length = it } > 0) {
-                    output.write(buffer, 0, length)
-                    totalBytes += length
+            var totalBytes = 0L
+            inputStream.use { input ->
+                destFile.outputStream().use { output ->
+                    val buffer = ByteArray(BUFFER_SIZE)
+                    var length: Int
+                    while (input.read(buffer).also { length = it } > 0) {
+                        output.write(buffer, 0, length)
+                        totalBytes += length
+                    }
                 }
             }
+            totalBytes
         }
-        totalBytes
-    }
 
     /**
      * Copies an APK asset to a file.
@@ -53,18 +55,19 @@ object FileUtils {
     suspend fun copyAssetToFile(
         context: Context,
         assetPath: String,
-        destFile: File
-    ): Unit = withContext(Dispatchers.IO) {
-        context.assets.open(assetPath).use { input ->
-            destFile.outputStream().use { output ->
-                val buffer = ByteArray(BUFFER_SIZE)
-                var length: Int
-                while (input.read(buffer).also { length = it } > 0) {
-                    output.write(buffer, 0, length)
+        destFile: File,
+    ): Unit =
+        withContext(Dispatchers.IO) {
+            context.assets.open(assetPath).use { input ->
+                destFile.outputStream().use { output ->
+                    val buffer = ByteArray(BUFFER_SIZE)
+                    var length: Int
+                    while (input.read(buffer).also { length = it } > 0) {
+                        output.write(buffer, 0, length)
+                    }
                 }
             }
         }
-    }
 
     /**
      * Copies a file to a SAF DocumentFile.
@@ -75,24 +78,25 @@ object FileUtils {
     suspend fun copyFileToDocument(
         contentResolver: ContentResolver,
         srcFile: File,
-        destDocument: DocumentFile
-    ): Boolean = withContext(Dispatchers.IO) {
-        if (!srcFile.exists()) return@withContext false
+        destDocument: DocumentFile,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            if (!srcFile.exists()) return@withContext false
 
-        val destUri = destDocument.uri
-        try {
-            srcFile.inputStream().use { input ->
-                contentResolver.openOutputStream(destUri)?.use { output ->
-                    val buffer = ByteArray(BUFFER_SIZE)
-                    var length: Int
-                    while (input.read(buffer).also { length = it } > 0) {
-                        output.write(buffer, 0, length)
-                    }
-                } ?: return@withContext false
+            val destUri = destDocument.uri
+            try {
+                srcFile.inputStream().use { input ->
+                    contentResolver.openOutputStream(destUri)?.use { output ->
+                        val buffer = ByteArray(BUFFER_SIZE)
+                        var length: Int
+                        while (input.read(buffer).also { length = it } > 0) {
+                            output.write(buffer, 0, length)
+                        }
+                    } ?: return@withContext false
+                }
+                true
+            } catch (e: IOException) {
+                false
             }
-            true
-        } catch (e: IOException) {
-            false
         }
-    }
 }

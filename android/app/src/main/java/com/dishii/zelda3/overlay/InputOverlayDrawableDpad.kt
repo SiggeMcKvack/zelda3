@@ -23,7 +23,7 @@ class InputOverlayDrawableDpad(
     res: Resources,
     defaultStateBitmap: Bitmap,
     pressedOneDirectionStateBitmap: Bitmap,
-    pressedTwoDirectionsStateBitmap: Bitmap
+    pressedTwoDirectionsStateBitmap: Bitmap,
 ) {
     var trackId: Int
 
@@ -61,7 +61,10 @@ class InputOverlayDrawableDpad(
         trackId = -1
     }
 
-    fun updateStatus(event: MotionEvent, dpad_slide: Boolean): Boolean {
+    fun updateStatus(
+        event: MotionEvent,
+        dpad_slide: Boolean,
+    ): Boolean {
         val pointerIndex = event.actionIndex
         val xPosition = event.getX(pointerIndex).toInt()
         val yPosition = event.getY(pointerIndex).toInt()
@@ -218,7 +221,7 @@ class InputOverlayDrawableDpad(
                     controlPositionX,
                     controlPositionY,
                     width + controlPositionX,
-                    height + controlPositionY
+                    height + controlPositionY,
                 )
                 previousTouchX = fingerPositionX
                 previousTouchY = fingerPositionY
@@ -227,12 +230,20 @@ class InputOverlayDrawableDpad(
         return true
     }
 
-    fun setPosition(x: Int, y: Int) {
+    fun setPosition(
+        x: Int,
+        y: Int,
+    ) {
         controlPositionX = x
         controlPositionY = y
     }
 
-    fun setBounds(left: Int, top: Int, right: Int, bottom: Int) {
+    fun setBounds(
+        left: Int,
+        top: Int,
+        right: Int,
+        bottom: Int,
+    ) {
         defaultStateBitmap.setBounds(left, top, right, bottom)
         pressedOneDirectionStateBitmap.setBounds(left, top, right, bottom)
         pressedTwoDirectionsStateBitmap.setBounds(left, top, right, bottom)

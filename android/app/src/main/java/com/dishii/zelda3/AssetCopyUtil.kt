@@ -31,7 +31,7 @@ object AssetCopyUtil {
     fun copyAssetsToExternal(
         context: Context,
         assetsFolderPath: String,
-        externalFolderPath: String
+        externalFolderPath: String,
     ) = runBlocking {
         copyAssetsToExternalAsync(context, assetsFolderPath, externalFolderPath)
     }
@@ -50,7 +50,7 @@ object AssetCopyUtil {
     suspend fun copyAssetsToExternalAsync(
         context: Context,
         assetsFolderPath: String,
-        externalFolderPath: String
+        externalFolderPath: String,
     ) = withContext(Dispatchers.IO) {
         val assetManager = context.assets
         val assetFiles = assetManager.list(assetsFolderPath)
@@ -65,7 +65,7 @@ object AssetCopyUtil {
                 copyAssetFile(
                     assetManager = assetManager,
                     assetPath = assetsFolderPath.appendPath(assetFile),
-                    outputPath = externalFolderPath.appendPath(assetFile)
+                    outputPath = externalFolderPath.appendPath(assetFile),
                 )
             } catch (e: IOException) {
                 Log.e(TAG, "Failed to copy asset: $assetFile", e)
@@ -81,7 +81,7 @@ object AssetCopyUtil {
     private fun copyAssetFile(
         assetManager: AssetManager,
         assetPath: String,
-        outputPath: String
+        outputPath: String,
     ) {
         assetManager.open(assetPath).use { input ->
             File(outputPath).outputStream().use { output ->
@@ -93,6 +93,5 @@ object AssetCopyUtil {
     /**
      * Extension function for cleaner path concatenation.
      */
-    private fun String.appendPath(child: String): String =
-        this + File.separator + child
+    private fun String.appendPath(child: String): String = this + File.separator + child
 }

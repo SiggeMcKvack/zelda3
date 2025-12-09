@@ -6,12 +6,17 @@ import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
-import android.widget.*
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.dishii.zelda3.util.showToast
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
@@ -19,14 +24,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
-import com.dishii.zelda3.util.showToast
 
 /**
  * Activity for selecting ROM files to create zelda3_assets.dat.
  * Requires a US ROM for base assets, optionally accepts language ROMs for dialogue.
  */
 class RomSelectionActivity : AppCompatActivity() {
-
     companion object {
         private const val TAG = "RomSelection"
         private const val MAX_LANGUAGE_ROMS = 12
@@ -41,7 +44,7 @@ class RomSelectionActivity : AppCompatActivity() {
         val path: String,
         val langCode: String,
         val langName: String,
-        val valid: Boolean
+        val valid: Boolean,
     )
 
     // State
@@ -57,9 +60,18 @@ class RomSelectionActivity : AppCompatActivity() {
 
     // Native functions
     private external fun nativeIdentifyRom(romPath: String): String?
-    private external fun nativeExtractDialogue(romPath: String, outputDir: String): Int
-    private external fun nativeCompileAssets(usRomPath: String, outputPath: String,
-                                             languages: String?, dialogueDir: String?): Int
+
+    private external fun nativeExtractDialogue(
+        romPath: String,
+        outputDir: String,
+    ): Int
+
+    private external fun nativeCompileAssets(
+        usRomPath: String,
+        outputPath: String,
+        languages: String?,
+        dialogueDir: String?,
+    ): Int
 
     // File pickers
     private val baseRomPicker: ActivityResultLauncher<Intent> =
@@ -111,19 +123,21 @@ class RomSelectionActivity : AppCompatActivity() {
     }
 
     private fun openBaseRomPicker() {
-        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-        }
+        val intent =
+            Intent(Intent.ACTION_GET_CONTENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+            }
         baseRomPicker.launch(Intent.createChooser(intent, "Select US SNES ROM"))
     }
 
     private fun openLangRomPicker() {
-        val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-        }
+        val intent =
+            Intent(Intent.ACTION_GET_CONTENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+                putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            }
         langRomPicker.launch(Intent.createChooser(intent, "Select Language ROM(s)"))
     }
 
@@ -141,9 +155,10 @@ class RomSelectionActivity : AppCompatActivity() {
                 }
 
                 // Identify ROM
-                val jsonStr = withContext(Dispatchers.IO) {
-                    nativeIdentifyRom(tempFile.absolutePath)
-                }
+                val jsonStr =
+                    withContext(Dispatchers.IO) {
+                        nativeIdentifyRom(tempFile.absolutePath)
+                    }
 
                 if (jsonStr == null) {
                     showToast("Failed to read ROM file", Toast.LENGTH_LONG)
@@ -157,8 +172,10 @@ class RomSelectionActivity : AppCompatActivity() {
                 val valid = json.getBoolean("valid")
 
                 if (langCode != "us") {
-                    showToast("US ROM required. Detected: $langName\n\nUse 'Add Language ROMs' for other languages.",
-                        Toast.LENGTH_LONG)
+                    showToast(
+                        "US ROM required. Detected: $langName\n\nUse 'Add Language ROMs' for other languages.",
+                        Toast.LENGTH_LONG,
+                    )
                     tempFile.delete()
                     return@launch
                 }
@@ -166,7 +183,6 @@ class RomSelectionActivity : AppCompatActivity() {
                 // Store ROM info (keep temp file for later use)
                 baseRomInfo = RomInfo(tempFile.absolutePath, langCode, langName, valid)
                 updateUI()
-
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing base ROM", e)
                 showToast("Error: ${e.message}", Toast.LENGTH_LONG)
@@ -175,14 +191,17 @@ class RomSelectionActivity : AppCompatActivity() {
         }
     }
 
-    private fun processLanguageRom(uri: Uri, uniqueId: Int) {
+    private fun processLanguageRom(
+        uri: Uri,
+        uniqueId: Int,
+    ) {
         if (languageRoms.size >= MAX_LANGUAGE_ROMS) {
             showToast("Maximum language ROMs reached")
             return
         }
 
         lifecycleScope.launch {
-            val tempFile = File(cacheDir, "temp_lang_${uniqueId}.sfc")
+            val tempFile = File(cacheDir, "temp_lang_$uniqueId.sfc")
             try {
                 // Copy to cache
                 withContext(Dispatchers.IO) {
@@ -194,9 +213,10 @@ class RomSelectionActivity : AppCompatActivity() {
                 }
 
                 // Identify ROM
-                val jsonStr = withContext(Dispatchers.IO) {
-                    nativeIdentifyRom(tempFile.absolutePath)
-                }
+                val jsonStr =
+                    withContext(Dispatchers.IO) {
+                        nativeIdentifyRom(tempFile.absolutePath)
+                    }
 
                 if (jsonStr == null) {
                     showToast("Failed to read ROM file", Toast.LENGTH_LONG)
@@ -211,8 +231,10 @@ class RomSelectionActivity : AppCompatActivity() {
 
                 // Check for US ROM (should use base ROM field)
                 if (langCode == "us") {
-                    showToast("US ROM detected.\n\nPlease use 'Select Base ROM' for the USA ROM.",
-                        Toast.LENGTH_LONG)
+                    showToast(
+                        "US ROM detected.\n\nPlease use 'Select Base ROM' for the USA ROM.",
+                        Toast.LENGTH_LONG,
+                    )
                     tempFile.delete()
                     return@launch
                 }
@@ -228,7 +250,6 @@ class RomSelectionActivity : AppCompatActivity() {
                 }
 
                 updateUI()
-
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing language ROM", e)
                 showToast("Error: ${e.message}", Toast.LENGTH_LONG)
@@ -248,14 +269,18 @@ class RomSelectionActivity : AppCompatActivity() {
     private fun updateUI() {
         // Base ROM status
         baseRomInfo?.let { info ->
-            baseRomStatus.text = if (info.valid) {
-                "\u2713 ${info.langName}"
-            } else {
-                "\u26A0 Unknown ROM (${info.langName})"
-            }
-            baseRomStatus.setTextColor(ContextCompat.getColor(this,
-                if (info.valid) android.R.color.holo_green_dark else android.R.color.holo_orange_dark
-            ))
+            baseRomStatus.text =
+                if (info.valid) {
+                    "\u2713 ${info.langName}"
+                } else {
+                    "\u26A0 Unknown ROM (${info.langName})"
+                }
+            baseRomStatus.setTextColor(
+                ContextCompat.getColor(
+                    this,
+                    if (info.valid) android.R.color.holo_green_dark else android.R.color.holo_orange_dark,
+                ),
+            )
         } ?: run {
             baseRomStatus.text = "No ROM selected"
             baseRomStatus.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
@@ -264,16 +289,19 @@ class RomSelectionActivity : AppCompatActivity() {
         // Language ROMs list
         langRomsContainer.removeAllViews()
         if (languageRoms.isEmpty()) {
-            val emptyText = TextView(this).apply {
-                text = "No language ROMs added (optional)"
-                setTextColor(ContextCompat.getColor(context, android.R.color.darker_gray))
-                setPadding(0, 8, 0, 8)
-            }
+            val emptyText =
+                TextView(this).apply {
+                    text = "No language ROMs added (optional)"
+                    setTextColor(ContextCompat.getColor(context, android.R.color.darker_gray))
+                    setPadding(0, 8, 0, 8)
+                }
             langRomsContainer.addView(emptyText)
         } else {
             languageRoms.forEachIndexed { index, info ->
-                val row = LayoutInflater.from(this)
-                    .inflate(R.layout.item_language_rom, langRomsContainer, false)
+                val row =
+                    LayoutInflater
+                        .from(this)
+                        .inflate(R.layout.item_language_rom, langRomsContainer, false)
 
                 // Set status icon based on ROM validity
                 row.findViewById<ImageView>(R.id.status_icon).apply {
@@ -303,24 +331,27 @@ class RomSelectionActivity : AppCompatActivity() {
 
         // Show progress dialog
         val progressView = LayoutInflater.from(this).inflate(R.layout.dialog_progress, null)
-        val progressDialog = MaterialAlertDialogBuilder(this)
-            .setTitle("Creating Assets")
-            .setView(progressView)
-            .setCancelable(false)
-            .create()
+        val progressDialog =
+            MaterialAlertDialogBuilder(this)
+                .setTitle("Creating Assets")
+                .setView(progressView)
+                .setCancelable(false)
+                .create()
         progressDialog.show()
 
         lifecycleScope.launch {
             try {
-                val externalDir = getExternalFilesDir(null)
-                    ?: throw Exception("External storage not available")
+                val externalDir =
+                    getExternalFilesDir(null)
+                        ?: throw Exception("External storage not available")
                 val dialogueDir = File(cacheDir, "dialogue").apply { mkdirs() }
 
                 // Step 1: Extract dialogue from US ROM
                 Log.i(TAG, "Extracting US dialogue...")
-                var result = withContext(Dispatchers.IO) {
-                    nativeExtractDialogue(baseRom.path, dialogueDir.absolutePath)
-                }
+                var result =
+                    withContext(Dispatchers.IO) {
+                        nativeExtractDialogue(baseRom.path, dialogueDir.absolutePath)
+                    }
                 if (result != 0) {
                     throw Exception("Failed to extract US dialogue (error $result)")
                 }
@@ -331,9 +362,10 @@ class RomSelectionActivity : AppCompatActivity() {
                     if (!langRom.valid) continue
 
                     Log.i(TAG, "Extracting ${langRom.langName} dialogue...")
-                    result = withContext(Dispatchers.IO) {
-                        nativeExtractDialogue(langRom.path, dialogueDir.absolutePath)
-                    }
+                    result =
+                        withContext(Dispatchers.IO) {
+                            nativeExtractDialogue(langRom.path, dialogueDir.absolutePath)
+                        }
                     if (result != 0) {
                         Log.w(TAG, "Failed to extract ${langRom.langName} dialogue")
                         continue
@@ -346,9 +378,10 @@ class RomSelectionActivity : AppCompatActivity() {
                 val outputPath = File(externalDir, "zelda3_assets.dat").absolutePath
                 val languages = if (langCodes.isEmpty()) null else langCodes.joinToString(",")
 
-                result = withContext(Dispatchers.IO) {
-                    nativeCompileAssets(baseRom.path, outputPath, languages, dialogueDir.absolutePath)
-                }
+                result =
+                    withContext(Dispatchers.IO) {
+                        nativeCompileAssets(baseRom.path, outputPath, languages, dialogueDir.absolutePath)
+                    }
 
                 // Cleanup temp files
                 dialogueDir.deleteRecursively()
@@ -365,7 +398,6 @@ class RomSelectionActivity : AppCompatActivity() {
                 } else {
                     throw Exception("Asset compilation failed (error $result)")
                 }
-
             } catch (e: Exception) {
                 progressDialog.dismiss()
                 Log.e(TAG, "Asset creation failed", e)

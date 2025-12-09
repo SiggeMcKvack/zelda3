@@ -19,7 +19,6 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.util.AttributeSet
-import android.util.DisplayMetrics
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -42,10 +41,11 @@ import kotlin.math.min
  * Draws the interactive input overlay on top of the
  * [SurfaceView] that is rendering emulation.
  */
-class InputOverlay(context: Context, attrs: AttributeSet?) :
-    SurfaceView(context, attrs),
+class InputOverlay(
+    context: Context,
+    attrs: AttributeSet?,
+) : SurfaceView(context, attrs),
     OnTouchListener {
-
     constructor(context: Context) : this(context, null)
 
     private val overlayButtons: MutableSet<InputOverlayDrawableButton> = HashSet()
@@ -68,8 +68,8 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
 
     // Settings
     private var overlayEnabled = true
-    private var overlayScale = 0  // -50 to +100
-    private var overlayOpacity = 100  // 0 to 100
+    private var overlayScale = 0 // -50 to +100
+    private var overlayOpacity = 100 // 0 to 100
     private var dpadSlideEnabled = true
     private var hapticFeedbackEnabled = false
 
@@ -87,14 +87,19 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
         }
     }
 
-    // D-pad directional keycodes (from zelda3.ini)
     // D-pad keycodes from zelda3.ini KeyMap: Up=w, Down=s, Left=a, Right=d
-    private val DPAD_UP = KeyEvent.KEYCODE_W
-    private val DPAD_DOWN = KeyEvent.KEYCODE_S
-    private val DPAD_LEFT = KeyEvent.KEYCODE_A
-    private val DPAD_RIGHT = KeyEvent.KEYCODE_D
+    private val dpadUp = KeyEvent.KEYCODE_W
+    private val dpadDown = KeyEvent.KEYCODE_S
+    private val dpadLeft = KeyEvent.KEYCODE_A
+    private val dpadRight = KeyEvent.KEYCODE_D
 
-    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+    override fun onLayout(
+        changed: Boolean,
+        left: Int,
+        top: Int,
+        right: Int,
+        bottom: Int,
+    ) {
         super.onLayout(changed, left, top, right, bottom)
 
         val overlayControlData = loadOverlayData()
@@ -119,18 +124,23 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
     }
 
     private fun detectLayout(): OverlayLayout {
-        val metrics = DisplayMetrics()
-        (context as Activity).windowManager.defaultDisplay.getRealMetrics(metrics)
+        val activity = context as Activity
+        val windowMetrics = WindowMetricsCalculator.getOrCreate().computeCurrentWindowMetrics(activity)
+        val bounds = windowMetrics.bounds
+        val density = resources.displayMetrics.density
 
-        val widthDp = metrics.widthPixels / metrics.density
-        val heightDp = metrics.heightPixels / metrics.density
+        val widthDp = bounds.width() / density
+        val heightDp = bounds.height() / density
         val smallestWidth = min(widthDp, heightDp)
 
         val orientation = resources.configuration.orientation
 
         return when {
-            smallestWidth >= 600 -> OverlayLayout.Foldable  // Tablet/foldable
+            smallestWidth >= 600 -> OverlayLayout.Foldable
+
+            // Tablet/foldable
             orientation == Configuration.ORIENTATION_LANDSCAPE -> OverlayLayout.Landscape
+
             else -> OverlayLayout.Portrait
         }
     }
@@ -148,7 +158,10 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
         }
     }
 
-    override fun onTouch(v: View, event: MotionEvent): Boolean {
+    override fun onTouch(
+        v: View,
+        event: MotionEvent,
+    ): Boolean {
         // Pass through touches when drawer is open so NavigationView can receive them
         if (isDrawerOpen) {
             android.util.Log.d("InputOverlay", "Drawer is open, passing touch through: ${event.action} at (${event.x}, ${event.y})")
@@ -193,7 +206,10 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
         return true
     }
 
-    private fun sendButtonEvent(button: OverlayControl, pressed: Boolean) {
+    private fun sendButtonEvent(
+        button: OverlayControl,
+        pressed: Boolean,
+    ) {
         val mainActivity = context as? MainActivity ?: return
         if (pressed) {
             mainActivity.sendKeyDown(button.keycode)
@@ -207,27 +223,27 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
 
         // Send key events for each direction
         if (dpad.upButtonState) {
-            mainActivity.sendKeyDown(DPAD_UP)
+            mainActivity.sendKeyDown(dpadUp)
         } else {
-            mainActivity.sendKeyUp(DPAD_UP)
+            mainActivity.sendKeyUp(dpadUp)
         }
 
         if (dpad.downButtonState) {
-            mainActivity.sendKeyDown(DPAD_DOWN)
+            mainActivity.sendKeyDown(dpadDown)
         } else {
-            mainActivity.sendKeyUp(DPAD_DOWN)
+            mainActivity.sendKeyUp(dpadDown)
         }
 
         if (dpad.leftButtonState) {
-            mainActivity.sendKeyDown(DPAD_LEFT)
+            mainActivity.sendKeyDown(dpadLeft)
         } else {
-            mainActivity.sendKeyUp(DPAD_LEFT)
+            mainActivity.sendKeyUp(dpadLeft)
         }
 
         if (dpad.rightButtonState) {
-            mainActivity.sendKeyDown(DPAD_RIGHT)
+            mainActivity.sendKeyDown(dpadRight)
         } else {
-            mainActivity.sendKeyUp(DPAD_RIGHT)
+            mainActivity.sendKeyUp(dpadRight)
         }
     }
 
@@ -254,7 +270,8 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
         for (button in overlayButtons) {
             when (event.action and MotionEvent.ACTION_MASK) {
                 MotionEvent.ACTION_DOWN,
-                MotionEvent.ACTION_POINTER_DOWN ->
+                MotionEvent.ACTION_POINTER_DOWN,
+                -> {
                     if (buttonBeingConfigured == null &&
                         button.bounds.contains(fingerPositionX, fingerPositionY)
                     ) {
@@ -264,40 +281,47 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                         touchStartY = event.getY(pointerIndex)
                         hasMoved = false
                     }
+                }
 
-                MotionEvent.ACTION_MOVE -> if (buttonBeingConfigured != null) {
-                    val moveDistance = kotlin.math.sqrt(
-                        (event.getX(pointerIndex) - touchStartX).let { it * it } +
-                                (event.getY(pointerIndex) - touchStartY).let { it * it }
-                    )
+                MotionEvent.ACTION_MOVE -> {
+                    if (buttonBeingConfigured != null) {
+                        val moveDistance =
+                            kotlin.math.sqrt(
+                                (event.getX(pointerIndex) - touchStartX).let { it * it } +
+                                    (event.getY(pointerIndex) - touchStartY).let { it * it },
+                            )
 
-                    if (moveDistance > moveThreshold) {
-                        hasMoved = true
-                        buttonBeingConfigured!!.onConfigureTouch(event)
-                        invalidate()
-                        return true
+                        if (moveDistance > moveThreshold) {
+                            hasMoved = true
+                            buttonBeingConfigured!!.onConfigureTouch(event)
+                            invalidate()
+                            return true
+                        }
                     }
                 }
 
                 MotionEvent.ACTION_UP,
-                MotionEvent.ACTION_POINTER_UP -> if (buttonBeingConfigured === button) {
-                    if (!hasMoved) {
-                        showScaleDialog(
-                            buttonBeingConfigured,
-                            null,
-                            fingerPositionX,
-                            fingerPositionY
-                        )
-                    } else {
-                        saveControlPosition(
-                            buttonBeingConfigured!!.overlayControlData.id,
-                            buttonBeingConfigured!!.bounds.centerX(),
-                            buttonBeingConfigured!!.bounds.centerY(),
-                            buttonBeingConfigured!!.overlayControlData.individualScale,
-                            layout
-                        )
+                MotionEvent.ACTION_POINTER_UP,
+                -> {
+                    if (buttonBeingConfigured === button) {
+                        if (!hasMoved) {
+                            showScaleDialog(
+                                buttonBeingConfigured,
+                                null,
+                                fingerPositionX,
+                                fingerPositionY,
+                            )
+                        } else {
+                            saveControlPosition(
+                                buttonBeingConfigured!!.overlayControlData.id,
+                                buttonBeingConfigured!!.bounds.centerX(),
+                                buttonBeingConfigured!!.bounds.centerY(),
+                                buttonBeingConfigured!!.overlayControlData.individualScale,
+                                layout,
+                            )
+                        }
+                        buttonBeingConfigured = null
                     }
-                    buttonBeingConfigured = null
                 }
             }
         }
@@ -305,7 +329,8 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
         for (dpad in overlayDpads) {
             when (event.action and MotionEvent.ACTION_MASK) {
                 MotionEvent.ACTION_DOWN,
-                MotionEvent.ACTION_POINTER_DOWN ->
+                MotionEvent.ACTION_POINTER_DOWN,
+                -> {
                     if (dpadBeingConfigured == null &&
                         dpad.bounds.contains(fingerPositionX, fingerPositionY)
                     ) {
@@ -315,40 +340,47 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                         touchStartY = event.getY(pointerIndex)
                         hasMoved = false
                     }
+                }
 
-                MotionEvent.ACTION_MOVE -> if (dpadBeingConfigured != null) {
-                    val moveDistance = kotlin.math.sqrt(
-                        (event.getX(pointerIndex) - touchStartX).let { it * it } +
-                                (event.getY(pointerIndex) - touchStartY).let { it * it }
-                    )
+                MotionEvent.ACTION_MOVE -> {
+                    if (dpadBeingConfigured != null) {
+                        val moveDistance =
+                            kotlin.math.sqrt(
+                                (event.getX(pointerIndex) - touchStartX).let { it * it } +
+                                    (event.getY(pointerIndex) - touchStartY).let { it * it },
+                            )
 
-                    if (moveDistance > moveThreshold) {
-                        hasMoved = true
-                        dpadBeingConfigured!!.onConfigureTouch(event)
-                        invalidate()
-                        return true
+                        if (moveDistance > moveThreshold) {
+                            hasMoved = true
+                            dpadBeingConfigured!!.onConfigureTouch(event)
+                            invalidate()
+                            return true
+                        }
                     }
                 }
 
                 MotionEvent.ACTION_UP,
-                MotionEvent.ACTION_POINTER_UP -> if (dpadBeingConfigured === dpad) {
-                    if (!hasMoved) {
-                        showScaleDialog(
-                            null,
-                            dpadBeingConfigured,
-                            fingerPositionX,
-                            fingerPositionY
-                        )
-                    } else {
-                        saveControlPosition(
-                            OverlayControl.DPAD.id,
-                            dpadBeingConfigured!!.bounds.centerX(),
-                            dpadBeingConfigured!!.bounds.centerY(),
-                            dpadBeingConfigured!!.individualScale,
-                            layout
-                        )
+                MotionEvent.ACTION_POINTER_UP,
+                -> {
+                    if (dpadBeingConfigured === dpad) {
+                        if (!hasMoved) {
+                            showScaleDialog(
+                                null,
+                                dpadBeingConfigured,
+                                fingerPositionX,
+                                fingerPositionY,
+                            )
+                        } else {
+                            saveControlPosition(
+                                OverlayControl.DPAD.id,
+                                dpadBeingConfigured!!.bounds.centerX(),
+                                dpadBeingConfigured!!.bounds.centerY(),
+                                dpadBeingConfigured!!.individualScale,
+                                layout,
+                            )
+                        }
+                        dpadBeingConfigured = null
                     }
-                    dpadBeingConfigured = null
                 }
             }
         }
@@ -376,8 +408,8 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                             R.drawable.facebutton_a_depressed,
                             OverlayControl.BUTTON_A,
                             data,
-                            position
-                        )
+                            position,
+                        ),
                     )
                 }
 
@@ -390,8 +422,8 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                             R.drawable.facebutton_b_depressed,
                             OverlayControl.BUTTON_B,
                             data,
-                            position
-                        )
+                            position,
+                        ),
                     )
                 }
 
@@ -404,8 +436,8 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                             R.drawable.facebutton_x_depressed,
                             OverlayControl.BUTTON_X,
                             data,
-                            position
-                        )
+                            position,
+                        ),
                     )
                 }
 
@@ -418,8 +450,8 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                             R.drawable.facebutton_y_depressed,
                             OverlayControl.BUTTON_Y,
                             data,
-                            position
-                        )
+                            position,
+                        ),
                     )
                 }
 
@@ -432,8 +464,8 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                             R.drawable.facebutton_start_depressed,
                             OverlayControl.BUTTON_START,
                             data,
-                            position
-                        )
+                            position,
+                        ),
                     )
                 }
 
@@ -446,8 +478,8 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                             R.drawable.facebutton_select_depressed,
                             OverlayControl.BUTTON_SELECT,
                             data,
-                            position
-                        )
+                            position,
+                        ),
                     )
                 }
 
@@ -460,8 +492,8 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                             R.drawable.l_shoulder_depressed,
                             OverlayControl.BUTTON_L,
                             data,
-                            position
-                        )
+                            position,
+                        ),
                     )
                 }
 
@@ -474,8 +506,8 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                             R.drawable.r_shoulder_depressed,
                             OverlayControl.BUTTON_R,
                             data,
-                            position
-                        )
+                            position,
+                        ),
                     )
                 }
 
@@ -488,8 +520,8 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                             R.drawable.dpad_standard_cardinal_depressed,
                             R.drawable.dpad_standard_diagonal_depressed,
                             data,
-                            position
-                        )
+                            position,
+                        ),
                     )
                 }
             }
@@ -515,7 +547,7 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
         x: Int,
         y: Int,
         individualScale: Float,
-        layout: OverlayLayout
+        layout: OverlayLayout,
     ) {
         val windowSize = getSafeScreenSize(context, Pair(measuredWidth, measuredHeight))
         val min = windowSize.first
@@ -554,22 +586,24 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
     private fun showScaleDialog(
         button: InputOverlayDrawableButton?,
         dpad: InputOverlayDrawableDpad?,
-        x: Int, y: Int
+        x: Int,
+        y: Int,
     ) {
         scaleDialog?.dismiss()
 
         when {
             button != null -> {
-                scaleDialog = OverlayScaleDialog(context, button.overlayControlData) { newScale ->
-                    saveControlPosition(
-                        button.overlayControlData.id,
-                        button.bounds.centerX(),
-                        button.bounds.centerY(),
-                        newScale,
-                        layout
-                    )
-                    refreshControls()
-                }
+                scaleDialog =
+                    OverlayScaleDialog(context, button.overlayControlData) { newScale ->
+                        saveControlPosition(
+                            button.overlayControlData.id,
+                            button.bounds.centerX(),
+                            button.bounds.centerY(),
+                            newScale,
+                            layout,
+                        )
+                        refreshControls()
+                    }
                 scaleDialog?.showDialog(x, y, button.bounds.width(), button.bounds.height())
             }
 
@@ -577,16 +611,17 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                 val overlayControlData = loadOverlayData()
                 val dpadData = overlayControlData.firstOrNull { it.id == OverlayControl.DPAD.id }
                 if (dpadData != null) {
-                    scaleDialog = OverlayScaleDialog(context, dpadData) { newScale ->
-                        saveControlPosition(
-                            OverlayControl.DPAD.id,
-                            dpad.bounds.centerX(),
-                            dpad.bounds.centerY(),
-                            newScale,
-                            layout
-                        )
-                        refreshControls()
-                    }
+                    scaleDialog =
+                        OverlayScaleDialog(context, dpadData) { newScale ->
+                            saveControlPosition(
+                                OverlayControl.DPAD.id,
+                                dpad.bounds.centerX(),
+                                dpad.bounds.centerY(),
+                                newScale,
+                                layout,
+                            )
+                            refreshControls()
+                        }
                     scaleDialog?.showDialog(x, y, dpad.bounds.width(), dpad.bounds.height())
                 }
             }
@@ -594,16 +629,17 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
     }
 
     private fun populateDefaultConfig() {
-        val newConfig = OverlayControl.values().map { control ->
-            OverlayControlData(
-                id = control.id,
-                enabled = control.defaultVisibility,
-                landscapePosition = control.defaultLandscapePosition,
-                portraitPosition = control.defaultPortraitPosition,
-                foldablePosition = control.defaultFoldablePosition,
-                individualScale = control.defaultScale
-            )
-        }
+        val newConfig =
+            OverlayControl.values().map { control ->
+                OverlayControlData(
+                    id = control.id,
+                    enabled = control.defaultVisibility,
+                    landscapePosition = control.defaultLandscapePosition,
+                    portraitPosition = control.defaultPortraitPosition,
+                    foldablePosition = control.defaultFoldablePosition,
+                    individualScale = control.defaultScale,
+                )
+            }
         saveOverlayData(newConfig)
     }
 
@@ -635,9 +671,7 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
         prefs.edit().putString("overlay_data", json.toString()).apply()
     }
 
-    private fun hasTouchscreen(): Boolean {
-        return context.packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
-    }
+    private fun hasTouchscreen(): Boolean = context.packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
 
     private fun loadOverlayData(): List<OverlayControlData> {
         val jsonString = prefs.getString("overlay_data", null) ?: return emptyList()
@@ -660,20 +694,23 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                     OverlayControlData(
                         id = controlObj.getString("id"),
                         enabled = controlObj.getBoolean("enabled"),
-                        landscapePosition = Pair(
-                            controlObj.getDouble("landscape_x"),
-                            controlObj.getDouble("landscape_y")
-                        ),
-                        portraitPosition = Pair(
-                            controlObj.getDouble("portrait_x"),
-                            controlObj.getDouble("portrait_y")
-                        ),
-                        foldablePosition = Pair(
-                            controlObj.getDouble("foldable_x"),
-                            controlObj.getDouble("foldable_y")
-                        ),
-                        individualScale = controlObj.getDouble("scale").toFloat()
-                    )
+                        landscapePosition =
+                            Pair(
+                                controlObj.getDouble("landscape_x"),
+                                controlObj.getDouble("landscape_y"),
+                            ),
+                        portraitPosition =
+                            Pair(
+                                controlObj.getDouble("portrait_x"),
+                                controlObj.getDouble("portrait_y"),
+                            ),
+                        foldablePosition =
+                            Pair(
+                                controlObj.getDouble("foldable_x"),
+                                controlObj.getDouble("foldable_y"),
+                            ),
+                        individualScale = controlObj.getDouble("scale").toFloat(),
+                    ),
                 )
             }
             return controls
@@ -693,12 +730,10 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
     fun setOverlayEnabled(enabled: Boolean) {
         overlayEnabled = enabled
         saveSettings()
-        invalidate()  // Force redraw to show/hide overlay
+        invalidate() // Force redraw to show/hide overlay
     }
 
-    fun getOverlayEnabled(): Boolean {
-        return overlayEnabled
-    }
+    fun getOverlayEnabled(): Boolean = overlayEnabled
 
     fun setDpadSlide(enabled: Boolean) {
         dpadSlideEnabled = enabled
@@ -710,13 +745,9 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
         saveSettings()
     }
 
-    fun getDpadSlideEnabled(): Boolean {
-        return dpadSlideEnabled
-    }
+    fun getDpadSlideEnabled(): Boolean = dpadSlideEnabled
 
-    fun getHapticFeedbackEnabled(): Boolean {
-        return hapticFeedbackEnabled
-    }
+    fun getHapticFeedbackEnabled(): Boolean = hapticFeedbackEnabled
 
     fun setOverlayScale(scale: Int) {
         overlayScale = scale
@@ -732,12 +763,17 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
 
     fun getControlVisibility(): BooleanArray {
         val data = loadOverlayData()
-        return OverlayControl.values().map { control ->
-            data.firstOrNull { it.id == control.id }?.enabled ?: control.defaultVisibility
-        }.toBooleanArray()
+        return OverlayControl
+            .values()
+            .map { control ->
+                data.firstOrNull { it.id == control.id }?.enabled ?: control.defaultVisibility
+            }.toBooleanArray()
     }
 
-    fun setControlVisibility(index: Int, visible: Boolean) {
+    fun setControlVisibility(
+        index: Int,
+        visible: Boolean,
+    ) {
         val controls = OverlayControl.values()
         if (index < 0 || index >= controls.size) return
 
@@ -750,7 +786,7 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
 
     private fun saveSettings() {
         val data = loadControlDataOnly()
-        saveOverlayData(data)  // This saves all settings
+        saveOverlayData(data) // This saves all settings
     }
 
     // Load only control positions/scales without overwriting setting variables
@@ -769,20 +805,23 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
                     OverlayControlData(
                         id = controlObj.getString("id"),
                         enabled = controlObj.getBoolean("enabled"),
-                        landscapePosition = Pair(
-                            controlObj.getDouble("landscape_x"),
-                            controlObj.getDouble("landscape_y")
-                        ),
-                        portraitPosition = Pair(
-                            controlObj.getDouble("portrait_x"),
-                            controlObj.getDouble("portrait_y")
-                        ),
-                        foldablePosition = Pair(
-                            controlObj.getDouble("foldable_x"),
-                            controlObj.getDouble("foldable_y")
-                        ),
-                        individualScale = controlObj.getDouble("scale").toFloat()
-                    )
+                        landscapePosition =
+                            Pair(
+                                controlObj.getDouble("landscape_x"),
+                                controlObj.getDouble("landscape_y"),
+                            ),
+                        portraitPosition =
+                            Pair(
+                                controlObj.getDouble("portrait_x"),
+                                controlObj.getDouble("portrait_y"),
+                            ),
+                        foldablePosition =
+                            Pair(
+                                controlObj.getDouble("foldable_x"),
+                                controlObj.getDouble("foldable_y"),
+                            ),
+                        individualScale = controlObj.getDouble("scale").toFloat(),
+                    ),
                 )
             }
             return controls
@@ -794,10 +833,12 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
 
     private fun getSafeScreenSize(
         context: Context,
-        screenSize: Pair<Int, Int>
+        screenSize: Pair<Int, Int>,
     ): Pair<Point, Point> {
-        val windowMetrics = WindowMetricsCalculator.getOrCreate()
-            .computeCurrentWindowMetrics(context as Activity)
+        val windowMetrics =
+            WindowMetricsCalculator
+                .getOrCreate()
+                .computeCurrentWindowMetrics(context as Activity)
         val screenBounds = windowMetrics.bounds
 
         val leftCutoutInset: Int
@@ -833,7 +874,7 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
 
         return Pair(
             Point(insetLeft, insetTop),
-            Point(screenBounds.width() - insetRight, screenBounds.height() - insetBottom)
+            Point(screenBounds.width() - insetRight, screenBounds.height() - insetBottom),
         )
     }
 
@@ -844,23 +885,25 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
         pressedResId: Int,
         buttonId: OverlayControl,
         controlData: OverlayControlData,
-        position: Pair<Double, Double>
+        position: Pair<Double, Double>,
     ): InputOverlayDrawableButton {
         val res = context.resources
 
         val defaultDrawable = ContextCompat.getDrawable(context, defaultResId) as VectorDrawable
         val pressedDrawable = ContextCompat.getDrawable(context, pressedResId) as VectorDrawable
 
-        val defaultBitmap = Bitmap.createBitmap(
-            defaultDrawable.intrinsicWidth,
-            defaultDrawable.intrinsicHeight,
-            Bitmap.Config.ARGB_8888
-        )
-        val pressedBitmap = Bitmap.createBitmap(
-            pressedDrawable.intrinsicWidth,
-            pressedDrawable.intrinsicHeight,
-            Bitmap.Config.ARGB_8888
-        )
+        val defaultBitmap =
+            Bitmap.createBitmap(
+                defaultDrawable.intrinsicWidth,
+                defaultDrawable.intrinsicHeight,
+                Bitmap.Config.ARGB_8888,
+            )
+        val pressedBitmap =
+            Bitmap.createBitmap(
+                pressedDrawable.intrinsicWidth,
+                pressedDrawable.intrinsicHeight,
+                Bitmap.Config.ARGB_8888,
+            )
 
         val defaultCanvas = Canvas(defaultBitmap)
         val pressedCanvas = Canvas(pressedBitmap)
@@ -885,19 +928,20 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
         val drawableX = (min.x + (max.x - min.x) * position.first).toInt()
         val drawableY = (min.y + (max.y - min.y) * position.second).toInt()
 
-        val button = InputOverlayDrawableButton(
-            res,
-            scaledDefaultBitmap,
-            scaledPressedBitmap,
-            buttonId,
-            controlData
-        )
+        val button =
+            InputOverlayDrawableButton(
+                res,
+                scaledDefaultBitmap,
+                scaledPressedBitmap,
+                buttonId,
+                controlData,
+            )
 
         button.setBounds(
             drawableX - width / 2,
             drawableY - height / 2,
             drawableX + width / 2,
-            drawableY + height / 2
+            drawableY + height / 2,
         )
         button.setOpacity(overlayOpacity * 255 / 100)
 
@@ -911,7 +955,7 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
         pressedOneDirectionResId: Int,
         pressedTwoDirectionsResId: Int,
         controlData: OverlayControlData,
-        position: Pair<Double, Double>
+        position: Pair<Double, Double>,
     ): InputOverlayDrawableDpad {
         val res = context.resources
 
@@ -919,21 +963,24 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
         val pressedOneDirectionDrawable = ContextCompat.getDrawable(context, pressedOneDirectionResId) as VectorDrawable
         val pressedTwoDirectionsDrawable = ContextCompat.getDrawable(context, pressedTwoDirectionsResId) as VectorDrawable
 
-        val defaultBitmap = Bitmap.createBitmap(
-            defaultDrawable.intrinsicWidth,
-            defaultDrawable.intrinsicHeight,
-            Bitmap.Config.ARGB_8888
-        )
-        val pressedOneDirectionBitmap = Bitmap.createBitmap(
-            pressedOneDirectionDrawable.intrinsicWidth,
-            pressedOneDirectionDrawable.intrinsicHeight,
-            Bitmap.Config.ARGB_8888
-        )
-        val pressedTwoDirectionsBitmap = Bitmap.createBitmap(
-            pressedTwoDirectionsDrawable.intrinsicWidth,
-            pressedTwoDirectionsDrawable.intrinsicHeight,
-            Bitmap.Config.ARGB_8888
-        )
+        val defaultBitmap =
+            Bitmap.createBitmap(
+                defaultDrawable.intrinsicWidth,
+                defaultDrawable.intrinsicHeight,
+                Bitmap.Config.ARGB_8888,
+            )
+        val pressedOneDirectionBitmap =
+            Bitmap.createBitmap(
+                pressedOneDirectionDrawable.intrinsicWidth,
+                pressedOneDirectionDrawable.intrinsicHeight,
+                Bitmap.Config.ARGB_8888,
+            )
+        val pressedTwoDirectionsBitmap =
+            Bitmap.createBitmap(
+                pressedTwoDirectionsDrawable.intrinsicWidth,
+                pressedTwoDirectionsDrawable.intrinsicHeight,
+                Bitmap.Config.ARGB_8888,
+            )
 
         val defaultCanvas = Canvas(defaultBitmap)
         val pressedOneDirectionCanvas = Canvas(pressedOneDirectionBitmap)
@@ -941,7 +988,12 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
 
         defaultDrawable.setBounds(0, 0, defaultDrawable.intrinsicWidth, defaultDrawable.intrinsicHeight)
         pressedOneDirectionDrawable.setBounds(0, 0, pressedOneDirectionDrawable.intrinsicWidth, pressedOneDirectionDrawable.intrinsicHeight)
-        pressedTwoDirectionsDrawable.setBounds(0, 0, pressedTwoDirectionsDrawable.intrinsicWidth, pressedTwoDirectionsDrawable.intrinsicHeight)
+        pressedTwoDirectionsDrawable.setBounds(
+            0,
+            0,
+            pressedTwoDirectionsDrawable.intrinsicWidth,
+            pressedTwoDirectionsDrawable.intrinsicHeight,
+        )
 
         defaultDrawable.draw(defaultCanvas)
         pressedOneDirectionDrawable.draw(pressedOneDirectionCanvas)
@@ -964,19 +1016,20 @@ class InputOverlay(context: Context, attrs: AttributeSet?) :
         val drawableX = (min.x + (max.x - min.x) * position.first).toInt()
         val drawableY = (min.y + (max.y - min.y) * position.second).toInt()
 
-        val dpad = InputOverlayDrawableDpad(
-            res,
-            scaledDefaultBitmap,
-            scaledPressedOneDirectionBitmap,
-            scaledPressedTwoDirectionsBitmap
-        )
+        val dpad =
+            InputOverlayDrawableDpad(
+                res,
+                scaledDefaultBitmap,
+                scaledPressedOneDirectionBitmap,
+                scaledPressedTwoDirectionsBitmap,
+            )
         dpad.individualScale = controlData.individualScale
 
         dpad.setBounds(
             drawableX - width / 2,
             drawableY - height / 2,
             drawableX + width / 2,
-            drawableY + height / 2
+            drawableY + height / 2,
         )
         dpad.setPosition(drawableX - width / 2, drawableY - height / 2)
         dpad.setOpacity(overlayOpacity * 255 / 100)
