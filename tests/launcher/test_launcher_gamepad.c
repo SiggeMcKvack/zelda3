@@ -150,7 +150,9 @@ void test_axis_to_string_multiple_calls(void) {
  * Test runner
  * ===========================================================================*/
 
-int main(void) {
+int main(int argc, char *argv[]) {
+    (void)argc;
+    (void)argv;
     UNITY_BEGIN();
 
     /* LauncherGamepad_ButtonToString tests */
