@@ -9,7 +9,7 @@ else {
 apply plugin: 'kotlin-android'
 
 android {
-    namespace 'com.dishii.zelda3'
+    namespace = 'com.dishii.zelda3'
     compileSdkVersion 35
     defaultConfig {
         if (buildAsApplication) {
@@ -43,7 +43,7 @@ android {
     buildTypes {
         release {
             minifyEnabled true
-            shrinkResources true
+            shrinkResources = true
             debuggable false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -63,13 +63,13 @@ android {
         externalNativeBuild {
             cmake {
                 path 'jni/CMakeLists.txt'
-                version '3.22.1'
+                version = '3.22.1'
             }
         }
 
     }
     lintOptions {
-        abortOnError false
+        abortOnError = false
     }
 
     compileOptions {
