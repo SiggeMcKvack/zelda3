@@ -316,15 +316,19 @@ class LauncherActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                // Create MSU and saves subdirectories
+                // Create MSU, saves, and shaders subdirectories
                 val msuDir = File(folderPath, "MSU")
                 val savesDir = File(folderPath, "saves")
+                val shadersDir = File(folderPath, "shaders")
                 withContext(Dispatchers.IO) {
                     if (!msuDir.exists() && !msuDir.mkdirs()) {
                         throw IOException("Failed to create MSU directory")
                     }
                     if (!savesDir.exists() && !savesDir.mkdirs()) {
                         throw IOException("Failed to create saves directory")
+                    }
+                    if (!shadersDir.exists() && !shadersDir.mkdirs()) {
+                        throw IOException("Failed to create shaders directory")
                     }
                 }
 

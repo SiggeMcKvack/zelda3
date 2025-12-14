@@ -405,8 +405,17 @@ class MainActivity : SDLActivity() {
                     return -1
                 }
 
+            // Case-insensitive file finder (Android filesystems may be case-sensitive)
+            fun DocumentFile.findFileCaseInsensitive(name: String): DocumentFile? {
+                // Try exact match first
+                findFile(name)?.let { return it }
+                // Fall back to case-insensitive search
+                val lowerName = name.lowercase()
+                return listFiles().firstOrNull { it.name?.lowercase() == lowerName }
+            }
+
             // Start from the base subdirectory
-            var currentDir = rootDir.findFile(subdir)
+            var currentDir = rootDir.findFileCaseInsensitive(subdir)
             if (currentDir == null) {
                 if (createIfMissing) {
                     currentDir = rootDir.createDirectory(subdir) ?: run {
@@ -426,7 +435,7 @@ class MainActivity : SDLActivity() {
             var targetDir: DocumentFile = currentDir
             for (i in 0 until pathParts.size - 1) {
                 val dirName = pathParts[i]
-                var nextDir = targetDir.findFile(dirName)
+                var nextDir = targetDir.findFileCaseInsensitive(dirName)
                 if (nextDir == null) {
                     if (createIfMissing) {
                         nextDir = targetDir.createDirectory(dirName) ?: run {
@@ -443,7 +452,7 @@ class MainActivity : SDLActivity() {
 
             // Find or create the final file
             val finalFileName = pathParts.last()
-            var file = targetDir.findFile(finalFileName)
+            var file = targetDir.findFileCaseInsensitive(finalFileName)
             if (file == null) {
                 if (createIfMissing) {
                     file = targetDir.createFile("application/octet-stream", finalFileName) ?: run {
@@ -2017,23 +2026,25 @@ class MainActivity : SDLActivity() {
 
     /**
      * Extracts a relative shader path from a content URI.
-     * Looks for "shaders/" in the path and returns everything from there.
+     * Looks for "shaders/" or "Shaders/" in the path and returns everything from there.
      */
     private fun extractShaderRelativePath(uri: android.net.Uri): String? {
         val path = uri.path ?: return null
         Log.d(TAG, "extractShaderRelativePath: uri.path = $path")
 
-        // Look for "shaders/" in the path and extract from there
-        val shadersIndex = path.indexOf("shaders/")
+        // Look for "shaders/" or "Shaders/" in the path (case-insensitive search)
+        val lowerPath = path.lowercase()
+        val shadersIndex = lowerPath.indexOf("shaders/")
         if (shadersIndex >= 0) {
+            // Return the path preserving original case
             return path.substring(shadersIndex)
         }
 
-        // Fallback: try to get filename and construct path
+        // Fallback: try to get filename only (let native code resolve path)
         val filename = path.substringAfterLast("/")
         if (filename.endsWith(".slangp") || filename.endsWith(".slang")) {
-            // Assume it's in shaders/ folder
-            return "shaders/$filename"
+            Log.w(TAG, "extractShaderRelativePath: Could not find 'shaders/' in path, returning filename only: $filename")
+            return filename
         }
 
         return null

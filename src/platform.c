@@ -19,9 +19,14 @@
 
 // Check if path is for external storage (needs SAF)
 static bool IsExternalPath(const char *path) {
-  return strncmp(path, "MSU/", 4) == 0 ||
-         strncmp(path, "shaders/", 8) == 0;
+  // Case-insensitive check for MSU/
+  if (strncasecmp(path, "MSU/", 4) == 0)
+    return true;
+  // Case-insensitive check for shaders/ (handles "shaders/", "Shaders/", etc.)
+  if (strncasecmp(path, "shaders/", 8) == 0)
+    return true;
   // Note: saves use Platform_OpenSaveFile(), not Platform_OpenFile()
+  return false;
 }
 #endif
 
