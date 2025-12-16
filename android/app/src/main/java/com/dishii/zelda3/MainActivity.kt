@@ -3613,8 +3613,9 @@ class MainActivity : SDLActivity() {
             return
         }
 
-        // Convert captured buttons to sorted list of button names
-        val buttonNames = capturedButtons.map { getButtonName(it) }.sorted()
+        // Convert captured buttons to list of button names (preserves insertion order)
+        // LinkedHashSet preserves order: first pressed → last pressed
+        val buttonNames = capturedButtons.map { getButtonName(it) }
         val bindingString = buttonNames.joinToString("+")
 
         val commandId =
@@ -3626,12 +3627,13 @@ class MainActivity : SDLActivity() {
         Log.d(TAG, "finalizeBind: Binding commandId=$commandId to '$bindingString'")
 
         // Save to config via JNI
-        // For single button: buttonName="A", modifiers=null
-        // For combo: buttonName="A", modifiers=["B", "Start"]
-        val primaryButton = buttonNames.first()
+        // The LAST pressed button is the primary (action trigger)
+        // All other buttons are modifiers (must be held when pressing primary)
+        // Example: User holds L2, then presses L3 → primary=L3, modifiers=[L2]
+        val primaryButton = buttonNames.last()
         val modifiers =
             if (buttonNames.size > 1) {
-                buttonNames.drop(1).toTypedArray()
+                buttonNames.dropLast(1).toTypedArray()
             } else {
                 null
             }
@@ -3706,68 +3708,78 @@ class MainActivity : SDLActivity() {
                     .indexOfFirst { it.trim().startsWith("[") }
                     .let { if (it == -1) lines.size else gamePadMapIndex + 1 + it }
 
-            // Remove all existing bindings in [GamepadMap] section (except comments and Controls line)
-            val newLines = mutableListOf<String>()
-            newLines.addAll(lines.subList(0, gamePadMapIndex + 1)) // Everything up to [GamepadMap]
-
-            // Add comments and Controls line
-            for (i in gamePadMapIndex + 1 until nextSectionIndex) {
-                val line = lines[i].trim()
-                if (line.startsWith("#") || line.startsWith("Controls =")) {
-                    newLines.add(lines[i])
-                }
-            }
-
-            // Get all current bindings from native code
+            // Get bindings from native code
             val bindingsJson = nativeGetGamepadBindings()
             Log.d(TAG, "saveGamepadBindingsToConfig: Got bindings JSON: $bindingsJson")
+            if (bindingsJson.isEmpty() || bindingsJson == "[]") {
+                Log.d(TAG, "saveGamepadBindingsToConfig: No bindings to save")
+                return
+            }
 
-            // Parse JSON and write bindings
-            if (bindingsJson.isNotEmpty()) {
-                val bindings = parseGamepadBindingsJson(bindingsJson)
+            // Control names returned by C code, in order (indices 0-11)
+            val controlNames = listOf("Up", "Down", "Left", "Right", "Select", "Start", "B", "A", "Y", "X", "L", "R")
 
-                // Special handling: "Controls" must be a single line with all 12 buttons in order
-                // Format: Controls = DpadUp, DpadDown, DpadLeft, DpadRight, Back, Start, B, A, Y, X, L1, R1
-                val controlsBindings = mutableListOf<String>()
-                val otherBindings = mutableMapOf<String, String>()
+            // Build updates map from native bindings
+            val updates = mutableMapOf<String, String>()
+            val nativeBindings = parseGamepadBindingsJson(bindingsJson)
 
-                for ((cmdName, buttonCombo) in bindings) {
-                    if (cmdName == "Controls") {
-                        // Collect controls bindings (there will be 12 of them)
-                        controlsBindings.add(buttonCombo)
-                    } else {
-                        // Everything else goes as individual lines
-                        otherBindings[cmdName] = buttonCombo
+            // Group control/load/save bindings into arrays, others go directly to updates
+            val controlsBindings = arrayOfNulls<String>(12)
+            val loadBindings = arrayOfNulls<String>(10)
+            val saveBindings = arrayOfNulls<String>(10)
+
+            for ((cmdName, buttonCombo) in nativeBindings) {
+                val controlIndex = controlNames.indexOf(cmdName)
+                when {
+                    controlIndex != -1 -> controlsBindings[controlIndex] = buttonCombo
+                    cmdName.startsWith("Load") && cmdName.length > 4 -> {
+                        cmdName.substring(4).toIntOrNull()?.let { slot ->
+                            if (slot in 0..9) loadBindings[slot] = buttonCombo
+                        }
                     }
-                }
-
-                // Write Controls line if we have controls bindings
-                if (controlsBindings.isNotEmpty()) {
-                    // Should have exactly 12 controls in order
-                    val controlsLine = "Controls = " + controlsBindings.joinToString(", ")
-                    // Replace the existing Controls line
-                    val existingControlsIdx = newLines.indexOfFirst { it.trim().startsWith("Controls =") }
-                    if (existingControlsIdx != -1) {
-                        newLines[existingControlsIdx] = controlsLine
-                    } else {
-                        newLines.add(controlsLine)
+                    cmdName.startsWith("Save") && cmdName.length > 4 -> {
+                        cmdName.substring(4).toIntOrNull()?.let { slot ->
+                            if (slot in 0..9) saveBindings[slot] = buttonCombo
+                        }
                     }
-                }
-
-                // Write other bindings as individual lines
-                for ((cmdName, buttonCombo) in otherBindings) {
-                    newLines.add("$cmdName = $buttonCombo")
+                    else -> updates[cmdName] = buttonCombo
                 }
             }
 
-            // Add remaining sections
-            if (nextSectionIndex < lines.size) {
-                newLines.add("") // Blank line before next section
-                newLines.addAll(lines.subList(nextSectionIndex, lines.size))
+            // Convert arrays to comma-separated strings for updates
+            if (controlsBindings.any { it != null }) {
+                updates["Controls"] = controlsBindings.map { it ?: "" }.joinToString(", ")
+            }
+            if (loadBindings.any { it != null }) {
+                updates["Load"] = loadBindings.map { it ?: "" }.joinToString(", ")
+            }
+            if (saveBindings.any { it != null }) {
+                updates["Save"] = saveBindings.map { it ?: "" }.joinToString(", ")
+            }
+
+            // Update existing lines IN-PLACE
+            val updatedKeys = mutableSetOf<String>()
+            for (i in gamePadMapIndex + 1 until nextSectionIndex) {
+                val trimmed = lines[i].trim()
+                if (trimmed.contains("=") && !trimmed.startsWith("#")) {
+                    val key = trimmed.substringBefore("=").trim()
+                    updates[key]?.let { newValue ->
+                        lines[i] = "$key = $newValue"
+                        updatedKeys.add(key)
+                    }
+                }
+            }
+
+            // Add new bindings that didn't exist (before next section or end)
+            val newKeys = updates.keys - updatedKeys
+            var insertIdx = nextSectionIndex
+            for (key in newKeys) {
+                lines.add(insertIdx, "$key = ${updates[key]}")
+                insertIdx++
             }
 
             // Write back to file
-            configFile.writeText(newLines.joinToString("\n"))
+            configFile.writeText(lines.joinToString("\n"))
             Log.d(TAG, "saveGamepadBindingsToConfig: Successfully saved bindings")
         } catch (e: Exception) {
             Log.e(TAG, "saveGamepadBindingsToConfig: Error saving bindings", e)

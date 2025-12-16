@@ -328,26 +328,35 @@ JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetGamepadBi
         int button = GamepadMap_GetBindingForCommand(cmdId, &modifiers);
 
         if (button != -1) {
-            const char *cmdName = FindCmdName(cmdId);
+            const char *cmdName = FindCmdNameUnique(cmdId);
             if (!cmdName) continue;
 
-            // Build button combo string (e.g., "L2" or "L2+R3")
+            // Build button combo string for INI format
+            // INI parser expects: modifiers first, primary button last
+            // e.g., "L2+L3" means hold L2 (modifier), press L3 (primary)
             char buttonCombo[128];
-            const char *btnName = JniHelper_GetButtonName(button);
-            if (!btnName) continue;
-            snprintf(buttonCombo, sizeof(buttonCombo), "%s", btnName);
+            buttonCombo[0] = '\0';
 
-            // Add modifiers
+            // Add modifiers first
             for (int mod = 0; mod < JNI_GAMEPAD_BUTTON_COUNT; mod++) {
                 if (modifiers & (1 << mod)) {
                     const char *modName = JniHelper_GetButtonName(mod);
                     if (modName) {
-                        char temp[128];
-                        snprintf(temp, sizeof(temp), "%s+%s", buttonCombo, modName);
-                        snprintf(buttonCombo, sizeof(buttonCombo), "%s", temp);
+                        if (buttonCombo[0] != '\0') {
+                            strncat(buttonCombo, "+", sizeof(buttonCombo) - strlen(buttonCombo) - 1);
+                        }
+                        strncat(buttonCombo, modName, sizeof(buttonCombo) - strlen(buttonCombo) - 1);
                     }
                 }
             }
+
+            // Add primary button last
+            const char *btnName = JniHelper_GetButtonName(button);
+            if (!btnName) continue;
+            if (buttonCombo[0] != '\0') {
+                strncat(buttonCombo, "+", sizeof(buttonCombo) - strlen(buttonCombo) - 1);
+            }
+            strncat(buttonCombo, btnName, sizeof(buttonCombo) - strlen(buttonCombo) - 1);
 
             // Add binding entry to JSON array
             JniJsonBuilder *obj = JniJson_CreateObject();

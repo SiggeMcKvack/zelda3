@@ -120,4 +120,5 @@ void GamepadMap_Add(int button, uint32 modifiers, uint16 cmd);
 void GamepadMap_Clear(void);
 int GamepadMap_GetBindingForCommand(int cmd, uint32 *modifiers_out);
 const char* FindCmdName(int cmd);
+const char* FindCmdNameUnique(int cmd);
 int ParseGamepadButtonName(const char **value);

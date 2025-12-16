@@ -258,6 +258,31 @@ const char* FindCmdName(int cmd) {
   return "Null";
 }
 
+const char* FindCmdNameUnique(int cmd) {
+  // For indexed commands (Controls, Load, Save), return unique names
+  // Controls (1-12): Up, Down, Left, Right, Select, Start, B, A, Y, X, L, R
+  static const char *kControlNames[] = {
+    "Up", "Down", "Left", "Right", "Select", "Start", "B", "A", "Y", "X", "L", "R"
+  };
+  if (cmd >= kKeys_Controls && cmd <= kKeys_Controls_Last) {
+    return kControlNames[cmd - kKeys_Controls];
+  }
+  // Load (13-32): Load0, Load1, ..., Load9 (only first 10 are commonly used)
+  static char load_buf[8];
+  if (cmd >= kKeys_Load && cmd <= kKeys_Load_Last) {
+    snprintf(load_buf, sizeof(load_buf), "Load%d", cmd - kKeys_Load);
+    return load_buf;
+  }
+  // Save (33-52): Save0, Save1, ..., Save9
+  static char save_buf[8];
+  if (cmd >= kKeys_Save && cmd <= kKeys_Save_Last) {
+    snprintf(save_buf, sizeof(save_buf), "Save%d", cmd - kKeys_Save);
+    return save_buf;
+  }
+  // For all other commands, use the standard name
+  return FindCmdName(cmd);
+}
+
 const uint8 kDefaultGamepadCmds[] = {
   kGamepadBtn_DpadUp, kGamepadBtn_DpadDown, kGamepadBtn_DpadLeft, kGamepadBtn_DpadRight, kGamepadBtn_Back, kGamepadBtn_Start,
   kGamepadBtn_B, kGamepadBtn_A, kGamepadBtn_Y, kGamepadBtn_X, kGamepadBtn_L1, kGamepadBtn_R1,
