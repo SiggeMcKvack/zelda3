@@ -41,7 +41,9 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.navigation.NavigationView
 import com.google.android.material.slider.Slider
 import com.google.android.material.switchmaterial.SwitchMaterial
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.libsdl.app.SDLActivity
@@ -170,6 +172,7 @@ class MainActivity : SDLActivity() {
          *
          * @param renderer Renderer name ("SDL", "OpenGL ES", "Vulkan", etc.)
          */
+        @OptIn(DelicateCoroutinesApi::class)
         @JvmStatic
         fun updateRendererSetting(renderer: String) {
             Log.d(TAG, "updateRendererSetting called from JNI: renderer='$renderer'")
@@ -182,7 +185,7 @@ class MainActivity : SDLActivity() {
             }
 
             // Launch coroutine to update config (fire-and-forget)
-            kotlinx.coroutines.GlobalScope.launch {
+            GlobalScope.launch {
                 activity.updateRendererSetting(renderer)
             }
         }
@@ -846,13 +849,14 @@ class MainActivity : SDLActivity() {
     /**
      * Performs the actual migration of save files.
      */
+    @OptIn(DelicateCoroutinesApi::class)
     private fun performMigration(
         filesToMigrate: List<String>,
         filesToSkip: Set<String>,
         internalSavesDir: File,
         externalSavesDir: DocumentFile,
     ) {
-        kotlinx.coroutines.GlobalScope.launch {
+        GlobalScope.launch {
             var migratedCount = 0
             var skippedCount = 0
             var errorCount = 0

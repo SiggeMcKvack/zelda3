@@ -847,7 +847,7 @@ class InputOverlay(
         val bottomCutoutInset: Int
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            val insets = (context as Activity).windowManager.currentWindowMetrics.windowInsets
+            val insets = context.windowManager.currentWindowMetrics.windowInsets
             val cutoutInsets = insets.displayCutout
             if (cutoutInsets != null) {
                 leftCutoutInset = cutoutInsets.safeInsetLeft
