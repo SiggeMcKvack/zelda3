@@ -3735,18 +3735,25 @@ class MainActivity : SDLActivity() {
             for ((cmdName, buttonCombo) in nativeBindings) {
                 val controlIndex = controlNames.indexOf(cmdName)
                 when {
-                    controlIndex != -1 -> controlsBindings[controlIndex] = buttonCombo
+                    controlIndex != -1 -> {
+                        controlsBindings[controlIndex] = buttonCombo
+                    }
+
                     cmdName.startsWith("Load") && cmdName.length > 4 -> {
                         cmdName.substring(4).toIntOrNull()?.let { slot ->
                             if (slot in 0..9) loadBindings[slot] = buttonCombo
                         }
                     }
+
                     cmdName.startsWith("Save") && cmdName.length > 4 -> {
                         cmdName.substring(4).toIntOrNull()?.let { slot ->
                             if (slot in 0..9) saveBindings[slot] = buttonCombo
                         }
                     }
-                    else -> updates[cmdName] = buttonCombo
+
+                    else -> {
+                        updates[cmdName] = buttonCombo
+                    }
                 }
             }
 
