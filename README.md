@@ -2,7 +2,8 @@
 
 A reverse-engineered C reimplementation of The Legend of Zelda: A Link to the Past for SNES.
 
-[![Discord](https://img.shields.io/discord/XXXXXXXXXX?label=Discord&logo=discord)](https://discord.gg/AJJbJAzNNJ)
+![](https://dcbadge.limes.pink/api/server/https://discord.gg/AJJbJAzNNJ)
+
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.txt)
 
 ## About
@@ -152,3 +153,4 @@ This project is licensed under the MIT License. See [LICENSE.txt](LICENSE.txt) f
 - PPU/DSP implementation from [LakeSnes](https://github.com/elzo-d/LakeSnes)
 - Android port integration from [Waterdish/zelda3-android](https://github.com/Waterdish/zelda3-android)
 - Touchpad controls from [Eden emulator](https://git.eden-emu.dev/eden-emu/eden) project
+
