@@ -14,8 +14,11 @@
 /* Trim leading and trailing whitespace from string (in-place) */
 char* trim_whitespace(char *str);
 
-/* Parse boolean value ("1", "true", "True" -> 1, else 0) */
+/* Parse boolean value (1/true/yes/on, case-insensitive -> 1, else 0) */
 int parse_bool(const char *value);
+
+/* Parse EnableMSU value (false/true/deluxe/opuz/deluxe-opuz) to kMsuEnabled_* bits */
+int parse_msu_mode(const char *value);
 
 /* Parse integer value (wraps atoi) */
 int parse_int(const char *value);

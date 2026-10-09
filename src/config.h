@@ -64,6 +64,8 @@ typedef struct Config {
   uint16 custom_aspect_w;  // Custom aspect ratio width (for launcher)
   uint16 custom_aspect_h;  // Custom aspect ratio height (for launcher)
   bool extend_y;
+  bool unchanged_sprites;  // ExtendedAspectRatio flag (for launcher round-trip)
+  bool no_visual_fixes;    // ExtendedAspectRatio flag (for launcher round-trip)
   bool no_sprite_limits;
   bool display_perf_title;
   uint8 enable_msu;

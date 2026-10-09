@@ -52,6 +52,52 @@ fn save_then_reload_is_idempotent() {
     assert!(!a.is_empty(), "written INI is empty");
 }
 
+// Load the repo INI with `edit` applied to its text, save it, and reload.
+fn roundtrip_edited(name: &str, edit: impl Fn(&str) -> String) -> serde_json::Value {
+    let src = std::fs::read_to_string(repo_ini()).unwrap();
+    let ini = std::env::temp_dir().join(format!("zelda3_ffi_rs_{name}_{}.ini", std::process::id()));
+    let ini_s = ini.to_string_lossy().into_owned();
+    std::fs::write(&ini, edit(&src)).unwrap();
+    let json = load_config_json(&ini_s).unwrap();
+    let res = save_config_json(&ini_s, &json).unwrap();
+    assert!(res.contains("\"ok\":true"), "save not ok: {res}");
+    let v = serde_json::from_str(&load_config_json(&ini_s).unwrap()).unwrap();
+    std::fs::remove_file(&ini).unwrap();
+    v
+}
+
+#[test]
+fn msu_modes_survive_save_and_reload() {
+    for (ini_value, bits) in [("true", 1), ("deluxe", 3), ("opuz", 5), ("deluxe-opuz", 7)] {
+        let v = roundtrip_edited("msu", |src| {
+            let line = src.lines().find(|l| l.starts_with("EnableMSU")).unwrap();
+            src.replace(line, &format!("EnableMSU = {ini_value}"))
+        });
+        assert_eq!(v["enable_msu"], bits, "EnableMSU = {ini_value}");
+    }
+}
+
+#[test]
+fn aspect_ratio_replay_flags_survive_save_and_reload() {
+    let v = roundtrip_edited("aspect", |src| {
+        let line = src.lines().find(|l| l.starts_with("ExtendedAspectRatio")).unwrap();
+        src.replace(line, "ExtendedAspectRatio = extend_y, 16:9, unchanged_sprites, no_visual_fixes")
+    });
+    assert_eq!(v["extended_aspect_ratio"], 1);
+    assert_eq!(v["extend_y"], true);
+    assert_eq!(v["unchanged_sprites"], true);
+    assert_eq!(v["no_visual_fixes"], true);
+}
+
+#[test]
+fn out_of_range_values_are_rejected_not_truncated() {
+    let mut v: serde_json::Value =
+        serde_json::from_str(&load_config_json(&repo_ini()).unwrap()).unwrap();
+    v["msuvolume"] = 300.into(); // would wrap to 44 as a uint8
+    let res = validate_config_json(&v.to_string()).unwrap();
+    assert!(res.contains("\"ok\":false") && res.contains("msuvolume"), "{res}");
+}
+
 #[test]
 fn concurrent_calls_do_not_corrupt() {
     // The C core uses process-global keymap state; the safe wrappers serialize

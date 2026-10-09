@@ -35,10 +35,25 @@ STATIC_OR_TEST char* trim_whitespace(char *str) {
     return str;
 }
 
+// ASCII case-insensitive equality (the game matches INI names with StringEqualsNoCase).
+static bool str_ieq(const char *a, const char *b) {
+    for (; *a && *b; a++, b++)
+        if (tolower((unsigned char)*a) != tolower((unsigned char)*b)) return false;
+    return *a == *b;
+}
+
+// Accepts the same truthy spellings as the game's ParseBool (1/true/yes/on, any case).
 STATIC_OR_TEST int parse_bool(const char *value) {
-    return (strcmp(value, "1") == 0 ||
-            strcmp(value, "true") == 0 ||
-            strcmp(value, "True") == 0);
+    return str_ieq(value, "1") || str_ieq(value, "true") ||
+           str_ieq(value, "yes") || str_ieq(value, "on");
+}
+
+// EnableMSU = false|true|deluxe|opuz|deluxe-opuz -> kMsuEnabled_* bits (mirrors config.c).
+STATIC_OR_TEST int parse_msu_mode(const char *value) {
+    if (str_ieq(value, "opuz")) return kMsuEnabled_Msu | kMsuEnabled_Opuz;
+    if (str_ieq(value, "deluxe")) return kMsuEnabled_Msu | kMsuEnabled_MsuDeluxe;
+    if (str_ieq(value, "deluxe-opuz")) return kMsuEnabled_Msu | kMsuEnabled_MsuDeluxe | kMsuEnabled_Opuz;
+    return parse_bool(value) ? kMsuEnabled_Msu : 0;
 }
 
 STATIC_OR_TEST int parse_int(const char *value) {
@@ -82,11 +97,11 @@ STATIC_OR_TEST int parse_aspect_ratio(const char *value, int *custom_w, int *cus
 }
 
 STATIC_OR_TEST int parse_output_method(const char *value) {
-    if (strcmp(value, "SDL") == 0) return kOutputMethod_SDL;
-    if (strcmp(value, "SDL-Software") == 0) return kOutputMethod_SDLSoftware;
-    if (strcmp(value, "OpenGL") == 0) return kOutputMethod_OpenGL;
-    if (strcmp(value, "OpenGL ES") == 0) return kOutputMethod_OpenGL_ES;
-    if (strcmp(value, "Vulkan") == 0) return kOutputMethod_Vulkan;
+    if (str_ieq(value, "SDL")) return kOutputMethod_SDL;
+    if (str_ieq(value, "SDL-Software")) return kOutputMethod_SDLSoftware;
+    if (str_ieq(value, "OpenGL")) return kOutputMethod_OpenGL;
+    if (str_ieq(value, "OpenGL ES")) return kOutputMethod_OpenGL_ES;
+    if (str_ieq(value, "Vulkan")) return kOutputMethod_Vulkan;
     return kOutputMethod_SDL;  // default to SDL
 }
 
@@ -147,21 +162,23 @@ bool ConfigReader_Read(const char *path, Config *config) {
         char *value = trim_whitespace(equals + 1);
 
         // Parse based on section
-        if (strcmp(current_section, "General") == 0) {
-            if (strcmp(key, "Autosave") == 0) config->autosave = parse_bool(value);
-            else if (strcmp(key, "DisplayPerfInTitle") == 0) config->display_perf_title = parse_bool(value);
-            else if (strcmp(key, "DisableFrameDelay") == 0) config->disable_frame_delay = parse_bool(value);
-            else if (strcmp(key, "ExtendedAspectRatio") == 0) {
+        if (str_ieq(current_section, "General")) {
+            if (str_ieq(key, "Autosave")) config->autosave = parse_bool(value);
+            else if (str_ieq(key, "DisplayPerfInTitle")) config->display_perf_title = parse_bool(value);
+            else if (str_ieq(key, "DisableFrameDelay")) config->disable_frame_delay = parse_bool(value);
+            else if (str_ieq(key, "ExtendedAspectRatio")) {
                 int custom_w = 0, custom_h = 0;
                 config->extended_aspect_ratio = parse_aspect_ratio(value, &custom_w, &custom_h);
                 config->custom_aspect_w = custom_w;
                 config->custom_aspect_h = custom_h;
                 config->extend_y = strstr(value, "extend_y") != NULL;
+                config->unchanged_sprites = strstr(value, "unchanged_sprites") != NULL;
+                config->no_visual_fixes = strstr(value, "no_visual_fixes") != NULL;
             }
-            else if (strcmp(key, "Language") == 0) config->language = parse_string(value);
+            else if (str_ieq(key, "Language")) config->language = parse_string(value);
         }
-        else if (strcmp(current_section, "Graphics") == 0) {
-            if (strcmp(key, "WindowSize") == 0) {
+        else if (str_ieq(current_section, "Graphics")) {
+            if (str_ieq(key, "WindowSize")) {
                 if (strstr(value, "Auto")) {
                     config->window_width = 0;
                     config->window_height = 0;
@@ -184,130 +201,131 @@ bool ConfigReader_Read(const char *path, Config *config) {
                     }
                 }
             }
-            else if (strcmp(key, "WindowScale") == 0) config->window_scale = parse_int(value);
-            else if (strcmp(key, "Fullscreen") == 0) config->fullscreen = parse_int(value);
-            else if (strcmp(key, "IgnoreAspectRatio") == 0) config->ignore_aspect_ratio = parse_bool(value);
-            else if (strcmp(key, "OutputMethod") == 0) config->output_method = parse_output_method(value);
-            else if (strcmp(key, "LinearFiltering") == 0) config->linear_filtering = parse_bool(value);
-            else if (strcmp(key, "NewRenderer") == 0) config->new_renderer = parse_bool(value);
-            else if (strcmp(key, "EnhancedMode7") == 0) config->enhanced_mode7 = parse_bool(value);
-            else if (strcmp(key, "NoSpriteLimits") == 0) config->no_sprite_limits = parse_bool(value);
-            else if (strcmp(key, "DimFlashes") == 0) {
+            else if (str_ieq(key, "WindowScale")) config->window_scale = parse_int(value);
+            else if (str_ieq(key, "Fullscreen")) config->fullscreen = parse_int(value);
+            else if (str_ieq(key, "IgnoreAspectRatio")) config->ignore_aspect_ratio = parse_bool(value);
+            else if (str_ieq(key, "OutputMethod")) config->output_method = parse_output_method(value);
+            else if (str_ieq(key, "LinearFiltering")) config->linear_filtering = parse_bool(value);
+            else if (str_ieq(key, "NewRenderer")) config->new_renderer = parse_bool(value);
+            else if (str_ieq(key, "EnhancedMode7")) config->enhanced_mode7 = parse_bool(value);
+            else if (str_ieq(key, "NoSpriteLimits")) config->no_sprite_limits = parse_bool(value);
+            else if (str_ieq(key, "DimFlashes")) {
                 if (parse_bool(value)) config->features0 |= kFeatures0_DimFlashes;
             }
-            else if (strcmp(key, "LinkGraphics") == 0) config->link_graphics = parse_string(value);
-            else if (strcmp(key, "Shader") == 0) config->shader = parse_string(value);
+            else if (str_ieq(key, "LinkGraphics")) config->link_graphics = parse_string(value);
+            else if (str_ieq(key, "Shader")) config->shader = parse_string(value);
         }
-        else if (strcmp(current_section, "Sound") == 0) {
-            if (strcmp(key, "EnableAudio") == 0) config->enable_audio = parse_bool(value);
-            else if (strcmp(key, "AudioFreq") == 0) config->audio_freq = parse_int(value);
-            else if (strcmp(key, "AudioChannels") == 0) config->audio_channels = parse_int(value);
-            else if (strcmp(key, "AudioSamples") == 0) config->audio_samples = parse_int(value);
-            else if (strcmp(key, "EnableMSU") == 0) config->enable_msu = parse_bool(value);
-            else if (strcmp(key, "ResumeMSU") == 0) config->resume_msu = parse_bool(value);
-            else if (strcmp(key, "MSUVolume") == 0) config->msuvolume = parse_int(value);
-            else if (strcmp(key, "MSUPath") == 0) config->msu_path = parse_string(value);
+        else if (str_ieq(current_section, "Sound")) {
+            if (str_ieq(key, "EnableAudio")) config->enable_audio = parse_bool(value);
+            else if (str_ieq(key, "AudioFreq")) config->audio_freq = parse_int(value);
+            else if (str_ieq(key, "AudioChannels")) config->audio_channels = parse_int(value);
+            else if (str_ieq(key, "AudioSamples")) config->audio_samples = parse_int(value);
+            else if (str_ieq(key, "EnableMSU")) config->enable_msu = parse_msu_mode(value);
+            else if (str_ieq(key, "ResumeMSU")) config->resume_msu = parse_bool(value);
+            else if (str_ieq(key, "MSUVolume")) config->msuvolume = parse_int(value);
+            else if (str_ieq(key, "MSUPath")) config->msu_path = parse_string(value);
         }
-        else if (strcmp(current_section, "Features") == 0) {
+        else if (str_ieq(current_section, "Features")) {
             // Parse individual feature flags (matches config_writer output)
             int flag_value = parse_bool(value);
-            if (strcmp(key, "ItemSwitchLR") == 0 && flag_value)
+            if (str_ieq(key, "ItemSwitchLR") && flag_value)
                 config->features0 |= kFeatures0_SwitchLR;
-            else if (strcmp(key, "ItemSwitchLRLimit") == 0 && flag_value)
+            else if (str_ieq(key, "ItemSwitchLRLimit") && flag_value)
                 config->features0 |= kFeatures0_SwitchLRLimit;
-            else if (strcmp(key, "TurnWhileDashing") == 0 && flag_value)
+            else if (str_ieq(key, "TurnWhileDashing") && flag_value)
                 config->features0 |= kFeatures0_TurnWhileDashing;
-            else if (strcmp(key, "MirrorToDarkworld") == 0 && flag_value)
+            else if (str_ieq(key, "MirrorToDarkworld") && flag_value)
                 config->features0 |= kFeatures0_MirrorToDarkworld;
-            else if (strcmp(key, "CollectItemsWithSword") == 0 && flag_value)
+            else if (str_ieq(key, "CollectItemsWithSword") && flag_value)
                 config->features0 |= kFeatures0_CollectItemsWithSword;
-            else if (strcmp(key, "BreakPotsWithSword") == 0) {
+            else if (str_ieq(key, "BreakPotsWithSword")) {
                 int v = atoi(value);
                 config->break_pots_min_sword = (v < 0) ? 0 : (v > 4) ? 4 : v;
             }
-            else if (strcmp(key, "MoreActiveBombs") == 0 && flag_value)
+            else if (str_ieq(key, "MoreActiveBombs") && flag_value)
                 config->features0 |= kFeatures0_MoreActiveBombs;
-            else if (strcmp(key, "CarryMoreRupees") == 0 && flag_value)
+            else if (str_ieq(key, "CarryMoreRupees") && flag_value)
                 config->features0 |= kFeatures0_CarryMoreRupees;
-            else if (strcmp(key, "CancelBirdTravel") == 0 && flag_value)
+            else if (str_ieq(key, "CancelBirdTravel") && flag_value)
                 config->features0 |= kFeatures0_CancelBirdTravel;
-            else if (strcmp(key, "DisableLowHealthBeep") == 0 && flag_value)
+            else if (str_ieq(key, "DisableLowHealthBeep") && flag_value)
                 config->features0 |= kFeatures0_DisableLowHealthBeep;
-            else if (strcmp(key, "SkipIntroOnKeypress") == 0 && flag_value)
+            else if (str_ieq(key, "SkipIntroOnKeypress") && flag_value)
                 config->features0 |= kFeatures0_SkipIntroOnKeypress;
-            else if (strcmp(key, "ShowMaxItemsInYellow") == 0 && flag_value)
+            else if (str_ieq(key, "ShowMaxItemsInYellow") && flag_value)
                 config->features0 |= kFeatures0_ShowMaxItemsInYellow;
-            else if (strcmp(key, "MiscBugFixes") == 0 && flag_value)
+            else if (str_ieq(key, "MiscBugFixes") && flag_value)
                 config->features0 |= kFeatures0_MiscBugFixes;
-            else if (strcmp(key, "GameChangingBugFixes") == 0 && flag_value)
+            else if (str_ieq(key, "GameChangingBugFixes") && flag_value)
                 config->features0 |= kFeatures0_GameChangingBugFixes;
-            else if (strcmp(key, "Pokemode") == 0 && flag_value)
+            else if (str_ieq(key, "Pokemode") && flag_value)
                 config->features0 |= kFeatures0_Pokemode;
-            else if (strcmp(key, "PrincessZeldaHelps") == 0 && flag_value)
+            else if (str_ieq(key, "PrincessZeldaHelps") && flag_value)
                 config->features0 |= kFeatures0_PrincessZeldaHelps;
         }
-        else if (strcmp(current_section, "KeyMap") == 0) {
-            if (strcmp(key, "Controls") == 0) {
+        else if (str_ieq(current_section, "KeyMap")) {
+            if (str_ieq(key, "Controls")) {
                 LauncherUI_ParseControlString(value, g_kbd_controls);
             }
-            else if (strcmp(key, "Load") == 0) {
+            else if (str_ieq(key, "Load")) {
                 LauncherUI_ParseControlString(value, g_kbd_load);
             }
-            else if (strcmp(key, "Save") == 0) {
+            else if (str_ieq(key, "Save")) {
                 LauncherUI_ParseControlString(value, g_kbd_save);
             }
-            else if (strcmp(key, "Replay") == 0) {
+            else if (str_ieq(key, "Replay")) {
                 LauncherUI_ParseControlString(value, g_kbd_replay);
             }
-            else if (strcmp(key, "CheatLife") == 0) update_string(&g_kbd_cheat_life, value);
-            else if (strcmp(key, "CheatKeys") == 0) update_string(&g_kbd_cheat_keys, value);
-            else if (strcmp(key, "CheatWalkThroughWalls") == 0) update_string(&g_kbd_cheat_walkthrough, value);
-            else if (strcmp(key, "ClearKeyLog") == 0) update_string(&g_kbd_clear_keylog, value);
-            else if (strcmp(key, "StopReplay") == 0) update_string(&g_kbd_stop_replay, value);
-            else if (strcmp(key, "Fullscreen") == 0) update_string(&g_kbd_fullscreen, value);
-            else if (strcmp(key, "Reset") == 0) update_string(&g_kbd_reset, value);
-            else if (strcmp(key, "PauseDimmed") == 0) update_string(&g_kbd_pause_dimmed, value);
-            else if (strcmp(key, "Pause") == 0) update_string(&g_kbd_pause, value);
-            else if (strcmp(key, "Turbo") == 0) update_string(&g_kbd_turbo, value);
-            else if (strcmp(key, "ReplayTurbo") == 0) update_string(&g_kbd_replay_turbo, value);
-            else if (strcmp(key, "WindowBigger") == 0) update_string(&g_kbd_window_bigger, value);
-            else if (strcmp(key, "WindowSmaller") == 0) update_string(&g_kbd_window_smaller, value);
-            else if (strcmp(key, "VolumeUp") == 0) update_string(&g_kbd_volume_up, value);
-            else if (strcmp(key, "VolumeDown") == 0) update_string(&g_kbd_volume_down, value);
-            else if (strcmp(key, "DisplayPerf") == 0) update_string(&g_kbd_display_perf, value);
-            else if (strcmp(key, "ToggleRenderer") == 0) update_string(&g_kbd_toggle_renderer, value);
+            else if (str_ieq(key, "CheatLife")) update_string(&g_kbd_cheat_life, value);
+            else if (str_ieq(key, "CheatKeys")) update_string(&g_kbd_cheat_keys, value);
+            else if (str_ieq(key, "CheatEquipment") || str_ieq(key, "CheatWalkThroughWalls"))
+                update_string(&g_kbd_cheat_walkthrough, value);
+            else if (str_ieq(key, "ClearKeyLog")) update_string(&g_kbd_clear_keylog, value);
+            else if (str_ieq(key, "StopReplay")) update_string(&g_kbd_stop_replay, value);
+            else if (str_ieq(key, "Fullscreen")) update_string(&g_kbd_fullscreen, value);
+            else if (str_ieq(key, "Reset")) update_string(&g_kbd_reset, value);
+            else if (str_ieq(key, "PauseDimmed")) update_string(&g_kbd_pause_dimmed, value);
+            else if (str_ieq(key, "Pause")) update_string(&g_kbd_pause, value);
+            else if (str_ieq(key, "Turbo")) update_string(&g_kbd_turbo, value);
+            else if (str_ieq(key, "ReplayTurbo")) update_string(&g_kbd_replay_turbo, value);
+            else if (str_ieq(key, "WindowBigger")) update_string(&g_kbd_window_bigger, value);
+            else if (str_ieq(key, "WindowSmaller")) update_string(&g_kbd_window_smaller, value);
+            else if (str_ieq(key, "VolumeUp")) update_string(&g_kbd_volume_up, value);
+            else if (str_ieq(key, "VolumeDown")) update_string(&g_kbd_volume_down, value);
+            else if (str_ieq(key, "DisplayPerf")) update_string(&g_kbd_display_perf, value);
+            else if (str_ieq(key, "ToggleRenderer")) update_string(&g_kbd_toggle_renderer, value);
         }
-        else if (strcmp(current_section, "GamepadMap") == 0) {
-            if (strcmp(key, "Controls") == 0) {
+        else if (str_ieq(current_section, "GamepadMap")) {
+            if (str_ieq(key, "Controls")) {
                 LauncherUI_ParseGamepadControlString(value, g_gamepad_controls);
             }
-            else if (strcmp(key, "Load") == 0) {
+            else if (str_ieq(key, "Load")) {
                 LauncherUI_ParseGamepadControlString(value, g_gamepad_load);
             }
-            else if (strcmp(key, "Save") == 0) {
+            else if (str_ieq(key, "Save")) {
                 LauncherUI_ParseGamepadControlString(value, g_gamepad_save);
             }
-            else if (strcmp(key, "Replay") == 0) {
+            else if (str_ieq(key, "Replay")) {
                 LauncherUI_ParseGamepadControlString(value, g_gamepad_replay);
             }
-            else if (strcmp(key, "CheatLife") == 0) update_string(&g_gamepad_cheat_life, value);
-            else if (strcmp(key, "CheatKeys") == 0) update_string(&g_gamepad_cheat_keys, value);
-            else if (strcmp(key, "CheatEquipment") == 0 || strcmp(key, "CheatWalkThroughWalls") == 0)
+            else if (str_ieq(key, "CheatLife")) update_string(&g_gamepad_cheat_life, value);
+            else if (str_ieq(key, "CheatKeys")) update_string(&g_gamepad_cheat_keys, value);
+            else if (str_ieq(key, "CheatEquipment") || str_ieq(key, "CheatWalkThroughWalls"))
                 update_string(&g_gamepad_cheat_walkthrough, value);
-            else if (strcmp(key, "ClearKeyLog") == 0) update_string(&g_gamepad_clear_keylog, value);
-            else if (strcmp(key, "StopReplay") == 0) update_string(&g_gamepad_stop_replay, value);
-            else if (strcmp(key, "Fullscreen") == 0) update_string(&g_gamepad_fullscreen, value);
-            else if (strcmp(key, "Reset") == 0) update_string(&g_gamepad_reset, value);
-            else if (strcmp(key, "PauseDimmed") == 0) update_string(&g_gamepad_pause_dimmed, value);
-            else if (strcmp(key, "Pause") == 0) update_string(&g_gamepad_pause, value);
-            else if (strcmp(key, "Turbo") == 0) update_string(&g_gamepad_turbo, value);
-            else if (strcmp(key, "ReplayTurbo") == 0) update_string(&g_gamepad_replay_turbo, value);
-            else if (strcmp(key, "WindowBigger") == 0) update_string(&g_gamepad_window_bigger, value);
-            else if (strcmp(key, "WindowSmaller") == 0) update_string(&g_gamepad_window_smaller, value);
-            else if (strcmp(key, "VolumeUp") == 0) update_string(&g_gamepad_volume_up, value);
-            else if (strcmp(key, "VolumeDown") == 0) update_string(&g_gamepad_volume_down, value);
-            else if (strcmp(key, "DisplayPerf") == 0) update_string(&g_gamepad_display_perf, value);
-            else if (strcmp(key, "ToggleRenderer") == 0) update_string(&g_gamepad_toggle_renderer, value);
+            else if (str_ieq(key, "ClearKeyLog")) update_string(&g_gamepad_clear_keylog, value);
+            else if (str_ieq(key, "StopReplay")) update_string(&g_gamepad_stop_replay, value);
+            else if (str_ieq(key, "Fullscreen")) update_string(&g_gamepad_fullscreen, value);
+            else if (str_ieq(key, "Reset")) update_string(&g_gamepad_reset, value);
+            else if (str_ieq(key, "PauseDimmed")) update_string(&g_gamepad_pause_dimmed, value);
+            else if (str_ieq(key, "Pause")) update_string(&g_gamepad_pause, value);
+            else if (str_ieq(key, "Turbo")) update_string(&g_gamepad_turbo, value);
+            else if (str_ieq(key, "ReplayTurbo")) update_string(&g_gamepad_replay_turbo, value);
+            else if (str_ieq(key, "WindowBigger")) update_string(&g_gamepad_window_bigger, value);
+            else if (str_ieq(key, "WindowSmaller")) update_string(&g_gamepad_window_smaller, value);
+            else if (str_ieq(key, "VolumeUp")) update_string(&g_gamepad_volume_up, value);
+            else if (str_ieq(key, "VolumeDown")) update_string(&g_gamepad_volume_down, value);
+            else if (str_ieq(key, "DisplayPerf")) update_string(&g_gamepad_display_perf, value);
+            else if (str_ieq(key, "ToggleRenderer")) update_string(&g_gamepad_toggle_renderer, value);
         }
 
         line = next_line;

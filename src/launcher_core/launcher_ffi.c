@@ -103,9 +103,16 @@ static char *get_str(const cJSON *obj, const char *key) {
     return strdup(it->valuestring);
 }
 
-static int get_int(const cJSON *obj, const char *key, int def) {
+// Read an integer that must fit [lo, hi] (the range of the Config field it goes
+// into). Out-of-range values record `key` in *bad instead of being truncated.
+static int get_int(const cJSON *obj, const char *key, int lo, int hi, const char **bad) {
     const cJSON *it = cJSON_GetObjectItemCaseSensitive(obj, key);
-    return cJSON_IsNumber(it) ? it->valueint : def;
+    if (!cJSON_IsNumber(it)) return 0;
+    if (it->valuedouble < lo || it->valuedouble > hi) {
+        if (!*bad) *bad = key;
+        return 0;
+    }
+    return it->valueint;
 }
 
 static bool get_bool(const cJSON *obj, const char *key, bool def) {
@@ -159,6 +166,8 @@ static cJSON *config_to_json(const Config *c) {
     cJSON_AddNumberToObject(root, "custom_aspect_w", c->custom_aspect_w);
     cJSON_AddNumberToObject(root, "custom_aspect_h", c->custom_aspect_h);
     cJSON_AddBoolToObject(root, "extend_y", c->extend_y);
+    cJSON_AddBoolToObject(root, "unchanged_sprites", c->unchanged_sprites);
+    cJSON_AddBoolToObject(root, "no_visual_fixes", c->no_visual_fixes);
     cJSON_AddBoolToObject(root, "no_sprite_limits", c->no_sprite_limits);
     cJSON_AddBoolToObject(root, "display_perf_title", c->display_perf_title);
     cJSON_AddNumberToObject(root, "enable_msu", c->enable_msu);
@@ -188,33 +197,37 @@ static cJSON *config_to_json(const Config *c) {
 }
 
 // Populate a Config + the keymap globals from JSON. Caller owns/zeroes Config.
-static void json_to_config(const cJSON *root, Config *c) {
-    c->window_width = get_int(root, "window_width", 0);
-    c->window_height = get_int(root, "window_height", 0);
+// Returns the first key whose value doesn't fit its Config field, else NULL.
+static const char *json_to_config(const cJSON *root, Config *c) {
+    const char *bad = NULL;
+    c->window_width = get_int(root, "window_width", 0, 65535, &bad);
+    c->window_height = get_int(root, "window_height", 0, 65535, &bad);
     c->enhanced_mode7 = get_bool(root, "enhanced_mode7", false);
     c->new_renderer = get_bool(root, "new_renderer", false);
     c->ignore_aspect_ratio = get_bool(root, "ignore_aspect_ratio", false);
-    c->fullscreen = (uint8)get_int(root, "fullscreen", 0);
-    c->window_scale = (uint8)get_int(root, "window_scale", 0);
+    c->fullscreen = (uint8)get_int(root, "fullscreen", 0, 255, &bad);
+    c->window_scale = (uint8)get_int(root, "window_scale", 0, 255, &bad);
     c->enable_audio = get_bool(root, "enable_audio", false);
     c->linear_filtering = get_bool(root, "linear_filtering", false);
-    c->output_method = (uint8)get_int(root, "output_method", 0);
-    c->audio_freq = (uint16)get_int(root, "audio_freq", 0);
-    c->audio_channels = (uint8)get_int(root, "audio_channels", 0);
-    c->audio_samples = (uint16)get_int(root, "audio_samples", 0);
+    c->output_method = (uint8)get_int(root, "output_method", 0, 255, &bad);
+    c->audio_freq = (uint16)get_int(root, "audio_freq", 0, 65535, &bad);
+    c->audio_channels = (uint8)get_int(root, "audio_channels", 0, 255, &bad);
+    c->audio_samples = (uint16)get_int(root, "audio_samples", 0, 65535, &bad);
     c->autosave = get_bool(root, "autosave", false);
-    c->extended_aspect_ratio = (uint8)get_int(root, "extended_aspect_ratio", 0);
-    c->custom_aspect_w = (uint16)get_int(root, "custom_aspect_w", 0);
-    c->custom_aspect_h = (uint16)get_int(root, "custom_aspect_h", 0);
+    c->extended_aspect_ratio = (uint8)get_int(root, "extended_aspect_ratio", 0, 255, &bad);
+    c->custom_aspect_w = (uint16)get_int(root, "custom_aspect_w", 0, 65535, &bad);
+    c->custom_aspect_h = (uint16)get_int(root, "custom_aspect_h", 0, 65535, &bad);
     c->extend_y = get_bool(root, "extend_y", false);
+    c->unchanged_sprites = get_bool(root, "unchanged_sprites", false);
+    c->no_visual_fixes = get_bool(root, "no_visual_fixes", false);
     c->no_sprite_limits = get_bool(root, "no_sprite_limits", false);
     c->display_perf_title = get_bool(root, "display_perf_title", false);
-    c->enable_msu = (uint8)get_int(root, "enable_msu", 0);
+    c->enable_msu = (uint8)get_int(root, "enable_msu", 0, 255, &bad);
     c->resume_msu = get_bool(root, "resume_msu", false);
     c->disable_frame_delay = get_bool(root, "disable_frame_delay", false);
-    c->msuvolume = (uint8)get_int(root, "msuvolume", 0);
+    c->msuvolume = (uint8)get_int(root, "msuvolume", 0, 255, &bad);
     c->features0 = get_u32(root, "features0", 0);
-    c->break_pots_min_sword = (uint8)get_int(root, "break_pots_min_sword", 0);
+    c->break_pots_min_sword = (uint8)get_int(root, "break_pots_min_sword", 0, 255, &bad);
 
     c->link_graphics = get_str(root, "link_graphics");
     c->shader = get_str(root, "shader");
@@ -232,6 +245,18 @@ static void json_to_config(const cJSON *root, Config *c) {
         if (kbd) *kScalars[i].kbd = get_str(kbd, kScalars[i].key);
         if (pad) *kScalars[i].pad = get_str(pad, kScalars[i].key);
     }
+    return bad;
+}
+
+// json_to_config + ConfigWriter_Validate; fills err on failure.
+static bool parse_and_validate(const cJSON *root, Config *cfg, char *err, size_t err_size) {
+    ConfigWriter_InitDefaults(cfg);
+    const char *bad = json_to_config(root, cfg);
+    if (bad) {
+        snprintf(err, err_size, "Value out of range: %s", bad);
+        return false;
+    }
+    return ConfigWriter_Validate(cfg, err, err_size);
 }
 
 // Build the {"ok":bool,"error":...} result string for save/validate.
@@ -272,11 +297,8 @@ char *LauncherFfi_ValidateConfigJson(const char *config_json) {
     if (!root) return make_result(false, "invalid json");
 
     Config cfg;
-    ConfigWriter_InitDefaults(&cfg);
-    json_to_config(root, &cfg);
-
     char err[256] = "";
-    bool ok = ConfigWriter_Validate(&cfg, err, sizeof(err));
+    bool ok = parse_and_validate(root, &cfg, err, sizeof(err));
 
     cJSON_Delete(root);
     config_free_strings(&cfg);
@@ -291,11 +313,8 @@ char *LauncherFfi_SaveConfigJson(const char *ini_path, const char *config_json) 
     if (!root) return make_result(false, "invalid json");
 
     Config cfg;
-    ConfigWriter_InitDefaults(&cfg);
-    json_to_config(root, &cfg);
-
     char err[256] = "";
-    bool ok = ConfigWriter_Validate(&cfg, err, sizeof(err));
+    bool ok = parse_and_validate(root, &cfg, err, sizeof(err));
     if (ok && !ConfigWriter_Write(ini_path, &cfg)) {
         ok = false;
         snprintf(err, sizeof(err), "failed to write %s", ini_path);

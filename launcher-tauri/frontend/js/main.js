@@ -89,6 +89,7 @@ function renderField(field) {
   } else if (field.type === "int") {
     control = document.createElement("input");
     control.type = "number";
+    control.min = "0";
     control.value = config[field.key] ?? 0;
     control.addEventListener("input", () => { config[field.key] = parseInt(control.value || "0", 10); });
   } else if (field.type === "text") {

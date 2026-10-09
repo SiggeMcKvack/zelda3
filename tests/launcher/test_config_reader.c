@@ -89,10 +89,30 @@ void test_parse_bool_false(void) {
     TEST_ASSERT_EQUAL_INT(0, parse_bool("false"));
 }
 
+void test_parse_bool_game_spellings(void) {
+    /* Matches the game's ParseBool: yes/on and any case are truthy */
+    TEST_ASSERT_EQUAL_INT(1, parse_bool("yes"));
+    TEST_ASSERT_EQUAL_INT(1, parse_bool("On"));
+    TEST_ASSERT_EQUAL_INT(1, parse_bool("TRUE"));
+}
+
 void test_parse_bool_invalid(void) {
-    TEST_ASSERT_EQUAL_INT(0, parse_bool("yes"));
-    TEST_ASSERT_EQUAL_INT(0, parse_bool("TRUE"));
+    TEST_ASSERT_EQUAL_INT(0, parse_bool("no"));
+    TEST_ASSERT_EQUAL_INT(0, parse_bool("2"));
     TEST_ASSERT_EQUAL_INT(0, parse_bool(""));
+}
+
+/* ===========================================================================
+ * Tests for parse_msu_mode()
+ * ===========================================================================*/
+
+void test_parse_msu_mode_all_values(void) {
+    TEST_ASSERT_EQUAL_INT(0, parse_msu_mode("false"));
+    TEST_ASSERT_EQUAL_INT(kMsuEnabled_Msu, parse_msu_mode("true"));
+    TEST_ASSERT_EQUAL_INT(kMsuEnabled_Msu | kMsuEnabled_MsuDeluxe, parse_msu_mode("deluxe"));
+    TEST_ASSERT_EQUAL_INT(kMsuEnabled_Msu | kMsuEnabled_Opuz, parse_msu_mode("opuz"));
+    TEST_ASSERT_EQUAL_INT(kMsuEnabled_Msu | kMsuEnabled_MsuDeluxe | kMsuEnabled_Opuz,
+                          parse_msu_mode("Deluxe-Opuz"));
 }
 
 /* ===========================================================================
@@ -233,7 +253,9 @@ int main(void) {
     RUN_TEST(test_parse_bool_true_capitalized);
     RUN_TEST(test_parse_bool_zero);
     RUN_TEST(test_parse_bool_false);
+    RUN_TEST(test_parse_bool_game_spellings);
     RUN_TEST(test_parse_bool_invalid);
+    RUN_TEST(test_parse_msu_mode_all_values);
 
     /* parse_int tests */
     RUN_TEST(test_parse_int_positive);

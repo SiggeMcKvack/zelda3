@@ -112,7 +112,7 @@ static bool WriteGeneralSection(FILE *f, const Config *config) {
   // Map extended_aspect_ratio enum to string
   if (config->extended_aspect_ratio == 4 && config->custom_aspect_w > 0 && config->custom_aspect_h > 0) {
     // Custom aspect ratio
-    if (!WriteLine(f, "%d:%d\n\n", config->custom_aspect_w, config->custom_aspect_h)) return false;
+    if (!WriteLine(f, "%d:%d", config->custom_aspect_w, config->custom_aspect_h)) return false;
   } else {
     const char *aspect_str = "16:9";  // default
     switch (config->extended_aspect_ratio) {
@@ -121,8 +121,11 @@ static bool WriteGeneralSection(FILE *f, const Config *config) {
       case 2: aspect_str = "16:10"; break;
       case 3: aspect_str = "18:9"; break;
     }
-    if (!WriteLine(f, "%s\n\n", aspect_str)) return false;
+    if (!WriteLine(f, "%s", aspect_str)) return false;
   }
+  if (config->unchanged_sprites && !WriteLine(f, ", unchanged_sprites")) return false;
+  if (config->no_visual_fixes && !WriteLine(f, ", no_visual_fixes")) return false;
+  if (!WriteLine(f, "\n\n")) return false;
 
   if (!WriteLine(f, "# ------------------------------------------------------------------------------\n")) return false;
   if (!WriteLine(f, "# Language Settings\n")) return false;
