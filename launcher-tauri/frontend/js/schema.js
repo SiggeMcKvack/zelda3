@@ -6,6 +6,7 @@
 //   bool   -> checkbox bound to a boolean config key
 //   int    -> number input
 //   text   -> text input
+//   file   -> text input + Browse… button; filter: { name, extensions } for the dialog
 //   select -> dropdown; options: [[value,label],...] (numeric values)
 //   flag   -> checkbox toggling one bit of an integer key (config.features0)
 //   section-> a header row (Features tab grouping)
@@ -32,8 +33,10 @@ window.TABS = {
     { key: "display_perf_title", label: "Show FPS in window title", type: "bool" },
     { key: "disable_frame_delay", label: "Disable frame delay (for 60Hz displays only)", type: "bool" },
     { key: "features0", bit: 65536, label: "Dim flashes (accessibility - lessens flashing effects)", type: "flag" },
-    { key: "shader", label: "Shader File", type: "text" },
-    { key: "link_graphics", label: "Link Sprite File", type: "text" },
+    { key: "shader", label: "Shader File", type: "file",
+      filter: { name: "Shader", extensions: ["glsl", "glslp", "slang", "slangp"] } },
+    { key: "link_graphics", label: "Link Sprite File", type: "file",
+      filter: { name: "Link sprite", extensions: ["zspr"] } },
   ],
   Sound: [
     { key: "enable_audio", label: "Enable Audio", type: "bool" },

@@ -73,6 +73,8 @@ function renderField(field) {
     control.value = config[field.key] ?? "";
     if (field.placeholder) control.placeholder = field.placeholder;
     control.addEventListener("input", () => { config[field.key] = control.value; });
+  } else if (field.type === "file") {
+    control = renderFileControl(field);
   } else if (field.type === "select") {
     control = document.createElement("select");
     for (const [value, text] of field.options) {
@@ -85,6 +87,42 @@ function renderField(field) {
     control.addEventListener("change", () => { config[field.key] = parseInt(control.value, 10); });
   }
   return makeRow(field.label, control);
+}
+
+// Text input + Browse… button for a path-valued key. `field.filter` is
+// { name, extensions } for the native file dialog.
+function renderFileControl(field) {
+  const wrap = document.createElement("div");
+  wrap.className = "file-control";
+  const input = document.createElement("input");
+  input.type = "text";
+  const show = (value) => {
+    input.value = value;
+    input.title = value;
+    input.scrollLeft = input.scrollWidth;   // keep the filename end in view
+  };
+  show(config[field.key] ?? "");
+  input.addEventListener("input", () => { config[field.key] = input.value; input.title = input.value; });
+
+  const btn = document.createElement("button");
+  btn.className = "btn";
+  btn.textContent = "Browse…";
+  btn.addEventListener("click", async () => {
+    const path = await invoke("pick_file", {
+      filterName: field.filter.name,
+      extensions: field.filter.extensions,
+    });
+    if (!path) return;
+    config[field.key] = path;
+    show(path);
+  });
+
+  wrap.append(input, btn);
+  return wrap;
+}
+
+function pickRom() {
+  return invoke("pick_file", { filterName: "SNES ROM", extensions: ["sfc", "smc", "fig", "bin"] });
 }
 
 function renderTabs() {
@@ -441,7 +479,7 @@ function populateLanguages(languages) {
 }
 
 async function pickBaseRom() {
-  const path = await invoke("pick_rom_file");
+  const path = await pickRom();
   if (!path) return;
   baseRom = path;
   renderBaseRom();
@@ -457,7 +495,7 @@ async function pickBaseRom() {
 }
 
 async function addLanguageRom() {
-  const path = await invoke("pick_rom_file");
+  const path = await pickRom();
   if (!path) return;
   let lang = "";
   try {

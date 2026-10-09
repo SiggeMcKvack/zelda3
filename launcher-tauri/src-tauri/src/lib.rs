@@ -231,7 +231,7 @@ pub fn run() {
             commands::save_config,
             commands::validate_config,
             commands::reset_config,
-            commands::pick_rom_file,
+            commands::pick_file,
             commands::pick_msu_folder,
             commands::identify_rom,
             commands::create_dat,

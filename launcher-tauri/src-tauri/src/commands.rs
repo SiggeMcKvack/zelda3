@@ -73,13 +73,19 @@ pub fn launch_game() -> Result<(), String> {
 
 // --- Assets (restool) -------------------------------------------------------
 
-/// Open a native file dialog to pick a ROM; returns the absolute path or null.
+/// Open a native file dialog filtered to `extensions` (labelled `filter_name`);
+/// returns the absolute path or null.
 #[tauri::command]
-pub async fn pick_rom_file(app: tauri::AppHandle) -> Option<String> {
+pub async fn pick_file(
+    app: tauri::AppHandle,
+    filter_name: String,
+    extensions: Vec<String>,
+) -> Option<String> {
+    let exts: Vec<&str> = extensions.iter().map(String::as_str).collect();
     let picked = app
         .dialog()
         .file()
-        .add_filter("SNES ROM", &["sfc", "smc", "fig", "bin"])
+        .add_filter(filter_name, &exts)
         .blocking_pick_file();
     picked
         .and_then(|fp| fp.into_path().ok())

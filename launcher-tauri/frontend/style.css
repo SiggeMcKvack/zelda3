@@ -146,6 +146,10 @@ body {
 .row select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .row input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
 
+/* Path input + Browse button; the path input is wider than other controls. */
+.file-control { display: flex; gap: 8px; }
+.row .file-control input[type="text"] { width: 240px; }
+
 /* Path read-outs next to a Browse button: truncate long paths from the left. */
 .path {
   min-width: 0;
