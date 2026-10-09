@@ -54,12 +54,9 @@ cd C:\vcpkg
 
 # Install SDL2, Opus, and libyaml (64-bit)
 .\vcpkg install sdl2:x64-windows opus:x64-windows libyaml:x64-windows
-
-# Optional: Install GTK3 for the launcher (adds ~50 packages)
-.\vcpkg install gtk3:x64-windows pkgconf:x64-windows
 ```
 
-**Note:** Installation may take 10-15 minutes as vcpkg builds from source. GTK3 installation takes longer due to many dependencies.
+**Note:** Installation may take 10-15 minutes as vcpkg builds from source.
 
 ## Asset Extraction
 
@@ -208,51 +205,9 @@ OutputMethod = opengl  # or: sdl, vulkan
 - Graphics drivers with Vulkan support (NVIDIA, AMD, Intel)
 - Vulkan SDK not required for running (only for development)
 
-## Building the GTK3 Launcher
+## Building the Launcher
 
-The GTK3 launcher provides a graphical settings interface. Pre-built releases include the launcher with GTK3 and Adwaita theme bundled.
-
-### Building from Source
-
-To build the launcher yourself, you need GTK3 and pkgconf via vcpkg:
-
-```powershell
-# Install GTK3 and pkgconf (this takes a while - ~50 packages)
-cd C:\vcpkg
-.\vcpkg install gtk3:x64-windows pkgconf:x64-windows
-```
-
-Then set environment variables before configuring CMake:
-
-```powershell
-# Set pkg-config path for CMake to find GTK3
-$env:PKG_CONFIG = "$env:VCPKG_ROOT/installed/x64-windows/tools/pkgconf/pkgconf.exe"
-$env:PKG_CONFIG_PATH = "$env:VCPKG_ROOT/installed/x64-windows/lib/pkgconfig"
-
-# Configure and build
-cmake -B build -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-cmake --build build --config Release
-```
-
-After building, you'll have `zelda3-launcher.exe` alongside `zelda3.exe`.
-
-### GTK3 Theme Resources
-
-For the launcher to display properly, you need GTK3 theme files in the same directory as the executable:
-
-```
-build/Release/
-├── zelda3-launcher.exe
-├── share/
-│   └── icons/
-│       ├── Adwaita/
-│       └── hicolor/
-└── etc/
-    └── gtk-3.0/
-        └── settings.ini
-```
-
-Pre-built releases include these automatically. For manual builds, you can download Adwaita icons from [GNOME's releases](https://download.gnome.org/sources/adwaita-icon-theme/).
+The launcher is a Tauri app built with Rust; pre-built releases ship it as an installer with the game included. See the [Launcher Guide](../launcher.md#building-the-launcher) to build it yourself. On Windows it also needs `libsamplerate` and `pkgconf` from vcpkg, and the `PKG_CONFIG`/`PKG_CONFIG_PATH` variables pointing at vcpkg's pkgconf.
 
 ## Installation
 

@@ -1,6 +1,6 @@
 # Zelda3 Launcher
 
-The Zelda3 GTK3 Launcher provides a graphical interface for configuring game settings without manually editing the `zelda3.ini` configuration file.
+The Zelda3 launcher is a small desktop app for configuring game settings, creating the asset file and starting the game, without editing `zelda3.ini` by hand. It is built with [Tauri 2](https://tauri.app): a Rust backend that calls the GTK-free C launcher core (`src/launcher_core/`) over FFI, and a plain HTML/CSS/JS frontend rendered by the OS webview.
 
 ## Table of Contents
 
@@ -19,86 +19,68 @@ The Zelda3 GTK3 Launcher provides a graphical interface for configuring game set
 
 ## Installation
 
-### Prerequisites
+Release builds ship the launcher with the game inside:
 
-The launcher requires GTK3 to be installed on your system.
-
-**macOS (Homebrew):**
-```bash
-brew install gtk+3
-```
-
-**Linux (Debian/Ubuntu):**
-```bash
-sudo apt-get install libgtk-3-dev
-```
-
-**Linux (Fedora):**
-```bash
-sudo dnf install gtk3-devel
-```
-
-**Linux (Arch):**
-```bash
-sudo pacman -S gtk3
-```
-
-**Windows:**
-
-Pre-built releases from GitHub include GTK3 and the Adwaita theme - no additional installation required.
-
-For building from source, use vcpkg:
-```powershell
-vcpkg install gtk3:x64-windows pkgconf:x64-windows
-```
-Then set environment variables before running CMake:
-```powershell
-$env:PKG_CONFIG = "$env:VCPKG_ROOT/installed/x64-windows/tools/pkgconf/pkgconf.exe"
-$env:PKG_CONFIG_PATH = "$env:VCPKG_ROOT/installed/x64-windows/lib/pkgconfig"
-cmake -B build -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-```
+| Platform | Package | Notes |
+|----------|---------|-------|
+| macOS | `Zelda3.app` (zip) | Unsigned: right-click → Open the first time |
+| Windows | `zelda3-windows-*-setup.exe` (NSIS installer) | Needs the WebView2 runtime (preinstalled on Windows 10/11) |
+| Linux | `zelda3-linux-amd64-*.deb` | Pulls in SDL2, opus, libyaml, libsamplerate, OpenAL and webkit2gtk |
 
 ## Building the Launcher
 
-The launcher is built alongside the main game using CMake:
+The launcher lives in `launcher-tauri/src-tauri/`. Its `build.rs` builds `launcher_core_lib` from the top-level CMake project, so you need the game's build dependencies plus a Rust toolchain.
 
+**Extra prerequisites:**
+- Rust (stable), via [rustup](https://rustup.rs)
+- `libclang` (for bindgen): Xcode command line tools on macOS, `libclang-dev` on Linux, LLVM on Windows
+- `libsamplerate` (for the MSU → OPUZ encoder)
+- Linux only: `libwebkit2gtk-4.1-dev librsvg2-dev libxdo-dev libssl-dev`
+
+**Development run:**
 ```bash
-mkdir build && cd build
-cmake .. -DBUILD_LAUNCHER=ON
-cmake --build . -j$(nproc)
+cd launcher-tauri/src-tauri
+cargo run
 ```
+The frontend is embedded at build time; no npm or `cargo tauri` CLI is needed for development. After editing files in `launcher-tauri/frontend/`, run `touch tauri.conf.json` so the next `cargo build` re-embeds them. To test **Save & Launch** in a dev build, copy the `zelda3` game binary next to `target/debug/zelda3-launcher`.
 
-**Note:** The launcher is enabled by default. If GTK3 is not found, CMake will skip the launcher build and only build the main game.
-
-To explicitly disable the launcher:
+**Bundling** (what CI does in `.github/workflows/release.yml`):
 ```bash
-cmake .. -DBUILD_LAUNCHER=OFF
-```
+cargo install tauri-cli --version "^2" --locked
+cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
 
-After building, you'll have two executables:
-- `zelda3` - The main game executable
-- `zelda3-launcher` - The GTK3 launcher
+# The game ships as a Tauri sidecar named zelda3-game-<rust target triple>
+mkdir -p launcher-tauri/src-tauri/binaries
+cp build/zelda3 "launcher-tauri/src-tauri/binaries/zelda3-game-$(rustc -vV | sed -n 's/^host: //p')"
+
+cd launcher-tauri/src-tauri
+ZELDA3_CMAKE_BUILD_DIR=$PWD/../../build cargo tauri build --config tauri.bundle.conf.json --bundles app   # or deb / nsis
+
+# macOS only: copy Homebrew dylibs into the bundle and re-sign ad-hoc
+../../scripts/bundle-macos.sh target/release/bundle/macos/Zelda3.app
+```
+`ZELDA3_CMAKE_BUILD_DIR` makes `build.rs` link against an existing CMake build instead of configuring its own. On Windows, also pass `--config tauri.bundle.windows.conf.json` and stage the vcpkg DLLs in `binaries/dlls/`.
 
 ## Using the Launcher
 
-### Starting the Launcher
-
-From the build directory:
-```bash
-./zelda3-launcher
-```
-
-The launcher looks for `zelda3.ini` in the same directory as the launcher executable. If no configuration file exists, it will create one with default settings.
-
 ### Buttons
 
-- **Cancel** - Close the launcher without saving changes
-- **Save** - Save configuration to `zelda3.ini` and close
+- **Reset to defaults** - Overwrite `zelda3.ini` with the default configuration
+- **Validate** - Check the current settings without saving
+- **Save** - Save configuration to `zelda3.ini`
 - **Save & Launch** - Save configuration and launch the game
 
 ### Configuration File Location
 
-The launcher and game both use `zelda3.ini` from the executable's directory (not the current working directory). This means you can run the game from any location and it will find its configuration file correctly.
+The launcher keeps `zelda3.ini`, `zelda3_assets.dat` and the game's `saves/` in a per-user data directory:
+
+| Platform | Directory |
+|----------|-----------|
+| macOS | `~/Library/Application Support/Zelda3` |
+| Linux | `$XDG_CONFIG_HOME/zelda3` (default `~/.config/zelda3`) |
+| Windows | `%APPDATA%\Zelda3` |
+
+The launcher starts the game with this directory as its working directory. When the game is run directly, it uses the current directory if it contains `zelda3_assets.dat`, and otherwise falls back to its executable directory (the old behavior).
 
 ## Settings Tabs
 
@@ -225,7 +207,7 @@ Configure keyboard controls:
 - **A/B/X/Y** - Action buttons
 - **L/R** - Shoulder buttons
 
-Click each input field and press the desired key to bind it. Each binding has a "Clear" button to remove the assignment.
+Click each binding button and press the desired key to bind it. Right-click a binding to remove the assignment.
 
 **Default controls:**
 - Arrow Keys - Movement
@@ -236,7 +218,7 @@ Click each input field and press the desired key to bind it. Each binding has a 
 - A/S - L/R Buttons
 
 **Clear Bindings:**
-Every keyboard binding includes a "Clear" button to unbind the key without assigning a new one. This is useful when you want to disable specific controls.
+Right-click any keyboard binding to unbind the key without assigning a new one. This is useful when you want to disable specific controls.
 
 ### Gamepad
 
@@ -281,7 +263,7 @@ Map system control buttons:
 4. For modifier combos (e.g., L2+A), hold L2 first, then press A
 
 **Clear Bindings:**
-Each gamepad binding has a "Clear" button to remove the assignment without rebinding.
+Right-click a binding button to remove the assignment without rebinding.
 
 **Gamepad Settings:**
 - **Enable Gamepad** - Turn gamepad support on/off
@@ -291,76 +273,45 @@ Each gamepad binding has a "Clear" button to remove the assignment without rebin
 - Xbox controllers (One, Series X/S)
 - PlayStation controllers (DualShock 4, DualSense)
 - Nintendo Switch Pro Controller
-- Any SDL2-compatible gamepad
+- Any controller the browser Gamepad API reports with the standard mapping
 
 ## First Run
 
 When you run the launcher for the first time:
 
-1. The launcher checks for `zelda3.ini` in its executable directory
-2. If not found, it creates a new config file with default settings
-3. You'll see: `✓ Created default config at <path>/zelda3.ini`
-4. The launcher window opens with all default values loaded
-5. Adjust any settings you want, then click "Save & Launch" to start the game
+1. It creates the per-user data directory (see [Configuration File Location](#configuration-file-location))
+2. If there is no `zelda3.ini` there, it writes one with default settings
+3. On the General tab, pick your `zelda3.sfc` ROM and create the asset file
+4. Adjust any settings you want, then click "Save & Launch" to start the game
+
+Upgrading from the old GTK launcher: settings and assets used to live next to the executable. Copy your old `zelda3.ini`, `zelda3_assets.dat` and `saves/` into the per-user data directory, or let the launcher create new ones.
 
 ## Troubleshooting
 
 ### Launcher Won't Build
 
-**Problem:** CMake reports "GTK3 not found"
+**Problem:** `cargo build` fails in `build.rs`
 
 **Solution:**
-- Make sure GTK3 is installed (see [Installation](#installation))
-- On macOS arm64: Ensure GTK3 is installed via Homebrew in `/opt/homebrew`
-- On Linux: Install the `-dev` or `-devel` package, not just the runtime
-- Check `pkg-config --modversion gtk+-3.0` to verify installation
+- `libyaml (yaml-0.1) not found via pkg-config`: install libyaml (`brew install libyaml`, `apt install libyaml-dev`)
+- `bindgen failed`: install libclang (see [Building the Launcher](#building-the-launcher))
+- CMake configure errors: the top-level game must configure; install SDL2 and opus first
 
 ### Game Executable Not Found
 
-**Problem:** Clicking "Save & Launch" shows error "Game executable not found: ./zelda3"
+**Problem:** Clicking "Save & Launch" shows "game executable not found"
 
 **Solution:**
-- Make sure you're running the launcher from the same directory as the `zelda3` executable
-- Build the main game first: `cmake --build . --target zelda3`
-- Both executables should be in the same directory
-
-### Configuration Not Saving
-
-**Problem:** Changes don't persist after closing the launcher
-
-**Solution:**
-- Check file permissions in the executable's directory
-- Make sure you clicked "Save" or "Save & Launch", not "Cancel"
-- Verify `zelda3.ini` exists and is writable
-- Check the terminal output for error messages
-
-### GTK Warnings in Terminal
-
-**Problem:** Seeing GTK warnings like "Allocating size to GtkWindow without calling gtk_widget_get_preferred_width/height"
-
-**Solution:**
-- These are harmless warnings from the GTK3 library
-- They don't affect functionality
-- Can be safely ignored
+- Release builds ship the game as `zelda3-game` next to the launcher; reinstall if it is missing
+- Dev builds: copy the CMake-built `zelda3` next to `target/debug/zelda3-launcher`
 
 ### Gamepad Not Detected
 
-**Problem:** Controller not working in launcher
+**Problem:** Controller not working in the launcher
 
 **Solution:**
-- Ensure controller is connected before starting the launcher
-- Check `SDL_INIT_GAMECONTROLLER` initialization succeeded
+- Press any button on the controller after the launcher opens; webviews only expose a gamepad after the first input
 - Try reconnecting the controller
-- Verify controller works with other SDL2 applications
-
-### Wrong Architecture (macOS)
-
-**Problem:** Build fails with "found x86_64 but target is arm64"
-
-**Solution:**
-- Reinstall GTK3 via Homebrew: `brew reinstall gtk+3`
-- Clear CMake cache: `rm -rf build && mkdir build`
-- CMake will automatically detect the correct architecture
 
 ## Advanced Configuration
 
@@ -378,7 +329,7 @@ See `docs/configuration.md` for detailed explanation of all options.
 
 ## See Also
 
-- [Installation Guide](installation.md) - Building the game and launcher
+- [Installation Guide](installation.md) - Building the game
 - [Configuration Reference](configuration.md) - Detailed config file format
 - [Getting Started](getting-started.md) - First-time setup and gameplay
 - [Troubleshooting](troubleshooting.md) - Common issues and solutions

@@ -603,7 +603,7 @@ SNES $10:8000 → ROM offset 0x080000 (512KB into ROM)
 The CMake build produces:
 - `librestool_lib.a` (or `.lib` on Windows) - Static library (~2.4MB)
 - `zelda3-restool` - CLI executable (~2.3MB)
-- `zelda3-launcher` - GTK3 GUI launcher (~2.3MB, if GTK3 available)
+- `liblauncher_core_lib.a` - Launcher core linked by the Tauri launcher (`launcher-tauri/`)
 
 ### System Requirements
 
@@ -612,7 +612,7 @@ The CMake build produces:
 
 ## Library API (Embedding)
 
-The restool functionality is available as a C static library (`restool_lib`) for embedding in other applications. The library is used by both the CLI tool (`zelda3-restool`) and the GTK3 launcher (`zelda3-launcher`).
+The restool functionality is available as a C static library (`restool_lib`) for embedding in other applications. The library is used by both the CLI tool (`zelda3-restool`) and the Tauri launcher (via `launcher_core_lib`).
 
 ### Architecture
 
@@ -629,8 +629,8 @@ The restool functionality is available as a C static library (`restool_lib`) for
         ▼                                    ▼
 ┌───────────────────┐              ┌───────────────────┐
 │  zelda3-restool   │              │  zelda3-launcher  │
-│  CLI executable   │              │  GTK3 GUI app     │
-│  (cli.c)          │              │  (launcher_ui.c)  │
+│  CLI executable   │              │  Tauri app (FFI)  │
+│  (cli.c)          │              │ (launcher_ffi.c)  │
 └───────────────────┘              └───────────────────┘
 ```
 

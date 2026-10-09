@@ -19,7 +19,7 @@ This is a ~70-80kLOC C reimplementation of the original SNES game, reverse-engin
 - **Cross-platform** - Runs on desktop, mobile, and console platforms
 - **Snapshot system** - Save/load/replay game state with input history
 - **Multiple renderers** - SDL software, OpenGL/OpenGL ES, Vulkan support
-- **GTK3 launcher** - Graphical settings editor (optional, desktop only)
+- **Launcher** - Graphical settings editor and asset creator (desktop only, ships with releases)
 
 ## Quick Start
 
@@ -30,10 +30,6 @@ This is a ~70-80kLOC C reimplementation of the original SNES game, reverse-engin
 # Install dependencies
 # Ubuntu/Debian: sudo apt install libsdl2-dev libopus-dev libyaml-dev cmake build-essential
 # macOS: brew install sdl2 opus libyaml cmake
-
-# Optional: Install GTK3 for graphical launcher
-# Ubuntu/Debian: sudo apt install libgtk-3-dev
-# macOS: brew install gtk+3
 
 # Build
 mkdir build && cd build
@@ -73,10 +69,7 @@ This creates `zelda3_assets.dat` containing all game resources.
 
 Or on Windows: `zelda3.exe`
 
-**Optional:** Use the graphical launcher to configure settings (if GTK3 is installed):
-```bash
-./zelda3-launcher
-```
+**Optional:** Use the graphical launcher to configure settings. It ships with release builds; to build it yourself see the [Launcher Guide](docs/launcher.md).
 
 ## Controls
 
@@ -105,7 +98,7 @@ Or on Windows: `zelda3.exe`
 - **[Getting Started](docs/getting-started.md)** - First-time setup guide
 - **[Installation](docs/installation.md)** - Detailed build instructions
 - **[Usage Guide](docs/usage.md)** - Controls, features, and configuration
-- **[Launcher Guide](docs/launcher.md)** - GTK3 settings editor (optional)
+- **[Launcher Guide](docs/launcher.md)** - Settings editor and asset creator
 - **[Architecture](docs/architecture.md)** - Technical architecture overview
 - **[Contributing](CONTRIBUTING.md)** - How to contribute
 - **[Changelog](CHANGELOG.md)** - Recent updates

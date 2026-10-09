@@ -53,7 +53,7 @@ Flags at unused RAM 0x648+. Must be toggleable via zelda3.ini.
 
 **Android:** `android/app/jni/`, `src/platform/android/` (jni_helpers, android_jni), `android/.../util/` (Kotlin utils)
 
-**Launcher:** `src/launcher/` (GTK3 UI, config reader/writer)
+**Launcher:** `launcher-tauri/` (Tauri 2 app: Rust backend + HTML/JS frontend), `src/launcher_core/` (C FFI core), `src/launcher/` (INI reader/writer)
 
 **Restool:** `src/restool/` (C asset extraction, library API)
 
