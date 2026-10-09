@@ -478,10 +478,16 @@ char *LauncherFfi_DatStatus(const char *dir) {
 // ----------------------------------------------------------------------------
 #ifdef HAVE_OPUS_ENCODER
 #include "opus_encoder_lib.h"
-#include <dirent.h>
 #include <ctype.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <dirent.h>
+#endif
 
-// Returns the track number if `name` is "<prefix><digits>.pcm", else -1.
+// Returns the track number if `name` is "<prefix><digits>.pcm" (extension in
+// any case, digits possibly zero-padded), else -1.
 static int pcm_track_number(const char *name, const char *prefix) {
     size_t plen = strlen(prefix);
     if (strncmp(name, prefix, plen) != 0) return -1;
@@ -489,8 +495,45 @@ static int pcm_track_number(const char *name, const char *prefix) {
     if (!isdigit((unsigned char)*p)) return -1;
     char *end;
     long n = strtol(p, &end, 10);
-    if (strcmp(end, ".pcm") != 0) return -1;
+    if (end[0] != '.' || tolower((unsigned char)end[1]) != 'p' ||
+        tolower((unsigned char)end[2]) != 'c' || tolower((unsigned char)end[3]) != 'm' || end[4])
+        return -1;
     return (int)n;
+}
+
+typedef struct { int number; char name[260]; } PcmTrack;
+
+static void add_pcm_track(PcmTrack *tracks, int *count, const char *name, const char *prefix) {
+    int t = pcm_track_number(name, prefix);
+    if (t < 0 || strlen(name) >= sizeof(tracks->name)) return;
+    tracks[*count].number = t;
+    strcpy(tracks[*count].name, name);
+    (*count)++;
+}
+
+// Collects the "<prefix><n>.pcm" files in folder into tracks.
+// Returns the count, or -1 if the folder cannot be opened.
+static int collect_pcm_tracks(const char *folder, const char *prefix, PcmTrack *tracks, int max) {
+    int count = 0;
+#ifdef _WIN32
+    char pattern[1024];
+    snprintf(pattern, sizeof(pattern), "%s\\*", folder);
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA(pattern, &fd);
+    if (h == INVALID_HANDLE_VALUE) return -1;
+    do {
+        add_pcm_track(tracks, &count, fd.cFileName, prefix);
+    } while (count < max && FindNextFileA(h, &fd));
+    FindClose(h);
+#else
+    DIR *d = opendir(folder);
+    if (!d) return -1;
+    struct dirent *e;
+    while (count < max && (e = readdir(d)) != NULL)
+        add_pcm_track(tracks, &count, e->d_name, prefix);
+    closedir(d);
+#endif
+    return count;
 }
 
 // Per-file opus callback context: forwards to the launcher progress callback,
@@ -517,30 +560,27 @@ char *LauncherFfi_EncodeMsuToOpus(const char *folder, const char *prefix,
                                   LauncherProgressCb cb, void *user) {
     if (!folder || !prefix) return make_result(false, "folder and prefix are required");
 
-    DIR *d = opendir(folder);
-    if (!d) return make_result(false, "cannot open MSU folder");
-
-    int tracks[512];
-    int count = 0;
-    struct dirent *e;
-    while ((e = readdir(d)) != NULL && count < 512) {
-        int t = pcm_track_number(e->d_name, prefix);
-        if (t >= 0) tracks[count++] = t;
+    enum { kMaxTracks = 512 };
+    PcmTrack *tracks = (PcmTrack *)malloc(kMaxTracks * sizeof(PcmTrack));
+    if (!tracks) return make_result(false, "out of memory");
+    int count = collect_pcm_tracks(folder, prefix, tracks, kMaxTracks);
+    if (count <= 0) {
+        free(tracks);
+        return make_result(false, count < 0 ? "cannot open MSU folder" : "no matching .pcm files found");
     }
-    closedir(d);
-    if (count == 0) return make_result(false, "no matching .pcm files found");
 
     int encoded = 0;
     const char *err = NULL;
     for (int i = 0; i < count; i++) {
         char in[1024], out_path[1024];
-        snprintf(in, sizeof(in), "%s/%s%d.pcm", folder, prefix, tracks[i]);
-        snprintf(out_path, sizeof(out_path), "%s/%s%d.opuz", folder, prefix, tracks[i]);
+        // Output uses the unpadded name the game loads ("<prefix><n>.opuz").
+        snprintf(in, sizeof(in), "%s/%s", folder, tracks[i].name);
+        snprintf(out_path, sizeof(out_path), "%s/%s%d.opuz", folder, prefix, tracks[i].number);
 
         ProgressForward pf = { .cb = cb, .user = user, .index = i, .total = count };
         OpusEncoderOptionsEx opts = {
             .bitrate = 128000,
-            .has_repeat = OpusEncoder_TrackHasRepeat(tracks[i]),
+            .has_repeat = OpusEncoder_TrackHasRepeat(tracks[i].number),
             .callback = cb ? opus_progress_forward : NULL,
             .callback_data = cb ? &pf : NULL,
         };
@@ -552,6 +592,7 @@ char *LauncherFfi_EncodeMsuToOpus(const char *folder, const char *prefix,
             break;
         }
     }
+    free(tracks);
 
     cJSON *r = cJSON_CreateObject();
     cJSON_AddBoolToObject(r, "ok", err == NULL);

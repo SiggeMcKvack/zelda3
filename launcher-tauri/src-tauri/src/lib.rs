@@ -168,8 +168,13 @@ pub fn tidy_msu_pcm(folder: &str, prefix: &str, delete: bool) -> String {
             if msu_track(&name) != Some((prefix, true)) {
                 continue;
             }
-            let stem = &name[..name.len() - ".pcm".len()];
-            if !dir.join(format!("{stem}.opuz")).is_file() {
+            // The encoder writes the unpadded name the game loads, so
+            // "x-01.PCM" pairs with "x-1.opuz".
+            let digits = &name[prefix.len()..name.len() - ".pcm".len()];
+            let Ok(n) = digits.parse::<u32>() else {
+                continue;
+            };
+            if !dir.join(format!("{prefix}{n}.opuz")).is_file() {
                 continue;
             }
             if delete {

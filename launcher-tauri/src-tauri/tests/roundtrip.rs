@@ -201,3 +201,22 @@ fn tidy_msu_pcm_only_touches_encoded_tracks() {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
+
+#[test]
+fn tidy_msu_pcm_pairs_padded_and_uppercase_names() {
+    let dir = std::env::temp_dir().join(format!("zelda3-msu-tidy-pad-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // The encoder writes the unpadded lowercase name the game loads.
+    for f in ["alttp_msu-01.PCM", "alttp_msu-1.opuz"] {
+        std::fs::write(dir.join(f), b"x").unwrap();
+    }
+    let v: serde_json::Value = serde_json::from_str(&zelda3_launcher_core::tidy_msu_pcm(
+        dir.to_str().unwrap(),
+        "alttp_msu-",
+        true,
+    ))
+    .unwrap();
+    assert_eq!(v["count"], 1);
+    assert!(!dir.join("alttp_msu-01.PCM").exists());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
