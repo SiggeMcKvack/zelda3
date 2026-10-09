@@ -22,6 +22,20 @@ Notable changes, improvements, and additions to the Zelda3 project.
 - The game ships as a Tauri sidecar (`zelda3-game`); `scripts/bundle-macos.sh` bundles Homebrew dylibs (including SDL3 for sdl2-compat) into the macOS app.
 - Removed: GTK launcher sources, the `BUILD_LAUNCHER` CMake option, GTK vcpkg overlays, and GTK from CI.
 
+### Launcher Fixes
+
+- MSU modes other than plain PCM (Deluxe, Opuz) were reset to Disabled whenever the launcher reloaded `zelda3.ini`.
+- The `unchanged_sprites` / `no_visual_fixes` flags on `ExtendedAspectRatio` are now kept when saving.
+- INI names and booleans are read like the game reads them (any case; `yes`/`on` accepted).
+- Saving, validating or launching no longer freezes the window while an MSU encode or asset build runs. The Encode and Create buttons are disabled while busy.
+- Key capture follows the keyboard layout (AZERTY etc.) and records Shift/Ctrl/Alt combos (e.g. `Shift+F1`). Gamepad capture records button combos (e.g. `L2+L3`) and no longer records stick axes, which the game can't bind. Clicking a binding again cancels capture.
+- Numpad keys are recorded as `Keypad Enter`, `Keypad +`, and so on.
+- Out-of-range numbers (e.g. MSU volume 300) are rejected instead of wrapping around.
+- MSU encoding accepts `.PCM` in any case and zero-padded track numbers, and writes the `<prefix><n>.opuz` name the game loads.
+- Reset to defaults asks for confirmation.
+- ROM file names in the language list are shown as text, never parsed as HTML.
+- Windows: the launcher runs with the UTF-8 code page, so non-ASCII paths (e.g. in the user name) work.
+
 ## December 2025
 
 ### Android: Vulkan Slang Shader Support
