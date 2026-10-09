@@ -48,6 +48,7 @@ Notable changes, improvements, and additions to the Zelda3 project.
 - Android: falling back to OpenGL ES now releases the Vulkan objects first.
 - Debug builds enable `VK_LAYER_KHRONOS_validation` when it is installed.
 - Removed the unused `GetVulkanGPUName()`.
+- Android: glslang (used for slang shaders) updated to 16.6.0, the same version desktop builds get from the Vulkan SDK 1.4.363.
 
 ## December 2025
 
