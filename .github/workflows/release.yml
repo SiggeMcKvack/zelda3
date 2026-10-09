@@ -111,7 +111,7 @@ jobs:
       run: |
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_OSX_arm64ITECTURES=arm64
+          -DCMAKE_OSX_ARCHITECTURES=arm64
 
     - name: Build
       run: cmake --build build -j$(sysctl -n hw.ncpu)
@@ -162,7 +162,7 @@ jobs:
       run: |
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_OSX_x86_64ITECTURES=x86_64
+          -DCMAKE_OSX_ARCHITECTURES=x86_64
 
     - name: Build
       run: cmake --build build -j$(sysctl -n hw.ncpu)
