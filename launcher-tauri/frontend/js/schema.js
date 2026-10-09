@@ -10,7 +10,7 @@
 //   select -> dropdown; options: [[value,label],...] (numeric values)
 //   flag   -> checkbox toggling one bit of an integer key (config.features0)
 //   section-> a header row (Features tab grouping)
-//   opus   -> the MSU -> OPUZ encoder block (Sound tab)
+//   msu    -> MSU folder + track prefix (config.msu_path) and OPUZ encoder (Sound tab)
 window.TABS = {
   Graphics: [
     { key: "output_method", label: "Output Method", type: "select",
@@ -50,8 +50,7 @@ window.TABS = {
       options: [[0, "Disabled"], [1, "PCM"], [3, "PCM Deluxe"], [5, "Opuz"], [7, "Opuz Deluxe"]] },
     { key: "msuvolume", label: "MSU Volume (0-100)", type: "int" },
     { key: "resume_msu", label: "Resume MSU position when re-entering overworld area", type: "bool" },
-    { key: "msu_path", label: "MSU Folder / path prefix", type: "text" },
-    { type: "opus" },
+    { type: "msu" },
   ],
   Features: [
     { type: "section", label: "Save" },

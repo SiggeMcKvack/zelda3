@@ -22,6 +22,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
@@ -221,8 +222,6 @@ body {
 .assets-info { padding: 0 var(--row-pad-x) 8px; }
 .assets-info:empty { display: none; }
 
-.opus-block { margin-top: 20px; }
-
 .progress {
   height: 8px;
   margin: 4px var(--row-pad-x) 6px;
@@ -231,7 +230,6 @@ body {
   border-radius: 5px;
   overflow: hidden;
 }
-.progress[hidden] { display: none; }
 .progress-bar {
   height: 100%;
   width: 0%;

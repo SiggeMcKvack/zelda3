@@ -130,6 +130,105 @@ pub fn encode_msu_to_opus(folder: &str, prefix: &str, app: tauri::AppHandle) -> 
     }
 }
 
+/// Resolve a config path the way the game sees it: relative paths are relative
+/// to the data dir, which is the game's working directory.
+pub fn resolve_data_path(path: &str) -> PathBuf {
+    let p = std::path::Path::new(path);
+    if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        data_dir().join(p)
+    }
+}
+
+/// Split an MSU-1 track filename `<prefix><N>.pcm|.opuz` into
+/// `(prefix, is_pcm)`; None for anything else.
+fn msu_track(name: &str) -> Option<(&str, bool)> {
+    let (stem, ext) = name.rsplit_once('.')?;
+    let is_pcm = ext.eq_ignore_ascii_case("pcm");
+    if !is_pcm && !ext.eq_ignore_ascii_case("opuz") {
+        return None;
+    }
+    let prefix = stem.trim_end_matches(|c: char| c.is_ascii_digit());
+    (prefix.len() < stem.len()).then_some((prefix, is_pcm))
+}
+
+/// After encoding, delete or move into `<folder>/pcm/` every `<prefix><N>.pcm`
+/// that now has a matching `.opuz` next to it (tracks that failed to encode are
+/// left alone). Returns `{"ok":bool,"error"?:str,"count":int}`.
+pub fn tidy_msu_pcm(folder: &str, prefix: &str, delete: bool) -> String {
+    let dir = resolve_data_path(folder);
+    let result = (|| -> std::io::Result<u32> {
+        let backup = dir.join("pcm");
+        let mut count = 0;
+        for entry in std::fs::read_dir(&dir)?.flatten() {
+            let Ok(name) = entry.file_name().into_string() else {
+                continue;
+            };
+            if msu_track(&name) != Some((prefix, true)) {
+                continue;
+            }
+            let stem = &name[..name.len() - ".pcm".len()];
+            if !dir.join(format!("{stem}.opuz")).is_file() {
+                continue;
+            }
+            if delete {
+                std::fs::remove_file(entry.path())?;
+            } else {
+                std::fs::create_dir_all(&backup)?;
+                let target = backup.join(&name);
+                if target.exists() {
+                    continue; // never overwrite an earlier backup
+                }
+                std::fs::rename(entry.path(), target)?;
+            }
+            count += 1;
+        }
+        Ok(count)
+    })();
+    match result {
+        Ok(count) => serde_json::json!({ "ok": true, "count": count }),
+        Err(e) => serde_json::json!({ "ok": false, "error": e.to_string() }),
+    }
+    .to_string()
+}
+
+/// Group the MSU-1 tracks (`<prefix><N>.pcm` / `<prefix><N>.opuz`) in `folder`
+/// by filename prefix. Returns
+/// `{"ok":bool,"error"?:str,"prefixes":[{"prefix","pcm","opuz"}]}`, most tracks first.
+pub fn scan_msu_folder(folder: &str) -> String {
+    let dir = resolve_data_path(folder);
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(e) => {
+            return serde_json::json!({ "ok": false, "error": e.to_string(), "prefixes": [] })
+                .to_string()
+        }
+    };
+    let mut counts: std::collections::BTreeMap<String, (u32, u32)> = Default::default();
+    for name in entries
+        .flatten()
+        .filter_map(|e| e.file_name().into_string().ok())
+    {
+        let Some((prefix, is_pcm)) = msu_track(&name) else {
+            continue;
+        };
+        let entry = counts.entry(prefix.to_string()).or_default();
+        if is_pcm {
+            entry.0 += 1;
+        } else {
+            entry.1 += 1;
+        }
+    }
+    let mut prefixes: Vec<_> = counts.into_iter().collect();
+    prefixes.sort_by_key(|(_, (pcm, opuz))| std::cmp::Reverse(pcm + opuz));
+    let prefixes: Vec<_> = prefixes
+        .into_iter()
+        .map(|(prefix, (pcm, opuz))| serde_json::json!({ "prefix": prefix, "pcm": pcm, "opuz": opuz }))
+        .collect();
+    serde_json::json!({ "ok": true, "prefixes": prefixes }).to_string()
+}
+
 // ----------------------------------------------------------------------------
 // Per-user data directory (matches the migration plan: one location on every OS,
 // so installed packages in read-only paths still work).
@@ -233,6 +332,8 @@ pub fn run() {
             commands::reset_config,
             commands::pick_file,
             commands::pick_msu_folder,
+            commands::scan_msu_folder,
+            commands::finish_opus_encode,
             commands::identify_rom,
             commands::create_dat,
             commands::dat_status,

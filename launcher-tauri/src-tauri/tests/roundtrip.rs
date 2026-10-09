@@ -74,3 +74,84 @@ fn concurrent_calls_do_not_corrupt() {
         h.join().unwrap();
     }
 }
+
+#[test]
+fn scan_msu_folder_groups_tracks_by_prefix() {
+    let dir = std::env::temp_dir().join(format!("zelda3-msu-scan-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for f in [
+        "alttp_msu-1.pcm",
+        "alttp_msu-2.pcm",
+        "alttp_msu-2.opuz",
+        "ALTTP_MSU-3.PCM",
+        "other-1.opuz",
+        "readme.txt",
+        "alttp_msu-.pcm",
+    ] {
+        std::fs::write(dir.join(f), b"").unwrap();
+    }
+    let v: serde_json::Value = serde_json::from_str(&zelda3_launcher_core::scan_msu_folder(
+        dir.to_str().unwrap(),
+    ))
+    .unwrap();
+    std::fs::remove_dir_all(&dir).unwrap();
+
+    assert_eq!(v["ok"], true);
+    let prefixes = v["prefixes"].as_array().unwrap();
+    assert_eq!(
+        prefixes[0],
+        serde_json::json!({ "prefix": "alttp_msu-", "pcm": 2, "opuz": 1 })
+    );
+    assert!(prefixes.contains(&serde_json::json!({ "prefix": "ALTTP_MSU-", "pcm": 1, "opuz": 0 })));
+    assert!(prefixes.contains(&serde_json::json!({ "prefix": "other-", "pcm": 0, "opuz": 1 })));
+    assert_eq!(
+        prefixes.len(),
+        3,
+        "files without a track number are ignored"
+    );
+}
+
+#[test]
+fn scan_msu_folder_reports_missing_folder() {
+    let v: serde_json::Value = serde_json::from_str(&zelda3_launcher_core::scan_msu_folder(
+        "/nonexistent/zelda3-msu",
+    ))
+    .unwrap();
+    assert_eq!(v["ok"], false);
+}
+
+#[test]
+fn tidy_msu_pcm_only_touches_encoded_tracks() {
+    for delete in [false, true] {
+        let dir =
+            std::env::temp_dir().join(format!("zelda3-msu-tidy-{}-{delete}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // Track 1 encoded; track 2 failed to encode; other prefix untouched.
+        for f in [
+            "alttp_msu-1.pcm",
+            "alttp_msu-1.opuz",
+            "alttp_msu-2.pcm",
+            "other-1.pcm",
+            "other-1.opuz",
+        ] {
+            std::fs::write(dir.join(f), b"x").unwrap();
+        }
+        let v: serde_json::Value = serde_json::from_str(&zelda3_launcher_core::tidy_msu_pcm(
+            dir.to_str().unwrap(),
+            "alttp_msu-",
+            delete,
+        ))
+        .unwrap();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["count"], 1);
+        assert!(!dir.join("alttp_msu-1.pcm").exists());
+        assert_eq!(dir.join("pcm/alttp_msu-1.pcm").exists(), !delete);
+        assert!(dir.join("alttp_msu-1.opuz").exists());
+        assert!(
+            dir.join("alttp_msu-2.pcm").exists(),
+            "unencoded track kept in place"
+        );
+        assert!(dir.join("other-1.pcm").exists(), "other prefix untouched");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}

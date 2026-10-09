@@ -9,7 +9,6 @@ let activeTab = "General";
 // Assets-tab state
 let baseRom = null;                 // absolute path to the base US ROM
 let languageRoms = [];              // [{ path, lang }]
-let msuFolder = null;               // MSU folder for opus encoding
 
 const statusEl = () => document.getElementById("status");
 
@@ -38,6 +37,31 @@ function makeRow(label, control) {
   return row;
 }
 
+// key -> function that re-reads config into its rendered <select>, so code can
+// change a dropdown's value (see setSelect).
+let selectRefreshers = {};
+
+function setSelect(key, value) {
+  config[key] = value;
+  selectRefreshers[key]?.();
+}
+
+// enable_msu: 0 off, 1 PCM, 3 PCM Deluxe, 5 Opuz, 7 Opuz Deluxe (bit 4 = Opuz,
+// bit 2 = Deluxe). PCM tracks are 44.1 kHz and OPUZ 48 kHz, so the output rate
+// follows the MSU mode.
+const MSU_OPUZ = 4, MSU_DELUXE = 2;
+
+function matchAudioFreqToMsu() {
+  const mode = config.enable_msu;
+  if (mode) setSelect("audio_freq", mode & MSU_OPUZ ? 48000 : 44100);
+}
+
+// After encoding: use the Opuz variant of the current MSU mode (Deluxe kept).
+function switchMsuToOpuz() {
+  setSelect("enable_msu", 1 | MSU_OPUZ | (config.enable_msu & MSU_DELUXE));
+  matchAudioFreqToMsu();
+}
+
 function renderField(field) {
   if (field.type === "section") {
     const h = document.createElement("h3");
@@ -45,7 +69,7 @@ function renderField(field) {
     h.textContent = field.label;
     return h;
   }
-  if (field.type === "opus") return renderOpusField();
+  if (field.type === "msu") return renderMsuField();
 
   let control;
   if (field.type === "bool") {
@@ -83,8 +107,13 @@ function renderField(field) {
       opt.textContent = text;
       control.appendChild(opt);
     }
-    control.value = String(config[field.key] ?? field.options[0][0]);
-    control.addEventListener("change", () => { config[field.key] = parseInt(control.value, 10); });
+    const show = () => { control.value = String(config[field.key] ?? field.options[0][0]); };
+    show();
+    selectRefreshers[field.key] = show;
+    control.addEventListener("change", () => {
+      config[field.key] = parseInt(control.value, 10);
+      if (field.key === "enable_msu") matchAudioFreqToMsu();
+    });
   }
   return makeRow(field.label, control);
 }
@@ -130,6 +159,7 @@ function renderTabs() {
   const panelsEl = document.getElementById("panels");
   tabsEl.innerHTML = "";
   panelsEl.innerHTML = "";
+  selectRefreshers = {};
 
   // General (asset management) first, then the schema tabs, then input tabs.
   const tabNames = ["General", ...Object.keys(window.TABS), "Keyboard", "Gamepad"];
@@ -350,35 +380,96 @@ function renderGeneralPanel(panel) {
   refreshDatStatus();   // also fills the language dropdown
 }
 
-// The MSU -> OPUZ encoder block, rendered as the Sound tab's "opus" field.
-function renderOpusField() {
-  const wrap = document.createElement("div");
-  wrap.className = "opus-block";
-  wrap.innerHTML = `
-    <h3 class="section-h">Encode MSU PCM → OPUZ</h3>
-    <div class="row">
-      <label class="field-label">MSU folder</label>
-      <span id="msu-folder-path" class="muted path">none selected</span>
-      <button id="pick-msu" class="btn">Select folder…</button>
-    </div>
-    <div class="row">
-      <label class="field-label">Track filename prefix</label>
-      <input id="msu-prefix" type="text" value="alttp_msu-" />
-    </div>
-    <div class="row row-end">
-      <button id="encode-opus" class="btn btn-primary">Encode to OPUZ</button>
-    </div>
-    <div id="opus-progress" class="progress" hidden><div id="opus-bar" class="progress-bar"></div></div>
-    <div id="opus-msg" class="muted assets-info"></div>`;
-  wrap.querySelector("#pick-msu").addEventListener("click", pickMsuFolder);
-  wrap.querySelector("#encode-opus").addEventListener("click", encodeOpus);
-  // restore previously chosen folder display after re-render
-  setTimeout(renderMsuFolder, 0);
-  return wrap;
+// The Sound tab's MSU section ("msu" field): browse for the track folder,
+// detect the filename prefix, and offer PCM -> OPUZ encoding when PCM tracks
+// match. Edits config.msu_path, which the game reads as <folder>/<prefix>.
+function renderMsuField() {
+  let { folder, prefix } = splitMsuPath(config.msu_path || "");
+  let scan = null;   // scan_msu_folder result for `folder`
+
+  const frag = document.createDocumentFragment();
+  const folderRow = document.createElement("div");
+  folderRow.className = "row";
+  folderRow.innerHTML = `
+    <label class="field-label">MSU folder</label>
+    <span class="muted path"></span>
+    <button class="btn">Browse…</button>`;
+  const folderText = folderRow.querySelector(".path");
+
+  const prefixInput = document.createElement("input");
+  prefixInput.type = "text";
+  const prefixRow = makeRow("Track filename prefix", prefixInput);
+
+  const info = document.createElement("div");
+  info.className = "muted assets-info";
+
+  const encodeBtn = document.createElement("button");
+  encodeBtn.className = "btn btn-primary";
+  encodeBtn.textContent = "Encode to OPUZ";
+  const encodeRow = makeRow("Convert the PCM tracks to OPUZ", encodeBtn);
+
+  const progress = document.createElement("div");
+  progress.id = "opus-progress";
+  progress.className = "progress";
+  progress.hidden = true;
+  progress.innerHTML = `<div id="opus-bar" class="progress-bar"></div>`;
+  const msg = document.createElement("div");
+  msg.id = "opus-msg";
+  msg.className = "muted assets-info";
+
+  frag.append(folderRow, prefixRow, info, encodeRow, progress, msg);
+
+  const refresh = () => {
+    setPathText(folderText, folder);
+    if (!folder) folderText.textContent = "data folder";
+    prefixInput.value = prefix;
+    const match = scan && scan.ok && scan.prefixes.find((p) => p.prefix === prefix);
+    if (!scan) info.textContent = "";
+    else if (!scan.ok) info.textContent = "Folder not found. Browse to the folder with your MSU-1 tracks.";
+    else if (match) info.textContent = `Found ${match.pcm} PCM and ${match.opuz} OPUZ tracks.`;
+    else info.textContent = `No tracks named ${prefix || "<prefix>"}N.pcm or .opuz in this folder.`;
+    encodeRow.hidden = !(match && match.pcm > 0);
+  };
+  const save = () => { config.msu_path = joinMsuPath(folder, prefix); };
+  const rescan = async () => {
+    scan = JSON.parse(await invoke("scan_msu_folder", { folder }));
+    refresh();
+  };
+
+  folderRow.querySelector(".btn").addEventListener("click", async () => {
+    const path = await invoke("pick_msu_folder");
+    if (!path) return;
+    folder = path;
+    await rescan();
+    // Keep the current prefix if it matches tracks here, else use the most common one.
+    const known = scan.ok && scan.prefixes.some((p) => p.prefix === prefix);
+    if (!known && scan.ok && scan.prefixes.length) prefix = scan.prefixes[0].prefix;
+    save();
+    refresh();
+  });
+  prefixInput.addEventListener("input", () => {
+    prefix = prefixInput.value;
+    save();
+    refresh();
+  });
+  encodeBtn.addEventListener("click", async () => {
+    await encodeOpus(folder, prefix);
+    await rescan();
+  });
+
+  refresh();
+  if (folder || prefix) rescan();
+  return frag;
 }
 
-function renderMsuFolder() {
-  setPathText(document.getElementById("msu-folder-path"), msuFolder);
+// "msu/alttp_msu-" -> { folder: "msu", prefix: "alttp_msu-" }
+function splitMsuPath(path) {
+  const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return i < 0 ? { folder: "", prefix: path } : { folder: path.slice(0, i), prefix: path.slice(i + 1) };
+}
+
+function joinMsuPath(folder, prefix) {
+  return folder ? folder.replace(/[\\/]+$/, "") + "/" + prefix : prefix;
 }
 
 // Show a path in a left-truncating `.path` span. The LRM keeps the leading "/"
@@ -389,29 +480,39 @@ function setPathText(el, path) {
   el.title = path || "";
 }
 
-async function pickMsuFolder() {
-  const path = await invoke("pick_msu_folder");
-  if (!path) return;
-  msuFolder = path;
-  renderMsuFolder();
-}
-
-async function encodeOpus() {
-  if (!msuFolder) { setStatus("Select an MSU folder first.", "err"); return; }
-  const prefix = document.getElementById("msu-prefix").value.trim();
-  if (!prefix) { setStatus("Enter the track filename prefix.", "err"); return; }
+async function encodeOpus(folder, prefix) {
   setOpusProgress(0, "Starting…");
   setStatus("Encoding MSU audio…", "");
   try {
-    const result = JSON.parse(await invoke("encode_opus", { folder: msuFolder, prefix }));
+    const result = JSON.parse(await invoke("encode_opus", { folder, prefix }));
     if (result.ok) {
       setOpusProgress(1, `Encoded ${result.encoded} / ${result.total} tracks`);
       setStatus("Opus encoding complete.", "ok");
+      if (result.encoded > 0) {
+        switchMsuToOpuz();
+        await tidyPcm(folder, prefix, result.encoded);
+      }
     } else {
       setStatus("Encoding failed: " + (result.error || "unknown"), "err");
     }
   } catch (e) {
     setStatus("Encoding failed: " + e, "err");
+  }
+}
+
+// Ask (native dialog) whether to keep the source PCM files in a pcm/ subfolder
+// or delete them; only tracks that now have an .opuz are touched.
+async function tidyPcm(folder, prefix, encoded) {
+  try {
+    const { action, result } = JSON.parse(
+      await invoke("finish_opus_encode", { folder, prefix, encoded }));
+    if (action === "none") return;
+    if (!result.ok) { setStatus("PCM cleanup failed: " + result.error, "err"); return; }
+    setStatus(action === "moved"
+      ? `Moved ${result.count} PCM files to the pcm subfolder.`
+      : `Deleted ${result.count} PCM files.`, "ok");
+  } catch (e) {
+    setStatus("PCM cleanup failed: " + e, "err");
   }
 }
 

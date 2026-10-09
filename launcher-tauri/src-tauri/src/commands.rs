@@ -102,24 +102,72 @@ pub async fn pick_msu_folder(app: tauri::AppHandle) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
+/// Count MSU tracks per filename prefix in `folder` (relative = data dir).
+#[tauri::command]
+pub fn scan_msu_folder(folder: String) -> String {
+    crate::scan_msu_folder(&folder)
+}
+
 /// Identify a ROM file. Returns `{"read","valid","lang_code","lang_name"}`.
 #[tauri::command]
 pub fn identify_rom(path: String) -> Result<String, String> {
     ok_or_err(crate::identify_rom(&path), "identify")
 }
 
-/// Encode MSU `.pcm` files in `folder` (matching `prefix`) to `.opuz`, streaming
-/// progress as "opus-progress" events. Runs off the async runtime.
+/// Encode MSU `.pcm` files in `folder` (matching `prefix`; relative = data dir)
+/// to `.opuz`, streaming progress as "opus-progress" events. Runs off the async runtime.
 #[tauri::command]
 pub async fn encode_opus(
     app: tauri::AppHandle,
     folder: String,
     prefix: String,
 ) -> Result<String, String> {
+    let folder = crate::resolve_data_path(&folder)
+        .to_string_lossy()
+        .into_owned();
     tauri::async_runtime::spawn_blocking(move || crate::encode_msu_to_opus(&folder, &prefix, app))
         .await
         .map_err(|e| format!("task join error: {e}"))?
         .ok_or_else(|| "encode failed".to_string())
+}
+
+/// After a successful encode, ask whether to keep the source `.pcm` tracks
+/// (moved to a `pcm` subfolder) or delete them. Cancel / closing the dialog
+/// leaves them in place. Returns `{"action":"moved"|"deleted"|"none",...}`.
+#[tauri::command]
+pub async fn finish_opus_encode(
+    app: tauri::AppHandle,
+    folder: String,
+    prefix: String,
+    encoded: u32,
+) -> Result<String, String> {
+    use tauri_plugin_dialog::{MessageDialogButtons, MessageDialogResult};
+    const KEEP: &str = "Keep (move to pcm/)";
+    const DELETE: &str = "Delete";
+    let choice = app
+        .dialog()
+        .message(format!(
+            "{encoded} tracks were encoded to OPUZ.\n\n\
+             Keep the original PCM files in a \"pcm\" subfolder, or delete them permanently?"
+        ))
+        .title("Encoding complete")
+        .buttons(MessageDialogButtons::YesNoCancelCustom(
+            KEEP.into(),
+            DELETE.into(),
+            "Cancel".into(),
+        ))
+        .blocking_show_with_result();
+    // Backends report custom buttons either by label or as Yes/No.
+    let delete = match choice {
+        MessageDialogResult::Yes => false,
+        MessageDialogResult::No => true,
+        MessageDialogResult::Custom(label) if label == KEEP => false,
+        MessageDialogResult::Custom(label) if label == DELETE => true,
+        _ => return Ok(r#"{"action":"none"}"#.into()),
+    };
+    let action = if delete { "deleted" } else { "moved" };
+    let result = crate::tidy_msu_pcm(&folder, &prefix, delete);
+    Ok(format!(r#"{{"action":"{action}","result":{result}}}"#))
 }
 
 /// DAT presence + languages for the user's data dir.
