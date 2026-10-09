@@ -40,38 +40,56 @@ window.KEYMAP_GROUPS = [
   ] },
 ];
 
-// KeyboardEvent.code -> SDL key name (SDL_GetKeyName output the game expects).
-// Letters/digits/F-keys are handled programmatically; this covers the rest.
+// KeyboardEvent.code -> SDL key name (SDL_GetKeyName output the game expects)
+// for keys whose name doesn't depend on the keyboard layout.
 window.KEY_TO_SDL = {
   ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
-  Enter: "Return", NumpadEnter: "Return", Escape: "Escape", Space: "Space",
+  Enter: "Return", Escape: "Escape", Space: "Space",
   Tab: "Tab", Backspace: "Backspace", Delete: "Delete", Insert: "Insert",
   Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown",
   ShiftLeft: "Left Shift", ShiftRight: "Right Shift",
   ControlLeft: "Left Ctrl", ControlRight: "Right Ctrl",
   AltLeft: "Left Alt", AltRight: "Right Alt",
   MetaLeft: "Left GUI", MetaRight: "Right GUI", CapsLock: "CapsLock",
+  NumpadEnter: "Keypad Enter", NumpadAdd: "Keypad +", NumpadSubtract: "Keypad -",
+  NumpadMultiply: "Keypad *", NumpadDivide: "Keypad /", NumpadDecimal: "Keypad .",
+};
+
+// US-layout characters by physical position: only a fallback for when
+// Shift/Alt changed the character the key produces.
+const PUNCT_BY_CODE = {
   Minus: "-", Equal: "=", BracketLeft: "[", BracketRight: "]", Backslash: "\\",
   Semicolon: ";", Quote: "'", Backquote: "`", Comma: ",", Period: ".", Slash: "/",
 };
 
 // Translate a KeyboardEvent into an SDL key name.
 window.keyEventToSdl = function (e) {
-  const c = e.code;
-  if (/^Key[A-Z]$/.test(c)) return c.slice(3);             // KeyA -> A
-  if (/^Digit[0-9]$/.test(c)) return c.slice(5);           // Digit0 -> 0
+  const c = e.code, k = e.key;
+  if (/^Digit[0-9]$/.test(c)) return c.slice(5);           // SDL keeps the number row as digits on every layout
   if (/^F([1-9]|1[0-9]|2[0-4])$/.test(c)) return c;        // F1..F24
   if (/^Numpad[0-9]$/.test(c)) return "Keypad " + c.slice(6);
   if (window.KEY_TO_SDL[c]) return window.KEY_TO_SDL[c];
-  return e.key.length === 1 ? e.key.toUpperCase() : e.key; // best-effort fallback
+  // Character keys: the game resolves single-character names to SDL keycodes,
+  // which follow the layout, so use the character the key produces (on AZERTY
+  // the key labelled A is "A", even though its e.code is KeyQ).
+  if (!e.altKey && /^[a-z]$/i.test(k)) return k.toUpperCase();
+  if (!e.altKey && !e.shiftKey && k.length === 1 && k > " " && k <= "~") return k;
+  if (/^Key[A-Z]$/.test(c)) return c.slice(3);             // non-Latin layouts: SDL falls back to US letters
+  return PUNCT_BY_CODE[c] || (k.length === 1 ? k.toUpperCase() : k);
 };
 
-// W3C "standard mapping" gamepad button index -> SDL GameController name
-// (matches launcher_gamepad.c's ButtonToString). 6/7 are triggers -> L2/R2.
+// Modifier keys: captured as a prefix ("Shift+F1") when another key follows,
+// or bound on their own when released alone. Prefix names match config.c.
+window.MODIFIER_CODES = new Set([
+  "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "AltLeft", "AltRight", "MetaLeft", "MetaRight",
+]);
+window.modifierPrefix = (e) =>
+  (e.ctrlKey ? "Ctrl+" : "") + (e.altKey ? "Alt+" : "") + (e.shiftKey ? "Shift+" : "");
+
+// W3C "standard mapping" gamepad button index -> button name config.c's
+// ParseGamepadButtonName accepts. 6/7 are triggers -> L2/R2. The game has no
+// stick-axis bindings, so axes are not captured.
 window.GAMEPAD_BUTTON_TO_SDL = [
   "A", "B", "X", "Y", "L1", "R1", "L2", "R2", "Back", "Start",
   "L3", "R3", "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Guide",
 ];
-
-// Standard-mapping axis index -> SDL axis base name (+/- appended by direction).
-window.GAMEPAD_AXIS_TO_SDL = ["LeftX", "LeftY", "RightX", "RightY"];

@@ -215,8 +215,8 @@ function renderKeymapPanel(panel, device) {
   const hint = document.createElement("div");
   hint.className = "assets-status";
   hint.textContent = device === "kbd"
-    ? "Click a binding, then press a key. Right-click to clear."
-    : "Click a binding, then press a button/stick on your controller. Right-click to clear.";
+    ? "Click a binding, then press a key (hold Shift/Ctrl/Alt for a combo). Click again to cancel, right-click to clear."
+    : "Click a binding, then press a controller button (hold one and press another for a combo). Click again to cancel, right-click to clear.";
   panel.appendChild(hint);
 
   for (const group of window.KEYMAP_GROUPS) {
@@ -257,8 +257,16 @@ function bindingRow(device, label, get, set) {
   };
   refresh();
 
-  btn.addEventListener("click", () => startCapture(device, btn, (v) => { set(v); refresh(); }));
-  btn.addEventListener("contextmenu", (e) => { e.preventDefault(); set(""); refresh(); });
+  btn.addEventListener("click", () => {
+    if (capturing?.btn === btn) cancelCapture();
+    else startCapture(device, btn, set, refresh);
+  });
+  btn.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    if (capturing?.btn === btn) cancelCapture();
+    set("");
+    refresh();
+  });
 
   row.appendChild(l);
   row.appendChild(btn);
@@ -267,40 +275,65 @@ function bindingRow(device, label, get, set) {
 
 function cancelCapture() {
   if (!capturing) return;
-  capturing.cleanup();
-  capturing.btn.classList.remove("capturing");
+  const { btn, cleanup, refresh } = capturing;
   capturing = null;
+  cleanup();
+  btn.classList.remove("capturing");
+  refresh();
 }
 
-function startCapture(device, btn, assign) {
+// Wait for the next key / button combo, then store it with `set`. `refresh`
+// redraws the button (also restoring it when the capture is cancelled).
+function startCapture(device, btn, set, refresh) {
   cancelCapture();
   btn.classList.add("capturing");
-  const prev = btn.textContent;
   btn.textContent = "Press…";
 
+  let cleanup;
   if (device === "kbd") {
-    const onKey = (e) => {
+    let lone = null;   // modifier held with no other key yet
+    const onDown = (e) => {
       e.preventDefault();
-      const name = window.keyEventToSdl(e);
-      finish(name);
+      if (e.repeat) return;
+      if (window.MODIFIER_CODES.has(e.code)) { lone = e.code; return; }
+      finish(window.modifierPrefix(e) + window.keyEventToSdl(e));
     };
-    window.addEventListener("keydown", onKey, true);
-    capturing = { btn, cleanup: () => window.removeEventListener("keydown", onKey, true) };
+    // A modifier released without another key binds the modifier itself.
+    const onUp = (e) => {
+      e.preventDefault();
+      if (e.code === lone) finish(window.KEY_TO_SDL[e.code]);
+    };
+    window.addEventListener("keydown", onDown, true);
+    window.addEventListener("keyup", onUp, true);
+    cleanup = () => {
+      window.removeEventListener("keydown", onDown, true);
+      window.removeEventListener("keyup", onUp, true);
+    };
   } else {
-    const baseline = snapshotGamepad();      // ignore already-held inputs
+    let held = heldButtons();   // ignore inputs already down until released
+    const combo = [];           // newly pressed buttons, in press order
     let raf = 0;
     const tick = () => {
-      const hit = detectGamepad(baseline);
-      if (hit) { finish(hit); return; }
+      const now = heldButtons();
+      held = held.filter((i) => now.includes(i));
+      for (const i of now) {
+        if (!held.includes(i) && !combo.includes(i) && window.GAMEPAD_BUTTON_TO_SDL[i]) combo.push(i);
+      }
+      // Bind once a combo button is released: "L2+L3" = hold L2, press L3.
+      if (combo.length && combo.some((i) => !now.includes(i))) {
+        finish(combo.map((i) => window.GAMEPAD_BUTTON_TO_SDL[i]).join("+"));
+        return;
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    capturing = { btn, cleanup: () => cancelAnimationFrame(raf) };
+    cleanup = () => cancelAnimationFrame(raf);
   }
+  capturing = { btn, cleanup, refresh };
 
   function finish(value) {
+    set(value);
     cancelCapture();
-    if (value) assign(value); else btn.textContent = prev;
   }
 }
 
@@ -309,35 +342,13 @@ function activePad() {
   return Array.from(pads).find((p) => p && p.connected) || null;
 }
 
-// Snapshot currently-held buttons/axes so capture ignores them.
-function snapshotGamepad() {
+// Indices of the buttons currently held on the active pad.
+function heldButtons() {
   const pad = activePad();
-  if (!pad) return null;
-  return {
-    buttons: pad.buttons.map((b) => b.value > 0.5 || b.pressed),
-    axes: Array.from(pad.axes),
-  };
-}
-
-// Return the SDL name of the first input newly active since `baseline`, else null.
-function detectGamepad(baseline) {
-  const pad = activePad();
-  if (!pad) return null;
-  for (let i = 0; i < pad.buttons.length; i++) {
-    const pressed = pad.buttons[i].value > 0.5 || pad.buttons[i].pressed;
-    const was = baseline && baseline.buttons[i];
-    if (pressed && !was && window.GAMEPAD_BUTTON_TO_SDL[i]) {
-      return window.GAMEPAD_BUTTON_TO_SDL[i];
-    }
-  }
-  for (let a = 0; a < pad.axes.length; a++) {
-    const v = pad.axes[a];
-    const wasV = baseline ? baseline.axes[a] : 0;
-    if (Math.abs(v) > 0.6 && Math.abs(wasV) <= 0.6 && window.GAMEPAD_AXIS_TO_SDL[a]) {
-      return window.GAMEPAD_AXIS_TO_SDL[a] + (v > 0 ? "+" : "-");
-    }
-  }
-  return null;
+  if (!pad) return [];
+  const held = [];
+  pad.buttons.forEach((b, i) => { if (b.value > 0.5 || b.pressed) held.push(i); });
+  return held;
 }
 
 // --- General tab (asset management: status, language, ROM -> DAT) ------------
