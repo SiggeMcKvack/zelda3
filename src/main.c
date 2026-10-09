@@ -1068,7 +1068,12 @@ static bool HasGameFiles() {
 
 // Get directory containing the executable and chdir to it
 // Also looks in parent directory for assets (for development builds where exe is in build/)
+// Keeps the current directory if it already has the assets (the launcher starts the
+// game in the per-user data dir).
 static void SwitchToExecutableDirectory() {
+  if (HasGameFiles())
+    return;
+
   char buf[4096];
 
 #ifdef __APPLE__
