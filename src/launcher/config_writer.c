@@ -132,12 +132,12 @@ static bool WriteGeneralSection(FILE *f, const Config *config) {
   if (!WriteLine(f, "# ------------------------------------------------------------------------------\n\n")) return false;
 
   if (!WriteLine(f, "# Set which language to use\n")) return false;
-  if (!WriteLine(f, "# Requires appropriate asset file created with restool.py\n")) return false;
+  if (!WriteLine(f, "# Requires an asset file built with that language (zelda3-restool or the launcher)\n")) return false;
   if (!WriteLine(f, "# (default: none/English, accepts: de, fr, etc.)\n")) return false;
   if (!WriteLine(f, "#\n")) return false;
   if (!WriteLine(f, "# To create assets for other languages:\n")) return false;
-  if (!WriteLine(f, "#   python restool.py --extract-dialogue -r german.sfc\n")) return false;
-  if (!WriteLine(f, "#   python restool.py --languages=de\n")) return false;
+  if (!WriteLine(f, "#   zelda3-restool --extract-from-rom german.sfc --extract-dialogue\n")) return false;
+  if (!WriteLine(f, "#   zelda3-restool --extract-from-rom zelda3.sfc --languages de\n")) return false;
   if (!WriteLine(f, "#\n")) return false;
 
   if (config->language && *config->language) {
