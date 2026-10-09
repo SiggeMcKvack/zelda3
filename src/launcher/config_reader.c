@@ -1,7 +1,8 @@
 #include "config_reader.h"
 #include "config_reader_internal.h"
 #include "config_writer.h"
-#include "launcher_ui.h"
+#include "keymap_state.h"      // control-mapping globals (GTK-free)
+#include "control_strings.h"   // LauncherUI_Parse*ControlString (GTK-free)
 #include "../config.h"
 #include "../game_features.h"
 #include "../logging.h"

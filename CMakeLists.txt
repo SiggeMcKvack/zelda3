@@ -86,45 +86,20 @@ else()
     set(HAVE_SLANG_SHADERS OFF)
 endif()
 
-# Option to build launcher (manual override)
-option(BUILD_LAUNCHER "Build GTK3 launcher" ON)
-
 # Option to build asset extraction tool
 option(BUILD_RESTOOL "Build asset extraction tool" ON)
 
 # Option to build PCM to OPUZ encoder
 option(BUILD_OPUS_ENCODER "Build PCM to OPUZ encoder" ON)
 
-# Find libyaml (required for restool integration in launcher)
+# GTK-free launcher core (INI read/write + control mapping + FFI surface).
+# Built as a static lib for the Tauri launcher backend to link via FFI.
+option(BUILD_LAUNCHER_CORE "Build GTK-free launcher core static lib" ON)
+
+# Find libyaml (required by restool)
 find_package(YAML REQUIRED)
 if(YAML_FOUND)
     message(STATUS "Found libyaml: ${YAML_LIBRARIES}")
-endif()
-
-# Find GTK3 (optional, for settings launcher)
-if(BUILD_LAUNCHER)
-    find_package(PkgConfig QUIET)
-    if(PkgConfig_FOUND)
-        # On macOS arm64, prefer Homebrew in /opt/homebrew over /usr/local
-        if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
-            set(ENV{PKG_CONFIG_PATH} "/opt/homebrew/lib/pkgconfig:/opt/homebrew/share/pkgconfig:$ENV{PKG_CONFIG_PATH}")
-        endif()
-
-        pkg_check_modules(GTK3 QUIET gtk+-3.0)
-        if(GTK3_FOUND)
-            message(STATUS "Found GTK3: ${GTK3_VERSION}")
-            set(HAVE_GTK3 ON)
-        else()
-            message(STATUS "GTK3 not found - launcher will not be built")
-            set(HAVE_GTK3 OFF)
-        endif()
-    else()
-        message(STATUS "pkg-config not found - cannot detect GTK3")
-        set(HAVE_GTK3 OFF)
-    endif()
-else()
-    message(STATUS "Launcher build disabled via BUILD_LAUNCHER=OFF")
-    set(HAVE_GTK3 OFF)
 endif()
 
 # Collect all source files (launcher files now in separate directory)
@@ -309,96 +284,15 @@ if(BUILD_OPUS_ENCODER)
 endif()
 
 # ==============================================================================
-# Launcher target (optional, requires GTK3)
+# GTK-free launcher core static library (Tauri launcher backend / FFI)
 # ==============================================================================
-
-if(HAVE_GTK3)
-    # Launcher source files (launcher-specific code only)
-    set(LAUNCHER_SOURCES
-        src/launcher/launcher_main.c
-        src/launcher/launcher_ui.c
-        src/launcher/launcher_ui_input.c
-        src/launcher/launcher_gamepad.c
-        src/launcher/config_writer.c
-        src/launcher/config_reader.c
-    )
-
-    # Add macOS-specific source
-    if(APPLE)
-        list(APPEND LAUNCHER_SOURCES src/platform/macos/launcher_macos.m)
-    endif()
-
-    # Create launcher executable
-    add_executable(zelda3-launcher ${LAUNCHER_SOURCES})
-
-    # Link against restool_lib (provides all extraction functionality)
-    # The restool_lib target provides all include directories and dependencies via PUBLIC
+if(BUILD_LAUNCHER_CORE)
     if(BUILD_RESTOOL AND TARGET restool_lib)
-        target_link_libraries(zelda3-launcher PRIVATE restool_lib)
+        add_subdirectory(src/launcher_core)
+        message(STATUS "Launcher core lib will be built: launcher_core_lib")
     else()
-        message(FATAL_ERROR "Launcher requires BUILD_RESTOOL=ON to link against restool_lib")
+        message(STATUS "launcher_core requires BUILD_RESTOOL=ON - skipping")
     endif()
-
-    # Link opus encoder for PCM-to-Opus conversion in launcher
-    if(BUILD_OPUS_ENCODER AND TARGET opus_encoder_lib)
-        target_link_libraries(zelda3-launcher PRIVATE opus_encoder_lib)
-        target_compile_definitions(zelda3-launcher PRIVATE HAVE_OPUS_ENCODER)
-        message(STATUS "Launcher will have PCM-to-Opus encoding support")
-    endif()
-
-    # Include directories for launcher (launcher-specific only, restool headers come from restool_lib)
-    target_include_directories(zelda3-launcher PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/launcher
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/opus_encoder
-        ${SDL2_INCLUDE_DIRS}
-        ${GTK3_INCLUDE_DIRS}
-    )
-
-    # Compiler flags for launcher
-    if(MSVC)
-        target_compile_options(zelda3-launcher PRIVATE
-            $<$<CONFIG:Release>:/O2>
-            $<$<CONFIG:Debug>:/Od /Zi>
-            /W3
-            /std:c17
-        )
-        target_compile_definitions(zelda3-launcher PRIVATE
-            _CRT_SECURE_NO_WARNINGS
-            _CRT_NONSTDC_NO_DEPRECATE
-        )
-    else()
-        target_compile_options(zelda3-launcher PRIVATE
-            $<$<CONFIG:Release>:-O2>
-            $<$<CONFIG:Debug>:-O0 -g>
-            -Wall
-        )
-    endif()
-
-    # Link GTK3 and SDL2 for launcher (libyaml comes from restool_lib)
-    target_link_libraries(zelda3-launcher PRIVATE
-        ${SDL2_LIBRARIES}
-        ${GTK3_LIBRARIES}
-    )
-
-    # Link directories for GTK3
-    target_link_directories(zelda3-launcher PRIVATE
-        ${GTK3_LIBRARY_DIRS}
-    )
-
-    # Add GTK3 compile flags
-    target_compile_options(zelda3-launcher PRIVATE ${GTK3_CFLAGS_OTHER})
-
-    # Platform-specific settings for launcher
-    if(APPLE)
-        target_compile_definitions(zelda3-launcher PRIVATE _THREAD_SAFE)
-        target_link_libraries(zelda3-launcher PRIVATE "-framework Cocoa")
-    endif()
-
-    # Install launcher
-    install(TARGETS zelda3-launcher DESTINATION bin)
-
-    message(STATUS "Launcher target will be built: zelda3-launcher")
 endif()
 
 # ==============================================================================
@@ -422,8 +316,6 @@ message(STATUS "Opus Found: ${Opus_FOUND}")
 message(STATUS "OpenGL Found: ${HAVE_OPENGL}")
 message(STATUS "Vulkan Found: ${HAVE_VULKAN}")
 message(STATUS "Slang Shaders: ${HAVE_SLANG_SHADERS}")
-message(STATUS "GTK3 Found: ${HAVE_GTK3}")
-message(STATUS "Launcher: ${HAVE_GTK3}")
 message(STATUS "Tests: ${BUILD_TESTS}")
 message(STATUS "Platform: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "===================================")

@@ -1,5 +1,6 @@
 #include "config_writer.h"
-#include "launcher_ui.h"
+#include "keymap_state.h"      // control-mapping globals + NUM_* counts (GTK-free)
+#include "control_strings.h"   // LauncherUI_FormatControlString (GTK-free)
 #include "../config.h"
 #include "../game_features.h"
 #include "../logging.h"
