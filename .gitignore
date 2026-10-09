@@ -81,3 +81,4 @@ translations/check_rom_sha.sh
 architecture-review.md
 /testdata/
 android/.claude/settings.local.json
+.cache/
