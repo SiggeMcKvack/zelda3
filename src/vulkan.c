@@ -1261,6 +1261,7 @@ static int DeviceTypeScore(VkPhysicalDeviceType type) {
   }
 }
 
+#ifndef NDEBUG
 static bool IsLayerAvailable(const char *name) {
   uint32_t count = 0;
   vkEnumerateInstanceLayerProperties(&count, NULL);
@@ -1272,6 +1273,7 @@ static bool IsLayerAvailable(const char *name) {
   free(layers);
   return found;
 }
+#endif
 
 static bool VulkanRenderer_Init(SDL_Window *window) {
   VK_LOG("Initializing Vulkan renderer");
