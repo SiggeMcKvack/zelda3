@@ -85,11 +85,10 @@ See [Python Restool Guide](RESTOOL_PYTHON.md) for details.
 
 ### Method 3: Launcher GUI
 
-The GTK3 launcher can create assets directly:
+The launcher can create assets directly (see [Launcher Guide](launcher.md) for building it):
 
-1. Build the project (includes launcher)
-2. Run `./zelda3-launcher`
-3. Go to **General** tab
+1. Open the launcher (`Zelda3.app`, the Windows install, or `zelda3-launcher` on Linux)
+2. Go to **General** tab
 4. Click **Browse** to select your ROM file
 5. Click **Create Asset File**
 
@@ -141,7 +140,7 @@ cmake .. -DENABLE_WERROR=ON
 | `ENABLE_WERROR` | ON, OFF | OFF | Treat warnings as errors |
 | `BUILD_RESTOOL` | ON, OFF | ON | Build asset extraction tool |
 | `BUILD_OPUS_ENCODER` | ON, OFF | ON | Build PCM to OPUZ encoder |
-| `BUILD_LAUNCHER` | ON, OFF | ON | Build GTK3 launcher |
+| `BUILD_LAUNCHER_CORE` | ON, OFF | ON | Build the launcher core static lib (used by the Tauri launcher) |
 | `BUILD_TESTS` | ON, OFF | OFF | Build unit tests |
 | `CMAKE_C_COMPILER` | clang, gcc, etc | System default | C compiler |
 | `CMAKE_INSTALL_PREFIX` | path | `/usr/local` | Installation prefix |

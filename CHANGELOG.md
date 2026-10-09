@@ -2,6 +2,26 @@
 
 Notable changes, improvements, and additions to the Zelda3 project.
 
+## October 2026
+
+### Desktop Launcher Rewritten in Tauri
+
+**Breaking change:** The GTK3 launcher has been replaced by a [Tauri 2](https://tauri.app) launcher (`launcher-tauri/`) on macOS, Linux and Windows. GTK is no longer a build or runtime dependency of the game.
+
+**What changes for users:**
+- `zelda3.ini`, `zelda3_assets.dat` and `saves/` now live in a per-user data directory instead of next to the executable:
+  - macOS: `~/Library/Application Support/Zelda3`
+  - Linux: `~/.config/zelda3` (or `$XDG_CONFIG_HOME/zelda3`)
+  - Windows: `%APPDATA%\Zelda3`
+- Existing files are **not** migrated automatically. Copy them over, or let the launcher create new ones.
+- Release packages: `Zelda3.app` (macOS zip), an NSIS installer (Windows) and a `.deb` (Linux). Each bundles the game, which the launcher starts.
+- When run directly, the game now keeps the current directory if it contains `zelda3_assets.dat`, and otherwise falls back to its executable directory as before.
+
+**Technical Details:**
+- The INI reader/writer, keymap state and asset/MSU tooling are exposed through a GTK-free C FFI (`src/launcher_core/`, `launcher_core_lib`). INI output is byte-for-byte identical to the previous launcher.
+- The game ships as a Tauri sidecar (`zelda3-game`); `scripts/bundle-macos.sh` bundles Homebrew dylibs (including SDL3 for sdl2-compat) into the macOS app.
+- Removed: GTK launcher sources, the `BUILD_LAUNCHER` CMake option, GTK vcpkg overlays, and GTK from CI.
+
 ## December 2025
 
 ### Android: Vulkan Slang Shader Support

@@ -1,0 +1,28 @@
+[package]
+name = "zelda3-launcher"
+version = "0.1.0"
+edition = "2021"
+description = "Zelda3 launcher (Tauri) - replaces the GTK launcher"
+license = "MIT"
+
+[lib]
+name = "zelda3_launcher_core"
+crate-type = ["lib"]
+
+[[bin]]
+name = "zelda3-launcher"
+path = "src/main.rs"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde_json = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+cmake = "0.1"
+bindgen = "0.70"
+pkg-config = "0.3"
