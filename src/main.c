@@ -487,7 +487,8 @@ int main(int argc, char** argv) {
       // Update config file for next launch
       Android_UpdateRendererConfig("OpenGL ES");
 
-      // Destroy Vulkan window
+      // Release whatever Vulkan objects were created, then destroy the Vulkan window
+      g_renderer_funcs.Destroy();
       SDL_DestroyWindow(window);
       window = NULL;
 

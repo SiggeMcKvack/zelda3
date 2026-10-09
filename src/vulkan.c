@@ -25,8 +25,8 @@
 #define VK_LOG(...) __android_log_print(ANDROID_LOG_INFO, "Zelda3-Vulkan", __VA_ARGS__)
 #define VK_ERR(...) __android_log_print(ANDROID_LOG_ERROR, "Zelda3-Vulkan", __VA_ARGS__)
 #else
-#define VK_LOG(...) fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n")
-#define VK_ERR(...) fprintf(stderr, "ERROR: "__VA_ARGS__); fprintf(stderr, "\n")
+#define VK_LOG(...) do { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } while (0)
+#define VK_ERR(...) do { fprintf(stderr, "ERROR: "__VA_ARGS__); fprintf(stderr, "\n"); } while (0)
 #endif
 
 #ifdef VULKAN_AVAILABLE
@@ -51,7 +51,7 @@ static const uint16_t g_quad_indices[] = {0, 1, 2, 2, 3, 0};
 
 // Embedded SPIR-V shaders (compiled from shaders/vertex.glsl and shaders/fragment.glsl)
 // See shaders/compile_shaders.sh for compilation process
-static const unsigned char k_vert_shader_spv[] = {
+static const _Alignas(uint32_t) unsigned char k_vert_shader_spv[] = {
   0x03, 0x02, 0x23, 0x07, 0x00, 0x00, 0x01, 0x00, 0x0a, 0x00, 0x0d, 0x00,
   0x1d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x00, 0x02, 0x00,
   0x01, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x06, 0x00, 0x02, 0x00, 0x00, 0x00,
@@ -183,7 +183,7 @@ static const unsigned char k_vert_shader_spv[] = {
   0x38, 0x00, 0x01, 0x00
 };
 
-static const unsigned char k_frag_shader_spv[] = {
+static const _Alignas(uint32_t) unsigned char k_frag_shader_spv[] = {
   0x03, 0x02, 0x23, 0x07, 0x00, 0x00, 0x01, 0x00, 0x0a, 0x00, 0x0d, 0x00,
   0x15, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0x00, 0x02, 0x00,
   0x01, 0x00, 0x00, 0x00, 0x0b, 0x00, 0x06, 0x00, 0x02, 0x00, 0x00, 0x00,
@@ -321,13 +321,14 @@ typedef struct {
   VkPipeline graphics_pipeline;
 
   VkFramebuffer *framebuffers;
+  // Per swapchain image: presentation may still hold it after the frame's fence signals
+  VkSemaphore *render_finished_semaphores;
 
   VkCommandPool command_pool;
-  VkCommandBuffer *command_buffers;
+  VkCommandBuffer command_buffers[MAX_FRAMES_IN_FLIGHT];
 
-  VkSemaphore *image_available_semaphores;
-  VkSemaphore *render_finished_semaphores;
-  VkFence *in_flight_fences;
+  VkSemaphore image_available_semaphores[MAX_FRAMES_IN_FLIGHT];
+  VkFence in_flight_fences[MAX_FRAMES_IN_FLIGHT];
 
   uint32_t current_frame;
 
@@ -346,10 +347,11 @@ typedef struct {
   VkBuffer index_buffer;
   VkDeviceMemory index_buffer_memory;
 
-  // Staging buffer for texture uploads
-  VkBuffer staging_buffer;
-  VkDeviceMemory staging_buffer_memory;
-  void *staging_buffer_mapped;
+  // Staging buffers for texture uploads, one per frame in flight so the CPU
+  // never overwrites data a still-pending frame has yet to copy
+  VkBuffer staging_buffers[MAX_FRAMES_IN_FLIGHT];
+  VkDeviceMemory staging_buffer_memories[MAX_FRAMES_IN_FLIGHT];
+  void *staging_buffers_mapped[MAX_FRAMES_IN_FLIGHT];
 
   // Game texture dimensions
   int texture_width;
@@ -391,6 +393,7 @@ static bool CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPr
 
   if (vkCreateBuffer(vk.device, &buffer_info, NULL, buffer) != VK_SUCCESS) {
     VK_ERR("Failed to create buffer");
+    *buffer = VK_NULL_HANDLE;
     return false;
   }
 
@@ -404,6 +407,9 @@ static bool CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPr
 
   if (vkAllocateMemory(vk.device, &alloc_info, NULL, buffer_memory) != VK_SUCCESS) {
     VK_ERR("Failed to allocate buffer memory");
+    vkDestroyBuffer(vk.device, *buffer, NULL);
+    *buffer = VK_NULL_HANDLE;
+    *buffer_memory = VK_NULL_HANDLE;
     return false;
   }
 
@@ -431,6 +437,7 @@ static bool CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImag
 
   if (vkCreateImage(vk.device, &image_info, NULL, image) != VK_SUCCESS) {
     VK_ERR("Failed to create image");
+    *image = VK_NULL_HANDLE;
     return false;
   }
 
@@ -444,6 +451,9 @@ static bool CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImag
 
   if (vkAllocateMemory(vk.device, &alloc_info, NULL, image_memory) != VK_SUCCESS) {
     VK_ERR("Failed to allocate image memory");
+    vkDestroyImage(vk.device, *image, NULL);
+    *image = VK_NULL_HANDLE;
+    *image_memory = VK_NULL_HANDLE;
     return false;
   }
 
@@ -505,34 +515,54 @@ static VkShaderModule CreateShaderModule(const uint32_t *code, size_t size) {
   return shader_module;
 }
 
+static VkCompositeAlphaFlagBitsKHR ChooseCompositeAlpha(VkCompositeAlphaFlagsKHR supported) {
+  static const VkCompositeAlphaFlagBitsKHR kPreferred[] = {
+    VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+    VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,  // Some Android drivers only expose this
+    VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+    VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+  };
+  for (size_t i = 0; i < ARRAY_SIZE(kPreferred); i++) {
+    if (supported & kPreferred[i])
+      return kPreferred[i];
+  }
+  return VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+}
+
 static bool CreateSwapchain() {
   VkSurfaceCapabilitiesKHR capabilities;
   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk.physical_device, vk.surface, &capabilities);
 
-  uint32_t format_count;
+  uint32_t format_count = 0;
   vkGetPhysicalDeviceSurfaceFormatsKHR(vk.physical_device, vk.surface, &format_count, NULL);
+  if (format_count == 0) {
+    VK_ERR("Surface reports no supported formats");
+    return false;
+  }
   VkSurfaceFormatKHR *formats = malloc(format_count * sizeof(VkSurfaceFormatKHR));
   vkGetPhysicalDeviceSurfaceFormatsKHR(vk.physical_device, vk.surface, &format_count, formats);
 
-  // Prefer UNORM format to avoid double gamma correction
-  // (game pixel data is already gamma-encoded for display)
+  // On recreation, keep the format the render pass and pipeline were built for.
+  // Otherwise prefer UNORM to avoid double gamma correction
+  // (game pixel data is already gamma-encoded for display), falling back to SRGB.
+  const VkFormat preferred[] = {vk.swapchain_format, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SRGB};
   VkSurfaceFormatKHR surface_format = formats[0];
-  for (uint32_t i = 0; i < format_count; i++) {
-    if (formats[i].format == VK_FORMAT_B8G8R8A8_UNORM && formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-      surface_format = formats[i];
-      break;
-    }
-  }
-  // Fall back to SRGB if UNORM not available (shouldn't happen on most platforms)
-  if (surface_format.format != VK_FORMAT_B8G8R8A8_UNORM) {
+  bool found = false;
+  for (size_t p = (vk.swapchain_format == VK_FORMAT_UNDEFINED); p < ARRAY_SIZE(preferred) && !found; p++) {
     for (uint32_t i = 0; i < format_count; i++) {
-      if (formats[i].format == VK_FORMAT_B8G8R8A8_SRGB && formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+      if (formats[i].format == preferred[p] && formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
         surface_format = formats[i];
+        found = true;
         break;
       }
     }
   }
   free(formats);
+
+  if (vk.render_pass && surface_format.format != vk.swapchain_format) {
+    VK_ERR("Surface no longer supports swapchain format %d", vk.swapchain_format);
+    return false;
+  }
 
   // Use surface capabilities for extent - more reliable than SDL during transitions
   vk.swapchain_extent = capabilities.currentExtent;
@@ -555,6 +585,11 @@ static bool CreateSwapchain() {
       vk.swapchain_extent.height = capabilities.maxImageExtent.height;
   }
 
+  if (vk.swapchain_extent.width == 0 || vk.swapchain_extent.height == 0) {
+    VK_ERR("Surface has zero extent (window minimized?)");
+    return false;
+  }
+
   uint32_t image_count = capabilities.minImageCount + 1;
   if (capabilities.maxImageCount > 0 && image_count > capabilities.maxImageCount) {
     image_count = capabilities.maxImageCount;
@@ -570,16 +605,18 @@ static bool CreateSwapchain() {
   create_info.imageArrayLayers = 1;
   create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
   create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  // Use IDENTITY transform - app is landscape-locked in manifest (AndroidManifest.xml:84)
+  // Prefer IDENTITY transform - app is landscape-locked in manifest (AndroidManifest.xml:84)
   // Using currentTransform can cause incorrect rotation on some Android devices
-  create_info.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-  create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+  create_info.preTransform = (capabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) ?
+      VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR : capabilities.currentTransform;
+  create_info.compositeAlpha = ChooseCompositeAlpha(capabilities.supportedCompositeAlpha);
   create_info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
   create_info.clipped = VK_TRUE;
   create_info.oldSwapchain = VK_NULL_HANDLE;
 
   if (vkCreateSwapchainKHR(vk.device, &create_info, NULL, &vk.swapchain) != VK_SUCCESS) {
     VK_ERR("Failed to create swapchain");
+    vk.swapchain = VK_NULL_HANDLE;
     return false;
   }
 
@@ -589,9 +626,17 @@ static bool CreateSwapchain() {
   vk.swapchain_images = malloc(vk.swapchain_image_count * sizeof(VkImage));
   vkGetSwapchainImagesKHR(vk.device, vk.swapchain, &vk.swapchain_image_count, vk.swapchain_images);
 
-  vk.swapchain_image_views = malloc(vk.swapchain_image_count * sizeof(VkImageView));
+  vk.swapchain_image_views = calloc(vk.swapchain_image_count, sizeof(VkImageView));
+  vk.render_finished_semaphores = calloc(vk.swapchain_image_count, sizeof(VkSemaphore));
+  VkSemaphoreCreateInfo semaphore_info = {0};
+  semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
   for (uint32_t i = 0; i < vk.swapchain_image_count; i++) {
     vk.swapchain_image_views[i] = CreateImageView(vk.swapchain_images[i], vk.swapchain_format);
+    if (vk.swapchain_image_views[i] == VK_NULL_HANDLE ||
+        vkCreateSemaphore(vk.device, &semaphore_info, NULL, &vk.render_finished_semaphores[i]) != VK_SUCCESS) {
+      VK_ERR("Failed to create swapchain image resources");
+      return false;
+    }
   }
 
   VK_LOG("Swapchain created: %ux%u, %u images, format=%d", vk.swapchain_extent.width, vk.swapchain_extent.height, vk.swapchain_image_count, vk.swapchain_format);
@@ -599,39 +644,59 @@ static bool CreateSwapchain() {
 }
 
 static void CleanupSwapchain() {
-  // Destroy framebuffers
-  if (vk.framebuffers) {
-    for (uint32_t i = 0; i < vk.swapchain_image_count; i++) {
-      if (vk.framebuffers[i]) {
-        vkDestroyFramebuffer(vk.device, vk.framebuffers[i], NULL);
-      }
-    }
-    free(vk.framebuffers);
-    vk.framebuffers = NULL;
+  for (uint32_t i = 0; i < vk.swapchain_image_count; i++) {
+    if (vk.framebuffers && vk.framebuffers[i])
+      vkDestroyFramebuffer(vk.device, vk.framebuffers[i], NULL);
+    if (vk.swapchain_image_views && vk.swapchain_image_views[i])
+      vkDestroyImageView(vk.device, vk.swapchain_image_views[i], NULL);
+    if (vk.render_finished_semaphores && vk.render_finished_semaphores[i])
+      vkDestroySemaphore(vk.device, vk.render_finished_semaphores[i], NULL);
   }
+  free(vk.framebuffers);
+  vk.framebuffers = NULL;
+  free(vk.swapchain_image_views);
+  vk.swapchain_image_views = NULL;
+  free(vk.render_finished_semaphores);
+  vk.render_finished_semaphores = NULL;
+  free(vk.swapchain_images);
+  vk.swapchain_images = NULL;
+  vk.swapchain_image_count = 0;
 
-  // Destroy image views
-  if (vk.swapchain_image_views) {
-    for (uint32_t i = 0; i < vk.swapchain_image_count; i++) {
-      if (vk.swapchain_image_views[i]) {
-        vkDestroyImageView(vk.device, vk.swapchain_image_views[i], NULL);
-      }
-    }
-    free(vk.swapchain_image_views);
-    vk.swapchain_image_views = NULL;
-  }
-
-  // Destroy swapchain
   if (vk.swapchain) {
     vkDestroySwapchainKHR(vk.device, vk.swapchain, NULL);
     vk.swapchain = VK_NULL_HANDLE;
   }
-
-  free(vk.swapchain_images);
-  vk.swapchain_images = NULL;
 }
 
-static bool RecreateSwapchain() {
+static bool CreateFramebuffers() {
+  vk.framebuffers = calloc(vk.swapchain_image_count, sizeof(VkFramebuffer));
+
+  for (uint32_t i = 0; i < vk.swapchain_image_count; i++) {
+    VkImageView attachments[] = {vk.swapchain_image_views[i]};
+
+    VkFramebufferCreateInfo framebuffer_info = {0};
+    framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    framebuffer_info.renderPass = vk.render_pass;
+    framebuffer_info.attachmentCount = 1;
+    framebuffer_info.pAttachments = attachments;
+    framebuffer_info.width = vk.swapchain_extent.width;
+    framebuffer_info.height = vk.swapchain_extent.height;
+    framebuffer_info.layers = 1;
+
+    if (vkCreateFramebuffer(vk.device, &framebuffer_info, NULL, &vk.framebuffers[i]) != VK_SUCCESS) {
+      VK_ERR("Failed to create framebuffer %u", i);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+static void RecreateSwapchain() {
+  // Assume failure until the new swapchain is complete, so EndDraw retries
+  // instead of rendering with a destroyed swapchain
+  vk.swapchain_needs_recreation = true;
+
   // Query surface capabilities for the actual current size
   VkSurfaceCapabilitiesKHR capabilities;
   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk.physical_device, vk.surface, &capabilities);
@@ -648,9 +713,8 @@ static bool RecreateSwapchain() {
   }
 
   if (w < 2 || h < 2) {
-    // Window is minimized or transitioning - mark for later recreation
-    vk.swapchain_needs_recreation = true;
-    return true;
+    // Window is minimized or transitioning - retry on a later frame
+    return;
   }
 
   VK_LOG("Recreating swapchain: %dx%d -> %dx%d", vk.swapchain_extent.width, vk.swapchain_extent.height, w, h);
@@ -659,32 +723,14 @@ static bool RecreateSwapchain() {
 
   CleanupSwapchain();
 
-  if (!CreateSwapchain()) {
+  if (!CreateSwapchain() || !CreateFramebuffers()) {
     VK_ERR("Failed to recreate swapchain");
-    return false;
-  }
-
-  // Recreate framebuffers (they depend on swapchain image views)
-  vk.framebuffers = malloc(vk.swapchain_image_count * sizeof(VkFramebuffer));
-  for (uint32_t i = 0; i < vk.swapchain_image_count; i++) {
-    VkImageView attachments[] = {vk.swapchain_image_views[i]};
-    VkFramebufferCreateInfo framebuffer_info = {0};
-    framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    framebuffer_info.renderPass = vk.render_pass;
-    framebuffer_info.attachmentCount = 1;
-    framebuffer_info.pAttachments = attachments;
-    framebuffer_info.width = vk.swapchain_extent.width;
-    framebuffer_info.height = vk.swapchain_extent.height;
-    framebuffer_info.layers = 1;
-    if (vkCreateFramebuffer(vk.device, &framebuffer_info, NULL, &vk.framebuffers[i]) != VK_SUCCESS) {
-      VK_ERR("Failed to recreate framebuffer %u", i);
-      return false;
-    }
+    CleanupSwapchain();
+    return;
   }
 
   vk.swapchain_needs_recreation = false;
   VK_LOG("Swapchain recreated successfully");
-  return true;
 }
 
 static bool CreateRenderPass() {
@@ -899,30 +945,6 @@ static bool CreateGraphicsPipeline() {
   return true;
 }
 
-static bool CreateFramebuffers() {
-  vk.framebuffers = malloc(vk.swapchain_image_count * sizeof(VkFramebuffer));
-
-  for (uint32_t i = 0; i < vk.swapchain_image_count; i++) {
-    VkImageView attachments[] = {vk.swapchain_image_views[i]};
-
-    VkFramebufferCreateInfo framebuffer_info = {0};
-    framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    framebuffer_info.renderPass = vk.render_pass;
-    framebuffer_info.attachmentCount = 1;
-    framebuffer_info.pAttachments = attachments;
-    framebuffer_info.width = vk.swapchain_extent.width;
-    framebuffer_info.height = vk.swapchain_extent.height;
-    framebuffer_info.layers = 1;
-
-    if (vkCreateFramebuffer(vk.device, &framebuffer_info, NULL, &vk.framebuffers[i]) != VK_SUCCESS) {
-      VK_ERR("Failed to create framebuffer %u", i);
-      return false;
-    }
-  }
-
-  return true;
-}
-
 static bool CreateCommandPool() {
   VkCommandPoolCreateInfo pool_info = {0};
   pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -938,8 +960,6 @@ static bool CreateCommandPool() {
 }
 
 static bool CreateCommandBuffers() {
-  vk.command_buffers = malloc(MAX_FRAMES_IN_FLIGHT * sizeof(VkCommandBuffer));
-
   VkCommandBufferAllocateInfo alloc_info = {0};
   alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   alloc_info.commandPool = vk.command_pool;
@@ -955,10 +975,6 @@ static bool CreateCommandBuffers() {
 }
 
 static bool CreateSyncObjects() {
-  vk.image_available_semaphores = malloc(MAX_FRAMES_IN_FLIGHT * sizeof(VkSemaphore));
-  vk.render_finished_semaphores = malloc(MAX_FRAMES_IN_FLIGHT * sizeof(VkSemaphore));
-  vk.in_flight_fences = malloc(MAX_FRAMES_IN_FLIGHT * sizeof(VkFence));
-
   VkSemaphoreCreateInfo semaphore_info = {0};
   semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
@@ -968,7 +984,6 @@ static bool CreateSyncObjects() {
 
   for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     if (vkCreateSemaphore(vk.device, &semaphore_info, NULL, &vk.image_available_semaphores[i]) != VK_SUCCESS ||
-        vkCreateSemaphore(vk.device, &semaphore_info, NULL, &vk.render_finished_semaphores[i]) != VK_SUCCESS ||
         vkCreateFence(vk.device, &fence_info, NULL, &vk.in_flight_fences[i]) != VK_SUCCESS) {
       VK_ERR("Failed to create synchronization objects");
       return false;
@@ -1085,12 +1100,15 @@ static bool CreateTextureResources(int width, int height) {
   }
 
   vk.texture_image_view = CreateImageView(vk.texture_image, VK_FORMAT_B8G8R8A8_UNORM);
+  if (vk.texture_image_view == VK_NULL_HANDLE)
+    return false;
 
   // Create texture sampler
+  VkFilter filter = g_config.linear_filtering ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
   VkSamplerCreateInfo sampler_info = {0};
   sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-  sampler_info.magFilter = VK_FILTER_NEAREST;
-  sampler_info.minFilter = VK_FILTER_NEAREST;
+  sampler_info.magFilter = filter;
+  sampler_info.minFilter = filter;
   sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
   sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
   sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
@@ -1150,16 +1168,18 @@ static bool CreateTextureResources(int width, int height) {
 
   vkUpdateDescriptorSets(vk.device, 1, &descriptor_write, 0, NULL);
 
-  // Create staging buffer for texture uploads (persistent)
-  VkDeviceSize buffer_size = width * height * 4;
-  if (!CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                    &vk.staging_buffer, &vk.staging_buffer_memory)) {
-    return false;
+  // Create persistently mapped staging buffers for texture uploads
+  VkDeviceSize buffer_size = (VkDeviceSize)width * height * 4;
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    if (!CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                      &vk.staging_buffers[i], &vk.staging_buffer_memories[i]) ||
+        vkMapMemory(vk.device, vk.staging_buffer_memories[i], 0, buffer_size, 0, &vk.staging_buffers_mapped[i]) != VK_SUCCESS) {
+      VK_ERR("Failed to create staging buffer");
+      vk.staging_buffers_mapped[i] = NULL;
+      return false;
+    }
   }
-
-  // Map staging buffer permanently
-  vkMapMemory(vk.device, vk.staging_buffer_memory, 0, buffer_size, 0, &vk.staging_buffer_mapped);
 
   // Transition texture to shader read layout
   VkCommandBufferAllocateInfo cmd_alloc_info = {0};
@@ -1209,6 +1229,48 @@ static bool CreateTextureResources(int width, int height) {
   vkFreeCommandBuffers(vk.device, vk.command_pool, 1, &command_buffer);
 
   return true;
+}
+
+// Returns a queue family supporting both graphics and presentation, or UINT32_MAX
+static uint32_t FindGraphicsPresentQueueFamily(VkPhysicalDevice device) {
+  uint32_t count = 0;
+  vkGetPhysicalDeviceQueueFamilyProperties(device, &count, NULL);
+  VkQueueFamilyProperties *families = malloc(count * sizeof(VkQueueFamilyProperties));
+  vkGetPhysicalDeviceQueueFamilyProperties(device, &count, families);
+
+  uint32_t result = UINT32_MAX;
+  for (uint32_t i = 0; i < count && result == UINT32_MAX; i++) {
+    VkBool32 present_support = VK_FALSE;
+    if (families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+      vkGetPhysicalDeviceSurfaceSupportKHR(device, i, vk.surface, &present_support);
+      if (present_support)
+        result = i;
+    }
+  }
+  free(families);
+  return result;
+}
+
+static int DeviceTypeScore(VkPhysicalDeviceType type) {
+  switch (type) {
+  case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return 4;
+  case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return 3;
+  case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: return 2;
+  case VK_PHYSICAL_DEVICE_TYPE_CPU: return 0;  // Software rasterizer (e.g. lavapipe)
+  default: return 1;
+  }
+}
+
+static bool IsLayerAvailable(const char *name) {
+  uint32_t count = 0;
+  vkEnumerateInstanceLayerProperties(&count, NULL);
+  VkLayerProperties *layers = malloc(count * sizeof(VkLayerProperties));
+  vkEnumerateInstanceLayerProperties(&count, layers);
+  bool found = false;
+  for (uint32_t i = 0; i < count && !found; i++)
+    found = strcmp(layers[i].layerName, name) == 0;
+  free(layers);
+  return found;
 }
 
 static bool VulkanRenderer_Init(SDL_Window *window) {
@@ -1266,6 +1328,15 @@ static bool VulkanRenderer_Init(SDL_Window *window) {
   create_info.enabledExtensionCount = extension_count;
   create_info.ppEnabledExtensionNames = extensions;
   create_info.enabledLayerCount = 0;
+#ifndef NDEBUG
+  // Debug builds: enable validation when the layer is installed (reports go to stdout/logcat)
+  static const char *const kValidationLayer = "VK_LAYER_KHRONOS_validation";
+  if (IsLayerAvailable(kValidationLayer)) {
+    VK_LOG("Enabling %s", kValidationLayer);
+    create_info.enabledLayerCount = 1;
+    create_info.ppEnabledLayerNames = &kValidationLayer;
+  }
+#endif
 #ifdef PLATFORM_MACOS
   create_info.flags = 0x00000001;  // VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR
 #endif
@@ -1284,7 +1355,7 @@ static bool VulkanRenderer_Init(SDL_Window *window) {
     return false;
   }
 
-  // Select physical device
+  // Select a physical device that can present to the window, preferring hardware GPUs
   uint32_t device_count = 0;
   vkEnumeratePhysicalDevices(vk.instance, &device_count, NULL);
   if (device_count == 0) {
@@ -1294,11 +1365,30 @@ static bool VulkanRenderer_Init(SDL_Window *window) {
 
   VkPhysicalDevice *devices = malloc(device_count * sizeof(VkPhysicalDevice));
   vkEnumeratePhysicalDevices(vk.instance, &device_count, devices);
-  vk.physical_device = devices[0];
-  free(devices);
 
   VkPhysicalDeviceProperties device_props;
-  vkGetPhysicalDeviceProperties(vk.physical_device, &device_props);
+  int best_score = -1;
+  vk.graphics_queue_family = UINT32_MAX;
+  for (uint32_t i = 0; i < device_count; i++) {
+    VkPhysicalDeviceProperties props;
+    vkGetPhysicalDeviceProperties(devices[i], &props);
+    uint32_t queue_family = FindGraphicsPresentQueueFamily(devices[i]);
+    int score = DeviceTypeScore(props.deviceType);
+    VK_LOG("Found GPU: %s (type %d)%s", props.deviceName, props.deviceType,
+           queue_family == UINT32_MAX ? " - cannot present, skipped" : "");
+    if (queue_family != UINT32_MAX && score > best_score) {
+      best_score = score;
+      vk.physical_device = devices[i];
+      vk.graphics_queue_family = queue_family;
+      device_props = props;
+    }
+  }
+  free(devices);
+
+  if (vk.graphics_queue_family == UINT32_MAX) {
+    VK_ERR("Failed to find a GPU with a graphics queue that can present to the window");
+    return false;
+  }
   VK_LOG("Selected GPU: %s", device_props.deviceName);
 
   // Check for known problematic drivers
@@ -1306,43 +1396,6 @@ static bool VulkanRenderer_Init(SDL_Window *window) {
     VK_ERR("WARNING: SwiftShader detected. Vulkan pipeline creation may hang.");
     VK_ERR("SwiftShader is a software Vulkan implementation used by Android emulators.");
     VK_ERR("Falling back to OpenGL ES renderer.");
-    return false;
-  }
-
-  // Note: Adreno GPU support now enabled with properly compiled SPIR-V shaders
-  // Shaders are loaded from assets (compiled with glslc) instead of embedded bytecode
-  // This should work on Adreno GPUs, but testing is required
-  // Uncomment the block below if issues persist on Adreno:
-  /*
-  if (strstr(device_props.deviceName, "Adreno") != NULL) {
-    VK_ERR("WARNING: Adreno GPU detected. Vulkan support experimental.");
-    VK_ERR("Falling back to OpenGL ES renderer.");
-    return false;
-  }
-  */
-
-  // Find graphics queue family
-  uint32_t queue_family_count = 0;
-  vkGetPhysicalDeviceQueueFamilyProperties(vk.physical_device, &queue_family_count, NULL);
-
-  VkQueueFamilyProperties *queue_families = malloc(queue_family_count * sizeof(VkQueueFamilyProperties));
-  vkGetPhysicalDeviceQueueFamilyProperties(vk.physical_device, &queue_family_count, queue_families);
-
-  vk.graphics_queue_family = UINT32_MAX;
-  for (uint32_t i = 0; i < queue_family_count; i++) {
-    if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-      VkBool32 present_support = false;
-      vkGetPhysicalDeviceSurfaceSupportKHR(vk.physical_device, i, vk.surface, &present_support);
-      if (present_support) {
-        vk.graphics_queue_family = i;
-        break;
-      }
-    }
-  }
-  free(queue_families);
-
-  if (vk.graphics_queue_family == UINT32_MAX) {
-    VK_ERR("Failed to find suitable queue family");
     return false;
   }
 
@@ -1440,70 +1493,67 @@ static bool VulkanRenderer_Init(SDL_Window *window) {
   return true;
 }
 
+// Destroys the game texture, its descriptor set and the staging buffers.
+// Vulkan destroy calls accept VK_NULL_HANDLE, so this is safe after a partial create.
+static void DestroyTextureResources() {
+  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    if (vk.staging_buffers_mapped[i])
+      vkUnmapMemory(vk.device, vk.staging_buffer_memories[i]);
+    vkDestroyBuffer(vk.device, vk.staging_buffers[i], NULL);
+    vkFreeMemory(vk.device, vk.staging_buffer_memories[i], NULL);
+    vk.staging_buffers_mapped[i] = NULL;
+    vk.staging_buffers[i] = VK_NULL_HANDLE;
+    vk.staging_buffer_memories[i] = VK_NULL_HANDLE;
+  }
+
+  vkDestroyDescriptorPool(vk.device, vk.descriptor_pool, NULL);
+  vkDestroySampler(vk.device, vk.texture_sampler, NULL);
+  vkDestroyImageView(vk.device, vk.texture_image_view, NULL);
+  vkDestroyImage(vk.device, vk.texture_image, NULL);
+  vkFreeMemory(vk.device, vk.texture_memory, NULL);
+  vk.descriptor_pool = VK_NULL_HANDLE;
+  vk.descriptor_set = VK_NULL_HANDLE;
+  vk.texture_sampler = VK_NULL_HANDLE;
+  vk.texture_image_view = VK_NULL_HANDLE;
+  vk.texture_image = VK_NULL_HANDLE;
+  vk.texture_memory = VK_NULL_HANDLE;
+}
+
+// Safe to call after a partial or failed Init (e.g. before the Android OpenGL ES fallback)
 static void VulkanRenderer_Destroy() {
   if (vk.device) {
     vkDeviceWaitIdle(vk.device);
-  }
 
-  // Destroy slang shader
 #ifdef SLANG_SHADERS_AVAILABLE
-  if (vk.slang_shader) {
-    SlangShader_Destroy(vk.slang_shader);
-    vk.slang_shader = NULL;
-  }
+    if (vk.slang_shader) {
+      SlangShader_Destroy(vk.slang_shader);
+      vk.slang_shader = NULL;
+    }
 #endif
 
-  for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-    if (vk.image_available_semaphores) vkDestroySemaphore(vk.device, vk.image_available_semaphores[i], NULL);
-    if (vk.render_finished_semaphores) vkDestroySemaphore(vk.device, vk.render_finished_semaphores[i], NULL);
-    if (vk.in_flight_fences) vkDestroyFence(vk.device, vk.in_flight_fences[i], NULL);
-  }
-  free(vk.image_available_semaphores);
-  free(vk.render_finished_semaphores);
-  free(vk.in_flight_fences);
-
-  if (vk.staging_buffer_mapped) {
-    vkUnmapMemory(vk.device, vk.staging_buffer_memory);
-  }
-  if (vk.staging_buffer) vkDestroyBuffer(vk.device, vk.staging_buffer, NULL);
-  if (vk.staging_buffer_memory) vkFreeMemory(vk.device, vk.staging_buffer_memory, NULL);
-
-  if (vk.descriptor_pool) vkDestroyDescriptorPool(vk.device, vk.descriptor_pool, NULL);
-  if (vk.texture_sampler) vkDestroySampler(vk.device, vk.texture_sampler, NULL);
-  if (vk.texture_image_view) vkDestroyImageView(vk.device, vk.texture_image_view, NULL);
-  if (vk.texture_image) vkDestroyImage(vk.device, vk.texture_image, NULL);
-  if (vk.texture_memory) vkFreeMemory(vk.device, vk.texture_memory, NULL);
-
-  if (vk.vertex_buffer) vkDestroyBuffer(vk.device, vk.vertex_buffer, NULL);
-  if (vk.vertex_buffer_memory) vkFreeMemory(vk.device, vk.vertex_buffer_memory, NULL);
-  if (vk.index_buffer) vkDestroyBuffer(vk.device, vk.index_buffer, NULL);
-  if (vk.index_buffer_memory) vkFreeMemory(vk.device, vk.index_buffer_memory, NULL);
-
-  if (vk.command_pool) vkDestroyCommandPool(vk.device, vk.command_pool, NULL);
-  free(vk.command_buffers);
-
-  if (vk.framebuffers) {
-    for (uint32_t i = 0; i < vk.swapchain_image_count; i++) {
-      vkDestroyFramebuffer(vk.device, vk.framebuffers[i], NULL);
+    for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+      vkDestroySemaphore(vk.device, vk.image_available_semaphores[i], NULL);
+      vkDestroyFence(vk.device, vk.in_flight_fences[i], NULL);
     }
-    free(vk.framebuffers);
+
+    DestroyTextureResources();
+
+    vkDestroyBuffer(vk.device, vk.vertex_buffer, NULL);
+    vkFreeMemory(vk.device, vk.vertex_buffer_memory, NULL);
+    vkDestroyBuffer(vk.device, vk.index_buffer, NULL);
+    vkFreeMemory(vk.device, vk.index_buffer_memory, NULL);
+
+    vkDestroyCommandPool(vk.device, vk.command_pool, NULL);
+
+    CleanupSwapchain();
+
+    vkDestroyPipeline(vk.device, vk.graphics_pipeline, NULL);
+    vkDestroyPipelineLayout(vk.device, vk.pipeline_layout, NULL);
+    vkDestroyDescriptorSetLayout(vk.device, vk.descriptor_set_layout, NULL);
+    vkDestroyRenderPass(vk.device, vk.render_pass, NULL);
+
+    vkDestroyDevice(vk.device, NULL);
   }
-
-  if (vk.graphics_pipeline) vkDestroyPipeline(vk.device, vk.graphics_pipeline, NULL);
-  if (vk.pipeline_layout) vkDestroyPipelineLayout(vk.device, vk.pipeline_layout, NULL);
-  if (vk.descriptor_set_layout) vkDestroyDescriptorSetLayout(vk.device, vk.descriptor_set_layout, NULL);
-  if (vk.render_pass) vkDestroyRenderPass(vk.device, vk.render_pass, NULL);
-
-  if (vk.swapchain_image_views) {
-    for (uint32_t i = 0; i < vk.swapchain_image_count; i++) {
-      vkDestroyImageView(vk.device, vk.swapchain_image_views[i], NULL);
-    }
-    free(vk.swapchain_image_views);
-  }
-  free(vk.swapchain_images);
-
-  if (vk.swapchain) vkDestroySwapchainKHR(vk.device, vk.swapchain, NULL);
-  if (vk.device) vkDestroyDevice(vk.device, NULL);
   if (vk.surface) vkDestroySurfaceKHR(vk.instance, vk.surface, NULL);
   if (vk.instance) vkDestroyInstance(vk.instance, NULL);
 
@@ -1544,28 +1594,19 @@ static void VulkanRenderer_BeginDraw(int width, int height, uint8_t **pixels, in
 
   if (!vk.pixel_buffer || vk.texture_width != width || vk.texture_height != height) {
     // Recreate texture if dimensions changed
-    if (vk.texture_image) {
-      vkDeviceWaitIdle(vk.device);
-
-      vkDestroyDescriptorPool(vk.device, vk.descriptor_pool, NULL);
-      vkDestroySampler(vk.device, vk.texture_sampler, NULL);
-      vkDestroyImageView(vk.device, vk.texture_image_view, NULL);
-      vkDestroyImage(vk.device, vk.texture_image, NULL);
-      vkFreeMemory(vk.device, vk.texture_memory, NULL);
-
-      if (vk.staging_buffer_mapped) {
-        vkUnmapMemory(vk.device, vk.staging_buffer_memory);
-      }
-      vkDestroyBuffer(vk.device, vk.staging_buffer, NULL);
-      vkFreeMemory(vk.device, vk.staging_buffer_memory, NULL);
-    }
+    vkDeviceWaitIdle(vk.device);
+    DestroyTextureResources();
 
     free(vk.pixel_buffer);
     vk.texture_width = width;
     vk.texture_height = height;
     vk.pixel_buffer = malloc(width * height * 4);
 
-    CreateTextureResources(width, height);
+    // On failure the game still draws into pixel_buffer; EndDraw skips presenting
+    if (!CreateTextureResources(width, height)) {
+      VK_ERR("Failed to create texture resources for %dx%d", width, height);
+      DestroyTextureResources();
+    }
   }
 
   *pixels = vk.pixel_buffer;
@@ -1580,6 +1621,10 @@ static void VulkanRenderer_EndDraw() {
       // Still not ready (window size still invalid) - skip this frame
       return;
     }
+  }
+
+  if (!vk.texture_image) {
+    return;  // Texture creation failed in BeginDraw
   }
 
   // Wait for previous frame
@@ -1602,8 +1647,9 @@ static void VulkanRenderer_EndDraw() {
 
   vkResetFences(vk.device, 1, &vk.in_flight_fences[vk.current_frame]);
 
-  // Upload texture data
-  memcpy(vk.staging_buffer_mapped, vk.pixel_buffer, vk.texture_width * vk.texture_height * 4);
+  // Upload texture data into this frame's staging buffer; the fence wait above
+  // guarantees the GPU has finished the copy that last read from it
+  memcpy(vk.staging_buffers_mapped[vk.current_frame], vk.pixel_buffer, vk.texture_width * vk.texture_height * 4);
 
   VkCommandBuffer cmd = vk.command_buffers[vk.current_frame];
   vkResetCommandBuffer(cmd, 0);
@@ -1648,7 +1694,7 @@ static void VulkanRenderer_EndDraw() {
   region.imageExtent.height = vk.texture_height;
   region.imageExtent.depth = 1;
 
-  vkCmdCopyBufferToImage(cmd, vk.staging_buffer, vk.texture_image,
+  vkCmdCopyBufferToImage(cmd, vk.staging_buffers[vk.current_frame], vk.texture_image,
                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
   // Transition texture back to shader read
@@ -1751,7 +1797,7 @@ static void VulkanRenderer_EndDraw() {
   submit_info.commandBufferCount = 1;
   submit_info.pCommandBuffers = &cmd;
 
-  VkSemaphore signal_semaphores[] = {vk.render_finished_semaphores[vk.current_frame]};
+  VkSemaphore signal_semaphores[] = {vk.render_finished_semaphores[image_index]};
   submit_info.signalSemaphoreCount = 1;
   submit_info.pSignalSemaphores = signal_semaphores;
 
@@ -1844,44 +1890,4 @@ const struct RendererFuncs kVulkanRendererFuncs = {
 
 void VulkanRenderer_Create(struct RendererFuncs *funcs) {
   *funcs = kVulkanRendererFuncs;
-}
-
-// Quick GPU name check without full initialization
-const char* GetVulkanGPUName() {
-#ifdef VULKAN_AVAILABLE
-  // Create minimal instance to query GPU
-  VkApplicationInfo app_info = {0};
-  app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-  app_info.pApplicationName = "Zelda3";
-  app_info.apiVersion = VK_API_VERSION_1_0;
-
-  VkInstanceCreateInfo create_info = {0};
-  create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-  create_info.pApplicationInfo = &app_info;
-
-  VkInstance instance;
-  if (vkCreateInstance(&create_info, NULL, &instance) != VK_SUCCESS) {
-    return NULL;
-  }
-
-  uint32_t device_count = 0;
-  vkEnumeratePhysicalDevices(instance, &device_count, NULL);
-  if (device_count == 0) {
-    vkDestroyInstance(instance, NULL);
-    return NULL;
-  }
-
-  VkPhysicalDevice *devices = malloc(device_count * sizeof(VkPhysicalDevice));
-  vkEnumeratePhysicalDevices(instance, &device_count, devices);
-
-  static VkPhysicalDeviceProperties device_props;
-  vkGetPhysicalDeviceProperties(devices[0], &device_props);
-
-  free(devices);
-  vkDestroyInstance(instance, NULL);
-
-  return device_props.deviceName;
-#else
-  return NULL;
-#endif
 }

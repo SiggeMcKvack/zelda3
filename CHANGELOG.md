@@ -36,6 +36,19 @@ Notable changes, improvements, and additions to the Zelda3 project.
 - ROM file names in the language list are shown as text, never parsed as HTML.
 - Windows: the launcher runs with the UTF-8 code page, so non-ASCII paths (e.g. in the user name) work.
 
+### Vulkan Renderer Fixes
+
+- `LinearFiltering` now applies to the Vulkan renderer (it was always nearest-neighbour).
+- A frame could show part of the next frame's image: one texture upload buffer was shared by two frames in flight. Each frame now has its own.
+- The "render finished" semaphore is now per swapchain image instead of per frame, as presentation requires.
+- No crash when the swapchain can't be recreated after a resize; it retries on the next frame instead.
+- No crash when the game texture can't be created; the frame is skipped.
+- GPU selection skips devices that can't present to the window and prefers hardware GPUs over software rasterizers (e.g. lavapipe) instead of always taking the first one.
+- The swapchain checks the transform and alpha modes the surface supports (some Android drivers only support `INHERIT` alpha).
+- Android: falling back to OpenGL ES now releases the Vulkan objects first.
+- Debug builds enable `VK_LAYER_KHRONOS_validation` when it is installed.
+- Removed the unused `GetVulkanGPUName()`.
+
 ## December 2025
 
 ### Android: Vulkan Slang Shader Support
