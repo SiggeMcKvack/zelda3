@@ -549,8 +549,9 @@ function renderLangList() {
   languageRoms.forEach((r, i) => {
     const li = document.createElement("li");
     li.className = "lang-item";
-    const tag = r.lang ? `[${r.lang}] ` : "";
-    li.innerHTML = `<span>${tag}${r.path}</span>`;
+    const label = document.createElement("span");
+    label.textContent = (r.lang ? `[${r.lang}] ` : "") + r.path;   // never innerHTML: paths are user data
+    li.appendChild(label);
     const rm = document.createElement("button");
     rm.className = "btn";
     rm.textContent = "Remove";
