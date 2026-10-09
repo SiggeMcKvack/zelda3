@@ -118,6 +118,23 @@ function renderTabs() {
       for (const field of window.TABS[name]) panel.appendChild(renderField(field));
     }
   }
+
+  // Sliding underline under the active tab. Placed once without a transition,
+  // then enabled so later tab switches animate.
+  const indicator = document.createElement("div");
+  indicator.className = "tab-indicator";
+  tabsEl.appendChild(indicator);
+  moveIndicator();
+  void indicator.offsetWidth;   // commit the initial position before enabling transitions
+  indicator.classList.add("animated");
+}
+
+function moveIndicator() {
+  const active = document.querySelector(".tab.active");
+  const indicator = document.querySelector(".tab-indicator");
+  if (!active || !indicator) return;
+  indicator.style.width = active.offsetWidth + "px";
+  indicator.style.transform = `translateX(${active.offsetLeft}px)`;
 }
 
 // --- Keyboard / Gamepad tabs ------------------------------------------------
@@ -471,13 +488,21 @@ async function createDat() {
 }
 
 function selectTab(name) {
+  if (name === activeTab) return;
   cancelCapture();
+  const tabs = Array.from(document.querySelectorAll(".tab"));
+  const from = tabs.findIndex((t) => t.textContent === activeTab);
+  const to = tabs.findIndex((t) => t.textContent === name);
   activeTab = name;
-  document.getElementById("panels").scrollTop = 0;
-  for (const t of document.querySelectorAll(".tab"))
-    t.classList.toggle("active", t.textContent === name);
+
+  // The incoming panel slides in from the side of the tab being moved to.
+  const panelsEl = document.getElementById("panels");
+  panelsEl.style.setProperty("--slide-dir", to > from ? 1 : -1);
+  panelsEl.scrollTop = 0;
+  for (const t of tabs) t.classList.toggle("active", t.textContent === name);
   for (const p of document.querySelectorAll(".panel"))
     p.classList.toggle("active", p.dataset.tab === name);
+  moveIndicator();
 }
 
 // --- backend actions --------------------------------------------------------

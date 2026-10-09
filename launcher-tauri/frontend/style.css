@@ -40,6 +40,7 @@ body {
 /* --- tabs ------------------------------------------------------------------ */
 
 .tabs {
+  position: relative;
   display: flex;
   gap: 4px;
   padding: 8px 18px 0;
@@ -53,11 +54,22 @@ body {
   border-bottom: 2px solid transparent;
   cursor: pointer;
   font: inherit;
+  transition: color 150ms ease;
 }
 .tab:hover { color: var(--text); }
-.tab.active {
-  color: var(--text);
-  border-bottom-color: var(--accent);
+.tab.active { color: var(--text); }
+
+.tab-indicator {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+.tab-indicator.animated {
+  transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              width 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .panels {
@@ -66,7 +78,19 @@ body {
   padding: 16px 18px;
 }
 .panel { display: none; }
-.panel.active { display: block; }
+.panel.active {
+  display: block;
+  animation: panel-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes panel-in {
+  from { opacity: 0; transform: translateX(calc(var(--slide-dir, 0) * 16px)); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel.active { animation: none; }
+  .tab, .tab-indicator.animated { transition: none; }
+}
 
 /* --- section headings (one style on every tab) ----------------------------- */
 
