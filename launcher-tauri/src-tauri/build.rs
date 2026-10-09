@@ -10,7 +10,12 @@ use std::path::{Path, PathBuf};
 
 fn main() {
     // Generate the Tauri context (reads tauri.conf.json, capabilities, frontend).
-    tauri_build::build();
+    // On Windows, embed a manifest that switches the process to the UTF-8 code page.
+    println!("cargo:rerun-if-changed=windows-app-manifest.xml");
+    let windows = tauri_build::WindowsAttributes::new()
+        .app_manifest(include_str!("windows-app-manifest.xml"));
+    tauri_build::try_build(tauri_build::Attributes::new().windows_attributes(windows))
+        .expect("failed to run tauri-build");
 
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let repo_root = manifest.join("../..").canonicalize().unwrap();
@@ -55,6 +60,11 @@ fn main() {
         .expect("libyaml (yaml-0.1) not found via pkg-config");
     if !cfg!(target_os = "windows") {
         println!("cargo:rustc-link-lib=dylib=m");
+    }
+    // Reserve Mach-O header space so bundle-macos.sh (dylibbundler) can rewrite
+    // the long /opt/homebrew dylib paths to @executable_path ones.
+    if cfg!(target_os = "macos") {
+        println!("cargo:rustc-link-arg-bins=-Wl,-headerpad_max_install_names");
     }
 
     // Optional opus encoder: linked only when CMake actually built it (i.e. the
