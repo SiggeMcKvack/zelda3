@@ -12,10 +12,13 @@ use std::sync::Mutex;
 use tauri::Emitter;
 
 // The C core keeps the keyboard/gamepad mappings in process-global state
-// (g_kbd_*/g_gamepad_*), so the FFI is NOT thread-safe. Tauri commands may run
-// concurrently, so every call into launcher_core is serialized through this
-// lock. Without it, concurrent load/save calls corrupt the heap (SIGABRT).
-static FFI_LOCK: Mutex<()> = Mutex::new(());
+// (g_kbd_*/g_gamepad_*), so the config FFI is NOT thread-safe. Tauri commands
+// may run concurrently, so config calls are serialized through CONFIG_LOCK.
+// Without it, concurrent load/save calls corrupt the heap (SIGABRT).
+// restool / opus calls never touch that state and take ASSET_LOCK instead, so a
+// minutes-long encode or DAT build doesn't block saving the config.
+static CONFIG_LOCK: Mutex<()> = Mutex::new(());
+static ASSET_LOCK: Mutex<()> = Mutex::new(());
 
 // Convert a C string the FFI allocated into an owned String, then free it.
 unsafe fn take_c_string(ptr: *mut c_char) -> Option<String> {
@@ -31,7 +34,7 @@ unsafe fn take_c_string(ptr: *mut c_char) -> Option<String> {
 /// Returns `None` if the file can't be read/parsed.
 pub fn load_config_json(ini_path: &str) -> Option<String> {
     let c_path = CString::new(ini_path).ok()?;
-    let _guard = FFI_LOCK.lock().unwrap();
+    let _guard = CONFIG_LOCK.lock().unwrap();
     unsafe { take_c_string(ffi::LauncherFfi_LoadConfigJson(c_path.as_ptr())) }
 }
 
@@ -40,7 +43,7 @@ pub fn load_config_json(ini_path: &str) -> Option<String> {
 pub fn save_config_json(ini_path: &str, config_json: &str) -> Option<String> {
     let c_path = CString::new(ini_path).ok()?;
     let c_json = CString::new(config_json).ok()?;
-    let _guard = FFI_LOCK.lock().unwrap();
+    let _guard = CONFIG_LOCK.lock().unwrap();
     unsafe {
         take_c_string(ffi::LauncherFfi_SaveConfigJson(
             c_path.as_ptr(),
@@ -52,21 +55,21 @@ pub fn save_config_json(ini_path: &str, config_json: &str) -> Option<String> {
 /// Validate `config_json` without writing. Returns `{"ok":bool,"error":...}`.
 pub fn validate_config_json(config_json: &str) -> Option<String> {
     let c_json = CString::new(config_json).ok()?;
-    let _guard = FFI_LOCK.lock().unwrap();
+    let _guard = CONFIG_LOCK.lock().unwrap();
     unsafe { take_c_string(ffi::LauncherFfi_ValidateConfigJson(c_json.as_ptr())) }
 }
 
 /// Write the default zelda3.ini to `ini_path`. Returns `{"ok":bool,"error":...}`.
 pub fn reset_config_defaults(ini_path: &str) -> Option<String> {
     let c_path = CString::new(ini_path).ok()?;
-    let _guard = FFI_LOCK.lock().unwrap();
+    let _guard = CONFIG_LOCK.lock().unwrap();
     unsafe { take_c_string(ffi::LauncherFfi_ResetDefaults(c_path.as_ptr())) }
 }
 
 /// Identify a ROM. Returns `{"read":bool,"valid":bool,"lang_code":str,"lang_name":str}`.
 pub fn identify_rom(rom_path: &str) -> Option<String> {
     let c_path = CString::new(rom_path).ok()?;
-    let _guard = FFI_LOCK.lock().unwrap();
+    let _guard = ASSET_LOCK.lock().unwrap();
     unsafe { take_c_string(ffi::LauncherFfi_IdentifyRom(c_path.as_ptr())) }
 }
 
@@ -74,14 +77,14 @@ pub fn identify_rom(rom_path: &str) -> Option<String> {
 /// Returns `{"ok":bool,"error":...,"languages":[...]}`. Long-running (call off-thread).
 pub fn create_dat(options_json: &str) -> Option<String> {
     let c_json = CString::new(options_json).ok()?;
-    let _guard = FFI_LOCK.lock().unwrap();
+    let _guard = ASSET_LOCK.lock().unwrap();
     unsafe { take_c_string(ffi::LauncherFfi_CreateDat(c_json.as_ptr())) }
 }
 
 /// DAT presence + languages in `dir`. Returns `{"exists":bool,"languages":[...]}`.
 pub fn dat_status(dir: &str) -> Option<String> {
     let c_dir = CString::new(dir).ok()?;
-    let _guard = FFI_LOCK.lock().unwrap();
+    let _guard = ASSET_LOCK.lock().unwrap();
     unsafe { take_c_string(ffi::LauncherFfi_DatStatus(c_dir.as_ptr())) }
 }
 
@@ -119,7 +122,7 @@ pub fn encode_msu_to_opus(folder: &str, prefix: &str, app: tauri::AppHandle) -> 
     let folder_c = CString::new(folder).ok()?;
     let prefix_c = CString::new(prefix).ok()?;
     let ctx = ProgressCtx { app };
-    let _guard = FFI_LOCK.lock().unwrap();
+    let _guard = ASSET_LOCK.lock().unwrap();
     unsafe {
         take_c_string(ffi::LauncherFfi_EncodeMsuToOpus(
             folder_c.as_ptr(),

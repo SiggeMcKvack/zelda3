@@ -180,6 +180,7 @@ body {
 .btn-primary:hover { background: var(--accent-hover); }
 .btn-launch { background: var(--ok); border-color: var(--ok); }
 .btn-launch:hover { background: var(--ok); filter: brightness(1.1); }
+.btn:disabled { opacity: 0.5; cursor: default; pointer-events: none; }
 
 .binding-btn { width: var(--control-w); font-family: ui-monospace, monospace; }
 .binding-btn.unset { color: var(--muted); }

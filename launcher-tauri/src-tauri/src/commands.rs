@@ -1,6 +1,10 @@
 // Tauri commands exposed to the frontend. Each is a thin wrapper that resolves
 // the per-user zelda3.ini path and calls into the launcher_core FFI (which is
-// serialized behind FFI_LOCK in lib.rs).
+// serialized behind CONFIG_LOCK / ASSET_LOCK in lib.rs).
+//
+// Sync Tauri commands run on the main thread, so anything that calls into the
+// FFI is async and runs on a blocking worker: a lock held by a long encode or
+// DAT build must never stall the UI thread.
 //
 // Config is passed as a JSON *string* both ways; the frontend JSON.parse/stringify
 // it. This keeps the backend free of a serde_json dependency.
@@ -27,42 +31,66 @@ fn ok_or_err(result: Option<String>, what: &str) -> Result<String, String> {
     }
 }
 
+/// Run `f` on a blocking worker thread (off both the UI thread and the async runtime).
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|e| format!("task join error: {e}"))
+}
+
+// Write the default INI to `path` and return the freshly loaded config JSON.
+fn write_defaults_and_load(path: &str) -> Result<String, String> {
+    let res = ok_or_err(reset_config_defaults(path), "reset")?;
+    if !res.contains("\"ok\":true") {
+        return Err(res);
+    }
+    ok_or_err(load_config_json(path), "load after reset")
+}
+
 /// Load the current config as a JSON string. Creates a default INI on first run.
 #[tauri::command]
-pub fn load_config() -> Result<String, String> {
+pub async fn load_config() -> Result<String, String> {
     let path = ensure_dir()?;
-    if !std::path::Path::new(&path).exists() {
-        let res = ok_or_err(reset_config_defaults(&path), "reset")?;
-        if !res.contains("\"ok\":true") {
-            return Err(res);
+    blocking(move || {
+        if !std::path::Path::new(&path).exists() {
+            return write_defaults_and_load(&path);
         }
-    }
-    ok_or_err(load_config_json(&path), "load")
+        ok_or_err(load_config_json(&path), "load")
+    })
+    .await?
 }
 
 /// Validate + write the given config JSON to the user's zelda3.ini.
 /// Returns the FFI result object string `{"ok":bool,"error":...}`.
 #[tauri::command]
-pub fn save_config(config: String) -> Result<String, String> {
+pub async fn save_config(config: String) -> Result<String, String> {
     let path = ensure_dir()?;
-    ok_or_err(save_config_json(&path, &config), "save")
+    blocking(move || ok_or_err(save_config_json(&path, &config), "save")).await?
 }
 
 /// Validate a config JSON without writing. Returns `{"ok":bool,"error":...}`.
 #[tauri::command]
-pub fn validate_config(config: String) -> Result<String, String> {
-    ok_or_err(validate_config_json(&config), "validate")
+pub async fn validate_config(config: String) -> Result<String, String> {
+    blocking(move || ok_or_err(validate_config_json(&config), "validate")).await?
 }
 
-/// Reset zelda3.ini to defaults and return the fresh config JSON.
+/// After confirmation, reset zelda3.ini to defaults and return the fresh config
+/// JSON; returns null if the user cancelled.
 #[tauri::command]
-pub fn reset_config() -> Result<String, String> {
-    let path = ensure_dir()?;
-    let res = ok_or_err(reset_config_defaults(&path), "reset")?;
-    if !res.contains("\"ok\":true") {
-        return Err(res);
+pub async fn reset_config(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::{MessageDialogButtons, MessageDialogKind};
+    let confirmed = app
+        .dialog()
+        .message("Replace zelda3.ini with the default settings? Your current settings and key bindings will be lost.")
+        .title("Reset to defaults")
+        .kind(MessageDialogKind::Warning)
+        .buttons(MessageDialogButtons::OkCancelCustom("Reset".into(), "Cancel".into()))
+        .blocking_show();
+    if !confirmed {
+        return Ok(None);
     }
-    ok_or_err(load_config_json(&path), "load after reset")
+    let path = ensure_dir()?;
+    blocking(move || write_defaults_and_load(&path)).await?.map(Some)
 }
 
 /// Launch the game (detached). Returns an error string if the binary is missing.
@@ -110,8 +138,8 @@ pub fn scan_msu_folder(folder: String) -> String {
 
 /// Identify a ROM file. Returns `{"read","valid","lang_code","lang_name"}`.
 #[tauri::command]
-pub fn identify_rom(path: String) -> Result<String, String> {
-    ok_or_err(crate::identify_rom(&path), "identify")
+pub async fn identify_rom(path: String) -> Result<String, String> {
+    blocking(move || ok_or_err(crate::identify_rom(&path), "identify")).await?
 }
 
 /// Encode MSU `.pcm` files in `folder` (matching `prefix`; relative = data dir)
@@ -125,10 +153,7 @@ pub async fn encode_opus(
     let folder = crate::resolve_data_path(&folder)
         .to_string_lossy()
         .into_owned();
-    tauri::async_runtime::spawn_blocking(move || crate::encode_msu_to_opus(&folder, &prefix, app))
-        .await
-        .map_err(|e| format!("task join error: {e}"))?
-        .ok_or_else(|| "encode failed".to_string())
+    blocking(move || ok_or_err(crate::encode_msu_to_opus(&folder, &prefix, app), "encode")).await?
 }
 
 /// After a successful encode, ask whether to keep the source `.pcm` tracks
@@ -172,9 +197,9 @@ pub async fn finish_opus_encode(
 
 /// DAT presence + languages for the user's data dir.
 #[tauri::command]
-pub fn dat_status() -> Result<String, String> {
+pub async fn dat_status() -> Result<String, String> {
     let dir = data_dir().to_string_lossy().into_owned();
-    ok_or_err(crate::dat_status(&dir), "dat_status")
+    blocking(move || ok_or_err(crate::dat_status(&dir), "dat_status")).await?
 }
 
 /// Build zelda3_assets.dat from a US ROM (+ optional language ROMs) into the data
@@ -190,8 +215,5 @@ pub async fn create_dat(us_rom_path: String, language_roms: Vec<String>) -> Resu
     })
     .to_string();
 
-    tauri::async_runtime::spawn_blocking(move || crate::create_dat(&options))
-        .await
-        .map_err(|e| format!("task join error: {e}"))?
-        .ok_or_else(|| "create_dat failed".to_string())
+    blocking(move || ok_or_err(crate::create_dat(&options), "create_dat")).await?
 }

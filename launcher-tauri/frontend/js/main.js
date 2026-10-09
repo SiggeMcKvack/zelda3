@@ -371,7 +371,8 @@ function renderGeneralPanel(panel) {
 
   panel.querySelector("#pick-base").addEventListener("click", pickBaseRom);
   panel.querySelector("#add-lang").addEventListener("click", addLanguageRom);
-  panel.querySelector("#create-dat").addEventListener("click", createDat);
+  const createBtn = panel.querySelector("#create-dat");
+  createBtn.addEventListener("click", () => whileDisabled(createBtn, createDat));
   panel.querySelector("#language-select").addEventListener("change", (e) => {
     config.language = e.target.value;   // "" = default
   });
@@ -453,10 +454,10 @@ function renderMsuField() {
     save();
     refresh();
   });
-  encodeBtn.addEventListener("click", async () => {
+  encodeBtn.addEventListener("click", () => whileDisabled(encodeBtn, async () => {
     await encodeOpus(folder, prefix);
     await rescan();
-  });
+  }));
 
   refresh();
   if (folder || prefix) rescan();
@@ -647,6 +648,12 @@ function selectTab(name) {
 
 // --- backend actions --------------------------------------------------------
 
+// Disable `btn` while the long-running `action` is in flight (no double starts).
+async function whileDisabled(btn, action) {
+  btn.disabled = true;
+  try { await action(); } finally { btn.disabled = false; }
+}
+
 async function load() {
   try {
     const json = await invoke("load_config");
@@ -680,7 +687,8 @@ async function validate() {
 
 async function reset() {
   try {
-    const json = await invoke("reset_config");
+    const json = await invoke("reset_config");   // null = cancelled in the confirm dialog
+    if (json == null) return;
     config = JSON.parse(json);
     renderTabs();
     setStatus("Reset to defaults.", "ok");
