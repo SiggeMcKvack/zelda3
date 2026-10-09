@@ -67,7 +67,7 @@ Before building, you must extract game assets from a USA region ROM.
 - Region: USA
 - SHA256: `66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb`
 
-### Method 1: C Restool (Recommended)
+### Extract with zelda3-restool
 
 ```cmd
 REM Build restool (built automatically with CMake)
@@ -80,20 +80,6 @@ REM Extract and compile assets
 Release\zelda3-restool.exe --extract-from-rom ..\zelda3.sfc --compile
 ```
 
-### Method 2: Python Restool (Alternative)
-
-```cmd
-REM Install Python requirements first
-python -m pip install -r requirements.txt
-
-REM Extract assets
-python assets\restool.py --extract-from-rom
-
-REM Or specify ROM path:
-python assets\restool.py --extract-from-rom -r C:\path\to\zelda3.sfc
-```
-
-This creates `zelda3_assets.dat` (~680KB) containing all game graphics, text, and maps.
 
 ## Building with CMake
 
@@ -288,12 +274,10 @@ cd C:\vcpkg
 
 **Solution:**
 ```cmd
-REM Run asset extraction
-python assets\restool.py --extract-from-rom
-
-REM Copy to executable directory
-copy zelda3_assets.dat build\Release\
-copy zelda3_assets.dat build\Debug\
+REM Run asset extraction, then copy the result next to zelda3.exe
+cd build
+Release\zelda3-restool.exe --extract-from-rom ..\zelda3.sfc
+copy zelda3_assets.dat Release\
 ```
 
 ### "Invalid ROM file"
@@ -375,18 +359,6 @@ cmake .. -A x64 -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
 cmake .. -A Win32 -DCMAKE_TOOLCHAIN_FILE=C:\vcpkg\scripts\buildsystems\vcpkg.cmake
 ```
 
-### Python Not Found
-
-**Issue:** `python` command not recognized.
-
-**Solution:**
-```cmd
-REM Check if Python is installed
-python --version
-
-REM If not found, download from python.org and install
-REM During installation, check "Add Python to PATH"
-```
 
 ## Advanced Usage
 
@@ -477,4 +449,3 @@ REM Users can now run zelda3.exe after adding their zelda3_assets.dat
 - [Installation Guide](../installation.md) - Overview of all platforms
 - [Troubleshooting](../troubleshooting.md) - Common issues and solutions
 - [Usage Guide](../usage.md) - Running and configuring the game
-- [BUILDING.md](/Users/carl/Repos/zelda3/BUILDING.md) - Complete build documentation

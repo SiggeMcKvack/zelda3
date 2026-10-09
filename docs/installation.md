@@ -47,9 +47,9 @@ Before building or running Zelda3, you must extract game assets from your ROM.
 - **Region:** USA
 - **SHA256:** `66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb`
 
-### Method 1: C Restool (Recommended)
+### Method 1: Command Line
 
-The C-based restool is faster and requires no Python dependencies. All data is extracted directly from ROM addresses.
+`zelda3-restool` is built with the game. All data is extracted directly from ROM addresses.
 
 ```bash
 # Build restool (built automatically with CMake)
@@ -69,28 +69,15 @@ This creates `zelda3_assets.dat` (~680KB for US-only, ~1MB with multiple languag
 
 See [C Restool Guide](RESTOOL_C.md) for detailed options and multi-language support.
 
-### Method 2: Python Restool (Alternative)
 
-For advanced use cases or if C restool has issues:
-
-```bash
-python3 -m pip install -r requirements.txt
-python3 assets/restool.py --extract-from-rom
-
-# Or specify ROM path
-python3 assets/restool.py --extract-from-rom -r /path/to/zelda3.sfc
-```
-
-See [Python Restool Guide](RESTOOL_PYTHON.md) for details.
-
-### Method 3: Launcher GUI
+### Method 2: Launcher GUI
 
 The launcher can create assets directly (see [Launcher Guide](launcher.md) for building it):
 
 1. Open the launcher (`Zelda3.app`, the Windows install, or `zelda3-launcher` on Linux)
 2. Go to **General** tab
-4. Click **Browse** to select your ROM file
-5. Click **Create Asset File**
+3. Click **Browse** to select your ROM file
+4. Click **Create Asset File**
 
 This creates `zelda3_assets.dat` automatically.
 
@@ -363,13 +350,20 @@ ctest --test-dir build -V
 
 ### Current Test Suites
 
-| Suite | Module | Tests |
-|-------|--------|-------|
-| config_writer | launcher | 18 |
-| config_reader | launcher | 32 |
-| launcher_gamepad | launcher | 19 |
+| Suite | Module | Covers |
+|-------|--------|--------|
+| config_writer | launcher | Writing `zelda3.ini` |
+| config_reader | launcher | Parsing `zelda3.ini` |
+| launcher_ffi | launcher | The C core API used by the Tauri launcher |
 
 Tests run automatically in CI on Debug builds for all platforms (Linux, Windows, macOS).
+
+The Tauri launcher also has Rust tests for the INI → JSON → INI round trip through the C core:
+
+```bash
+cd launcher-tauri/src-tauri
+cargo test
+```
 
 ### Adding Tests for New Modules
 

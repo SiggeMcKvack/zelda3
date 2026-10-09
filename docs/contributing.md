@@ -22,9 +22,9 @@ Before contributing, please:
 
 1. **Read the documentation:**
    - [README.md](../README.md) - Project overview
-   - [ARCHITECTURE.md](../ARCHITECTURE.md) - Code architecture
+   - [Architecture](architecture.md) - Code architecture
    - [development.md](development.md) - Development workflows
-   - [BUILDING.md](../BUILDING.md) - Build instructions
+   - [Installation Guide](installation.md) - Build instructions
 
 2. **Join the community:**
    - Discord: https://discord.gg/AJJbJAzNNJ
@@ -298,34 +298,27 @@ git remote add upstream https://github.com/snesrev/zelda3.git
 
 ### 2. Install Dependencies
 
-See [BUILDING.md](../BUILDING.md) for platform-specific instructions.
+See [Installation Guide](installation.md) for platform-specific instructions.
 
 **Quick setup (Linux/macOS):**
 ```bash
-# Install SDL2 and Opus
-sudo apt install libsdl2-dev libopus-dev cmake  # Ubuntu/Debian
-brew install sdl2 opus cmake                     # macOS
-
-# Install Python dependencies
-python3 -m pip install -r requirements.txt
+# Install SDL2, Opus and libyaml (for zelda3-restool)
+sudo apt install libsdl2-dev libopus-dev libyaml-dev cmake  # Ubuntu/Debian
+brew install sdl2 opus libyaml cmake                        # macOS
 ```
 
-### 3. Extract Assets
-
-```bash
-# Place zelda3.sfc (US version) in project root
-python3 assets/restool.py --extract-from-rom
-```
-
-### 4. Build Debug Version
+### 3. Build and Extract Assets
 
 ```bash
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Debug
 cmake --build . -j$(nproc)
+
+# Place zelda3.sfc (US version) in the project root
+./zelda3-restool --extract-from-rom ../zelda3.sfc
 ```
 
-### 5. Verify Setup
+### 4. Verify Setup
 
 ```bash
 # Run the game
@@ -362,7 +355,7 @@ Write clear, descriptive commit messages:
 ```
 Add L/R item switching feature
 
-- Define kFeatures0_SwitchLR flag in features.h
+- Define kFeatures0_SwitchLR flag in game_features.h
 - Implement item cycling in player.c
 - Add configuration option in zelda3.ini
 - Update documentation
@@ -385,7 +378,7 @@ update
 
 See [development.md](development.md#adding-features) for detailed workflow. Quick checklist:
 
-1. **Define feature flag** (`src/features.h`):
+1. **Define feature flag** (`src/game_features.h`):
    ```c
    enum {
      // ... existing flags
@@ -395,7 +388,7 @@ See [development.md](development.md#adding-features) for detailed workflow. Quic
 
 2. **Store in RAM** (next unused offset):
    ```c
-   // features.h
+   // game_features.h
    #define my_feature_state (*(uint8*)(g_ram+0x659))
    ```
 
@@ -747,7 +740,7 @@ Other ways to achieve similar goals.
 ### Getting Help
 
 **For development questions:**
-1. Read the documentation ([development.md](development.md), [ARCHITECTURE.md](../ARCHITECTURE.md))
+1. Read the documentation ([development.md](development.md), [Architecture](architecture.md))
 2. Search existing issues/PRs
 3. Ask on Discord
 4. Open a GitHub Discussion
@@ -768,8 +761,8 @@ Other ways to achieve similar goals.
 ### Documentation
 
 - **[README.md](../README.md)** - Project overview and quick start
-- **[BUILDING.md](../BUILDING.md)** - Detailed build instructions
-- **[ARCHITECTURE.md](../ARCHITECTURE.md)** - Code architecture and design
+- **[Installation Guide](installation.md)** - Detailed build instructions
+- **[Architecture](architecture.md)** - Code architecture and design
 - **[CHANGELOG.md](../CHANGELOG.md)** - Recent changes and history
 - **[development.md](development.md)** - Development workflows and patterns
 - **[debugging.md](debugging.md)** - Debugging tools and techniques
@@ -786,7 +779,7 @@ Other ways to achieve similar goals.
 ### Learning Resources
 
 **Understanding the Codebase:**
-1. Read [ARCHITECTURE.md](../ARCHITECTURE.md) for high-level overview
+1. Read [Architecture](architecture.md) for high-level overview
 2. Study small modules first (e.g., `src/hud.c`)
 3. Use verification mode to understand original behavior
 4. Ask questions on Discord

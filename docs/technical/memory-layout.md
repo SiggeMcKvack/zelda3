@@ -148,7 +148,7 @@ Enhanced features use special unused RAM locations (0x648+) that weren't used by
 ### Feature Flag Storage
 
 ```c
-// src/features.h
+// src/game_features.h
 enum {
   kRam_Features0 = 0x64c,  // Feature bitmask storage location
 };
@@ -159,7 +159,7 @@ enum {
 ### Feature Flag Definitions
 
 ```c
-// src/features.h
+// src/game_features.h
 enum {
   kFeatures0_ExtendScreen64 = 1,           // Widescreen support
   kFeatures0_SwitchLR = 2,                 // L/R item switching
@@ -361,7 +361,7 @@ if (memcmp(g_ram, snes_ram, sizeof(g_ram)) != 0) {
 - **[Graphics Pipeline](graphics-pipeline.md)** - How VRAM is used
 - **Code References:**
   - `src/variables.h` - All RAM macro definitions
-  - `src/features.h` - Feature flag definitions
+  - `src/game_features.h` - Feature flag definitions
   - `src/zelda_rtl.c` - RAM buffer declaration
 
 **External References:**

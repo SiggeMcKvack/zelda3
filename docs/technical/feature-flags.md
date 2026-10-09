@@ -21,12 +21,12 @@ The feature flag system allows Zelda3 to add enhancements while preserving the o
 Feature flags live in unused SNES RAM locations that were never used by the original game:
 
 ```c
-// src/features.h
+// src/game_features.h
 enum {
   kRam_Features0 = 0x64c,  // Primary feature bitfield (32-bit)
 };
 
-// Access macro (defined in features.h)
+// Access macro (defined in game_features.h)
 #define enhanced_features0 (*(uint32*)(g_ram+0x64c))
 ```
 
@@ -40,7 +40,7 @@ This storage method provides:
 Features are defined as power-of-2 constants:
 
 ```c
-// src/features.h
+// src/game_features.h
 enum {
   kFeatures0_ExtendScreen64 = 1,           // 2^0
   kFeatures0_SwitchLR = 2,                 // 2^1
@@ -70,10 +70,10 @@ enum {
 
 ### Step 1: Define the Flag
 
-Add a new power-of-2 constant to `src/features.h`:
+Add a new power-of-2 constant to `src/game_features.h`:
 
 ```c
-// src/features.h
+// src/game_features.h
 enum {
   // Existing features...
   kFeatures0_PrincessZeldaHelps = 262144,
@@ -185,7 +185,7 @@ void Player_Update() {
 **Feature:** Press L/R to cycle through items without opening menu.
 
 ```c
-// src/features.h
+// src/game_features.h
 kFeatures0_SwitchLR = 2,
 
 // src/player.c
@@ -212,7 +212,7 @@ void Player_HandleInput() {
 **Feature:** Extend screen rendering by 64 pixels (32 left, 32 right).
 
 ```c
-// src/features.h
+// src/game_features.h
 kFeatures0_ExtendScreen64 = 1,
 
 // snes/ppu.c
@@ -235,7 +235,7 @@ void PpuRenderScanline(Ppu *ppu, int y) {
 **Feature:** Silence annoying beep when health is low.
 
 ```c
-// src/features.h
+// src/game_features.h
 kFeatures0_DisableLowHealthBeep = 64,
 
 // src/player.c
@@ -255,7 +255,7 @@ void Player_UpdateSound() {
 **Feature:** Swinging sword picks up items (rupees, hearts, etc.).
 
 ```c
-// src/features.h
+// src/game_features.h
 kFeatures0_CollectItemsWithSword = 16,
 
 // src/ancilla.c (items on ground)
@@ -280,7 +280,7 @@ void Ancilla_CheckCollection(int ancilla_id) {
 **Feature:** Fix original SNES bugs that affect gameplay.
 
 ```c
-// src/features.h
+// src/game_features.h
 kFeatures0_GameChangingBugFixes = 16384,
 
 // src/sprite_main.c
@@ -438,7 +438,7 @@ Verify replays work correctly:
 When `enhanced_features0` is full (32 bits), add a second bitfield:
 
 ```c
-// src/features.h
+// src/game_features.h
 enum {
   kRam_Features0 = 0x64c,  // First 32 features
   kRam_Features1 = 0x650,  // Next 32 features (new!)
@@ -465,7 +465,7 @@ if (enhanced_features1 & kFeatures1_MyNewFeature) {
 - **[Architecture](../architecture.md)** - Overall system architecture
 - **[Memory Layout](memory-layout.md)** - RAM storage details
 - **Code References:**
-  - `src/features.h` - Feature flag definitions
+  - `src/game_features.h` - Feature flag definitions
   - `src/config.c` - INI parsing and flag initialization
   - `src/variables.h` - RAM macro definitions
   - `zelda3.ini` - User configuration

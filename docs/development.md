@@ -106,12 +106,12 @@ cmake .. -DCMAKE_C_COMPILER_LAUNCHER=ccache
 
 Keep `zelda3_assets.dat` up to date:
 ```bash
-# Re-extract after asset tool changes
-python3 assets/restool.py --extract-from-rom
+# Re-extract after asset tool changes (from the build directory)
+./zelda3-restool --extract-from-rom ../zelda3.sfc
 
 # Check asset file is current
 ls -lh zelda3_assets.dat
-# Should be ~2MB
+# ~680KB for US only, ~1MB with extra languages
 ```
 
 ## Common Development Tasks
@@ -200,7 +200,7 @@ Complete step-by-step guide for implementing new features.
 
 ### Step 1: Define Feature Flag
 
-Edit `src/features.h`:
+Edit `src/game_features.h`:
 
 ```c
 // Find kRam_Features0 enum
@@ -226,14 +226,14 @@ enum {
 If your feature needs persistent state:
 
 ```c
-// In features.h, after the enums
+// In game_features.h, after the enums
 #define my_feature_state (*(uint8*)(g_ram+0x659))  // Next unused offset
 ```
 
 **Finding next unused offset:**
 ```bash
-# Look at last defined macro in features.h
-grep "g_ram+" src/features.h | tail -1
+# Look at last defined macro in game_features.h
+grep "g_ram+" src/game_features.h | tail -1
 # Use next available offset
 ```
 
@@ -266,7 +266,7 @@ if (strcmp(key, "EnableMyFeature") == 0) {
 In the relevant module (e.g., `src/player.c`):
 
 ```c
-#include "features.h"
+#include "game_features.h"
 
 void Player_HandleMovement(void) {
   // Original behavior
@@ -314,12 +314,12 @@ Update documentation:
 **Feature:** Infinite arrows when low on ammo
 
 ```c
-// 1. features.h - Define flag
+// 1. game_features.h - Define flag
 enum {
   kFeatures0_InfiniteArrows = 131072,
 };
 
-// 2. features.h - Add state (if needed)
+// 2. game_features.h - Add state (if needed)
 // #define arrow_refill_timer (*(uint8*)(g_ram+0x659))
 
 // 3. zelda3.ini
@@ -462,7 +462,7 @@ Test all subsystems:
 
 ### Step 7: Document Platform
 
-Add to `BUILDING.md`:
+Add to `docs/installation.md` (and a page under `docs/platforms/`):
 ```markdown
 ## MyPlatform
 
@@ -1093,8 +1093,8 @@ grep -r "malloc\|free" src/
 - **[contributing.md](contributing.md)** - Contribution guidelines and workflow
 - **[debugging.md](debugging.md)** - Debugging tools and techniques
 - **[architecture.md](architecture.md)** - Technical architecture details
-- **[ARCHITECTURE.md](../ARCHITECTURE.md)** - High-level architecture
-- **[BUILDING.md](../BUILDING.md)** - Build instructions and troubleshooting
+- **[Architecture](architecture.md)** - High-level architecture
+- **[Installation Guide](installation.md)** - Build instructions and troubleshooting
 
 ---
 

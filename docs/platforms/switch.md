@@ -95,7 +95,7 @@ Before building, extract game assets from a USA region ROM on your desktop, then
 - Region: USA
 - SHA256: `66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb`
 
-### Method 1: Desktop C Restool (Recommended)
+### Extract on a Desktop
 
 Extract on your desktop computer:
 
@@ -106,29 +106,12 @@ cmake ..
 cmake --build . -j$(nproc)
 
 # Extract and compile assets
-./src/restool/zelda3-restool --extract-from-rom ../zelda3.sfc --compile
+./zelda3-restool --extract-from-rom ../zelda3.sfc --compile
 
 # Copy to SD card
 cp ../zelda3_assets.dat /path/to/sdcard/switch/zelda3/
 ```
 
-### Method 2: Python Restool (Alternative)
-
-```bash
-# Install Python requirements first
-python3 -m pip install -r requirements.txt
-
-# Extract assets
-python3 assets/restool.py --extract-from-rom
-
-# Or specify ROM path:
-python3 assets/restool.py --extract-from-rom -r /path/to/zelda3.sfc
-
-# Copy to SD card
-cp zelda3_assets.dat /path/to/sdcard/switch/zelda3/
-```
-
-This creates `zelda3_assets.dat` (~680KB) containing all game graphics, text, and maps.
 
 ## Building with Make
 
@@ -466,4 +449,3 @@ Backup regularly by copying to PC.
 - [Installation Guide](../installation.md) - Overview of all platforms
 - [Troubleshooting](../troubleshooting.md) - Common issues and solutions
 - [Usage Guide](../usage.md) - Running and configuring the game
-- [BUILDING.md](/Users/carl/Repos/zelda3/BUILDING.md) - Complete build documentation

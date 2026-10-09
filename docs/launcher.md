@@ -12,8 +12,7 @@ The Zelda3 launcher is a small desktop app for configuring game settings, creati
   - [Graphics](#graphics)
   - [Sound](#sound)
   - [Features](#features)
-  - [Keyboard](#keyboard)
-  - [Gamepad](#gamepad)
+  - [Keyboard and Gamepad](#keyboard-and-gamepad)
 - [First Run](#first-run)
 - [Troubleshooting](#troubleshooting)
 
@@ -65,7 +64,7 @@ ZELDA3_CMAKE_BUILD_DIR=$PWD/../../build cargo tauri build --config tauri.bundle.
 
 ### Buttons
 
-- **Reset to defaults** - Overwrite `zelda3.ini` with the default configuration
+- **Reset to defaults** - Overwrite `zelda3.ini` with the default configuration (asks for confirmation)
 - **Validate** - Check the current settings without saving
 - **Save** - Save configuration to `zelda3.ini`
 - **Save & Launch** - Save configuration and launch the game
@@ -84,196 +83,79 @@ The launcher starts the game with this directory as its working directory. When 
 
 ## Settings Tabs
 
+The Graphics, Sound and Features tabs are generated from `launcher-tauri/frontend/js/schema.js`; each control maps to one `zelda3.ini` key. See the comments in `zelda3.ini` for what each option does.
+
 ### General
 
-The General tab manages game assets and language settings:
+Manages the asset file and the game language:
 
-**Asset File Status:**
-- Shows current status of `zelda3_assets.dat`
-- Green indicator: Asset file found and valid
-- Red indicator: Asset file missing or invalid
-
-**Language Selection:**
-- Dropdown populated from available languages in asset file
-- Options depend on which dialogue files were extracted
-- Default: US English
-
-**Create Asset File:**
-
-If you don't have `zelda3_assets.dat`, you can create it directly from the launcher:
-
-1. **ROM Path** - Click "Browse..." to select your ROM file
-   - Supports .sfc and .smc formats
-   - Only USA ROMs fully supported for all features
-
-2. **Create Asset File** - Click to run extraction
-   - Shows progress in status area
-   - Displays success message or error details
-   - Automatically refreshes language dropdown on success
-
-**Error Messages:**
-- "Detected German ROM" - Non-USA ROM detected, extraction limited
-- "ROM not found" - Invalid path or missing file
-- "Unknown ROM" - ROM doesn't match any known version (check SHA1)
+- **Asset File** - Shows whether `zelda3_assets.dat` exists in the data directory and which languages it contains.
+- **Language** - The dialogue language to use, from the languages in the asset file.
+- **Create Asset File from ROM:**
+  1. **Base US ROM** - Browse to your US `zelda3.sfc`. The launcher identifies the ROM and shows e.g. "Recognized: ..." or "Not a recognized ALttP ROM."
+  2. **Language ROMs (optional)** - Add translated ROMs (German, French, ...) to include their dialogue. Each one is tagged with its detected language and can be removed again.
+  3. **Create Asset File** - Builds `zelda3_assets.dat` in the data directory and refreshes the language list. The button is disabled while the build runs.
 
 ### Graphics
 
-Configure visual rendering options:
-
-- **Output Method** - Rendering backend selection:
-  - SDL (software renderer)
-  - OpenGL (hardware-accelerated)
-  - OpenGL ES (mobile/embedded)
-  - Vulkan (modern cross-platform)
-
-- **Window Size** - Game window dimensions:
-  - Auto (native resolution)
-  - 1x (256x224 - original SNES resolution)
-  - 2x (512x448)
-  - 3x (768x672)
-  - 4x (1024x896)
-  - 5x (1280x1120)
-  - Fullscreen
-
-- **Extended Aspect Ratio** - Widescreen support:
-  - Off (4:3 original)
-  - extend_y, 16:9 (recommended)
-  - extend_y, 16:10
-  - Other presets (18:9)
-  - Custom ratios via zelda3.ini (e.g., 21:9, 32:9)
-
-- **Linear Filtering** - Smooth scaling (on/off)
-- **Integer Scaling** - Pixel-perfect scaling (on/off)
-
-- **Shader File** - Shader for visual effects:
-  - Click "Browse..." to open file chooser
-  - Supports .glsl/.glslp (OpenGL) and .slang/.slangp (Vulkan) formats
-  - Selected path saved to zelda3.ini
-
-**Recommendations:**
-- For modern displays: OpenGL or Vulkan with 16:9 extended aspect ratio
-- For retro feel: SDL with 2x/3x window size and integer scaling
+- **Output Method** - SDL, SDL-Software, OpenGL, OpenGL ES or Vulkan
+- **Window Width / Height** (0 = auto) and **Window Scale** (used in auto mode)
+- **Display Mode** - Windowed, Borderless Fullscreen or Fullscreen
+- **Aspect Ratio** - 4:3, 16:9, 16:10, 18:9 or Custom (set **Custom Aspect Width/Height**)
+- Toggles: stretch to fill window, extend render height to 240 lines, linear filtering, optimized PPU renderer, Enhanced Mode 7, no sprite limit, FPS in window title, disable frame delay, dim flashes
+- **Shader File** - `.glsl`/`.glslp` (OpenGL) or `.slang`/`.slangp` (Vulkan), with a Browse… button
+- **Link Sprite File** - A `.zspr` file replacing Link's graphics, with a Browse… button
 
 ### Sound
 
-Adjust audio settings:
+- **Enable Audio**, **Audio Channels** (Mono/Stereo), **Audio Frequency**, **Audio Samples**
+- **MSU** - Disabled, PCM, PCM Deluxe, Opuz or Opuz Deluxe. Changing it also sets the audio frequency to match (44100 for PCM, 48000 for Opuz).
+- **MSU Volume** (0-100)
+- **Resume MSU position** when re-entering an overworld area
+- **MSU folder** - Browse to the folder with your MSU-1 tracks. The launcher scans it, picks the most common filename prefix, and shows how many PCM and OPUZ tracks it found.
+- **Track filename prefix** - The part before the track number (e.g. `alttp_msu-` for `alttp_msu-1.pcm`). Folder and prefix are saved together as `MSUPath`.
+- **Encode to OPUZ** - Shown when the folder has PCM tracks. Converts them to OPUZ (much smaller), switches the MSU mode to the matching Opuz mode, then asks whether to move the PCM files to a `pcm/` subfolder or delete them.
 
-- **Music Volume** (0-128) - Background music volume
-- **SFX Volume** (0-128) - Sound effects volume
-- **MSU Audio Volume** (0-255) - CD-quality audio track volume (if using MSU-1 audio pack)
-- **Stereo** (on/off) - Enable stereo audio
-
-- **MSU** - MSU audio format dropdown (Disabled, PCM, PCM Deluxe, Opuz, Opuz Deluxe)
-- **MSU Folder** - Directory containing MSU audio tracks:
-  - Click "Browse..." to select the MSU folder
-  - **Auto-detection:** The launcher automatically scans the folder and detects:
-    - Format (PCM or Opuz) by reading file headers
-    - Deluxe status by checking for track numbers > 47
-    - Filename prefix pattern
-  - The dropdown and path are updated automatically based on detected format
-  - Info label shows: "115 MSU tracks detected (PCM Deluxe)"
-
-**Note:** MSU Audio is an enhanced audio pack with CD-quality music tracks. See the main documentation for details on obtaining MSU audio files.
+**Note:** MSU-1 audio packs replace the game's music with CD-quality tracks. See [Usage Guide](usage.md#audio-enhancements) for details.
 
 ### Features
 
-Toggle enhanced features (all disabled by default for original behavior):
+Enhancements beyond the original game, grouped as in `zelda3.ini`. All are off by default; leave them off for the original experience.
 
-- **Item Switch with L/R** - Use shoulder buttons to cycle items
-- **Switch Item on B Button Press** - Alternative item switching
-- **Collect Items with Sword** - Pick up items by swinging sword
-- **Run in Town and Houses** - Remove walk-only restrictions
-- **Daggers on Some Pots** - Throw daggers at certain objects
-- **Warp Without S+Q** - Fast warp without save-quit
-- **Warp on Mirror Outside** - Mirror works in more areas
-- **Random Overworld Spawns** - Randomize enemy spawns
-- **Fixed Volume Tables** - Improved audio mixing
-- **Ow MSU1 with FadeOut** - Smooth music transitions in overworld
-- **Skip MSU1 Resume** - Don't resume MSU tracks
-- **MSU Resume After S+Q** - Resume music after save-quit
-- **Equip Sword with Item** - Sword + item combinations
-- **Switch Palettes** - Alternative color schemes
-- **Free Play Mode** - Start with all items/upgrades
-- **Turbo Mode** - Faster gameplay speed
+- **Save** - Autosave on quit and reload on start
+- **Controls** - L/R item switching (optionally limited to the first 4 items), turn while dashing
+- **Gameplay** - Skip intro on keypress, mirror warp to the Dark World, collect items with sword, more active bombs, 9999 rupees, cancel bird travel with X, break pots with sword (minimum sword level)
+- **Interface** - Highlight maxed items, disable low health beep
+- **Bug Fixes** - Fix misc bugs, fix bugs that change gameplay
+- **Experimental** - Pokemode, Princess Zelda helps in battle
 
-**Important:** These features are enhancements beyond the original game. For authentic SNES experience, leave all features disabled.
+### Keyboard and Gamepad
 
-### Keyboard
+Both tabs edit the same set of bindings, for keyboard (`[KeyMap]`) and controller (`[GamepadMap]`):
 
-Configure keyboard controls:
+- **Controls** - Up, Down, Left, Right, Select, Start, A, B, X, Y, L, R
+- **Load state / Save state / Replay** - Slots 1-10
+- **Cheats** - Life / Magic, Keys, Walk through walls
+- **System** - Clear key log, stop replay, toggle fullscreen, reset, pause, pause (dimmed), turbo, replay turbo, window bigger/smaller, volume up/down, toggle perf display, toggle renderer
 
-- **Up/Down/Left/Right** - Movement
-- **Select/Start** - Menu/pause
-- **A/B/X/Y** - Action buttons
-- **L/R** - Shoulder buttons
+**Binding:**
+1. Click a binding; it shows "Press…"
+2. Press a key or controller button. Hold Shift/Ctrl/Alt (keyboard) or another button (controller) first to record a combo, e.g. `Shift+F1` or `L2+L3`.
+3. Click the binding again to cancel, or right-click it to clear it.
 
-Click each binding button and press the desired key to bind it. Right-click a binding to remove the assignment.
+Keys are recorded by keyboard layout (AZERTY etc.) and saved as SDL key names, e.g. `Return`, `Right Shift`, `Keypad Enter`. Controller triggers are recorded as L2/R2; analog stick directions can't be bound.
 
-**Default controls:**
-- Arrow Keys - Movement
-- Enter - Start
-- Shift - Select
-- Z - B Button
-- X - A Button
-- A/S - L/R Buttons
+**Default keyboard controls:**
 
-**Clear Bindings:**
-Right-click any keyboard binding to unbind the key without assigning a new one. This is useful when you want to disable specific controls.
+| SNES | Key |
+|------|-----|
+| D-pad | Arrow keys |
+| Select / Start | Right Shift / Return |
+| A / B | X / Z |
+| X / Y | S / A |
+| L / R | C / V |
 
-### Gamepad
-
-Configure game controller mappings with full button remapping UI.
-
-The Gamepad tab is organized into 4 subtabs matching the keyboard layout:
-
-#### Controls Subtab
-Map the core SNES controller buttons:
-- **Up/Down/Left/Right** - D-pad movement
-- **Select/Start** - Menu navigation
-- **A/B/X/Y** - Action buttons
-- **L/R** - Shoulder buttons
-
-#### Save States Subtab
-Configure snapshot controls:
-- **Load (F1-F10)** - Load save state slots
-- **Save (Shift+F1-F10)** - Save state slots
-- **Replay (Ctrl+F1-F10)** - Replay recordings
-
-#### Cheats Subtab
-Map cheat activation buttons:
-- **CheatLife** - Refill health and magic
-- **CheatKeys** - Set dungeon key count
-- **CheatWalkThroughWalls** - Enable no-clip mode
-
-#### System Subtab
-Map system control buttons:
-- **Fullscreen** - Toggle fullscreen mode
-- **Reset** - Reset the game
-- **Pause/PauseDimmed** - Pause with/without dimming
-- **Turbo/ReplayTurbo** - Fast-forward controls
-- **WindowBigger/WindowSmaller** - Resize window
-- **VolumeUp/VolumeDown** - Adjust audio volume
-- **StopReplay** - Stop replay playback
-- **ClearKeyLog** - Clear input recording log (debug)
-
-**Binding Buttons:**
-1. Click any binding button - it shows "Press button..."
-2. Press a gamepad button or trigger
-3. The detected button is displayed and saved
-4. For modifier combos (e.g., L2+A), hold L2 first, then press A
-
-**Clear Bindings:**
-Right-click a binding button to remove the assignment without rebinding.
-
-**Gamepad Settings:**
-- **Enable Gamepad** - Turn gamepad support on/off
-- **Controller Port** - Select which controller to use (0-3)
-
-**Supported Controllers:**
-- Xbox controllers (One, Series X/S)
-- PlayStation controllers (DualShock 4, DualSense)
-- Nintendo Switch Pro Controller
-- Any controller the browser Gamepad API reports with the standard mapping
+**Controllers:** any controller the webview's Gamepad API reports with the standard mapping (Xbox, PlayStation, Switch Pro, ...). Press a button after the launcher opens; webviews only expose a controller after the first input.
 
 ## First Run
 
@@ -318,18 +200,18 @@ Upgrading from the old GTK launcher: settings and assets used to live next to th
 For advanced users, you can manually edit `zelda3.ini`. The launcher generates a well-commented configuration file with all available options.
 
 Key sections:
-- `[General]` - Autosave, aspect ratio, scaling
-- `[Graphics]` - Rendering, window settings
-- `[Sound]` - Volume controls
+- `[General]` - Autosave, language, display options
+- `[Graphics]` - Renderer, window, shader, Link sprite
+- `[Sound]` - Audio and MSU settings
 - `[Features]` - Enhanced feature toggles
-- `[KeyMap]` - Keyboard bindings (scancode format)
+- `[KeyMap]` - Keyboard bindings (SDL key names, with `Shift+`/`Ctrl+`/`Alt+` modifiers)
 - `[GamepadMap]` - Controller bindings
 
-See `docs/configuration.md` for detailed explanation of all options.
+See the [Usage Guide](usage.md#configuration) for details on all options.
 
 ## See Also
 
 - [Installation Guide](installation.md) - Building the game
-- [Configuration Reference](configuration.md) - Detailed config file format
+- [Usage Guide](usage.md#configuration) - Configuration options
 - [Getting Started](getting-started.md) - First-time setup and gameplay
 - [Troubleshooting](troubleshooting.md) - Common issues and solutions

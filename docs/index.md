@@ -22,9 +22,7 @@ Welcome to the Zelda3 documentation! This is a reverse-engineered C reimplementa
 
 ## Asset Tools
 
-- **[C Restool Guide](RESTOOL_C.md)** - C-based asset extraction (recommended)
-- **[Python Restool Guide](RESTOOL_PYTHON.md)** - Python-based extraction (legacy)
-- **[Restool Feature Comparison](RESTOOL_REMAINING.md)** - Python-only features
+- **[Restool Guide](RESTOOL_C.md)** - `zelda3-restool` asset extraction and multi-language builds
 
 ## Development
 

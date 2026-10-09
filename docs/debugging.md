@@ -695,7 +695,7 @@ nxlink -s zelda3.nro
 
 - **Architecture:** See [architecture.md](architecture.md) for code structure
 - **Contributing:** See [contributing.md](contributing.md) for development guidelines
-- **Building:** See [BUILDING.md](../BUILDING.md) for build instructions
+- **Building:** See [Installation Guide](installation.md) for build instructions
 - **Troubleshooting:** See [troubleshooting.md](troubleshooting.md) for common issues
 
 ## Tips and Best Practices

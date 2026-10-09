@@ -37,7 +37,7 @@ link_x_coord = 100;  // Correct
 
 Memory regions: `g_ram` (game), `g_zenv.vram` (video), `g_zenv.sram` (save)
 
-### Feature Flags (features.h)
+### Feature Flags (game_features.h)
 ```c
 if (enhanced_features0 & kFeatures0_SwitchLR) { /* enabled */ }
 ```
@@ -64,7 +64,7 @@ See [docs/architecture.md](docs/architecture.md) for details.
 ## Development Patterns
 
 ### Adding Features
-1. Define flag in `features.h` (power-of-2)
+1. Define flag in `game_features.h` (power-of-2)
 2. Store at unused RAM offset (0x648+)
 3. Add INI option in zelda3.ini
 4. Gate implementation with flag check
@@ -92,7 +92,7 @@ Platform files go in `src/platform/<name>/`
 
 **Modify:**
 - Build: `CMakeLists.txt`
-- Config: `config.c/h`, `features.h`
+- Config: `config.c/h`, `game_features.h`
 - Types: `types.h`, `variables.h`
 - Platform: `platform_detect.h`, `platform.h/c`
 

@@ -139,8 +139,8 @@ Error: Could not open zelda3_assets.dat
 
 1. **Extract assets from ROM:**
    ```bash
-   python3 -m pip install -r requirements.txt
-   python3 assets/restool.py --extract-from-rom
+   cd build
+   ./zelda3-restool --extract-from-rom ../zelda3.sfc
    ```
 
 2. **Verify asset file exists:**
@@ -174,21 +174,6 @@ Error: ROM file has incorrect hash
 
 3. **Try re-downloading the ROM from a verified source**
 
-### Python Dependencies Missing
-
-**Symptoms:**
-```
-ModuleNotFoundError: No module named 'PIL'
-```
-
-**Solutions:**
-
-```bash
-python3 -m pip install -r requirements.txt
-
-# Or install manually
-python3 -m pip install Pillow PyYAML
-```
 
 ## Runtime Issues
 

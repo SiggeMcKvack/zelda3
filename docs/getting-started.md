@@ -20,21 +20,15 @@ Zelda3 is a reverse-engineered C reimplementation of The Legend of Zelda: A Link
 
 ## Quick Installation
 
-You have three options to get started:
+You have two options to get started:
 
-### Option 1: Windows Launcher (Easiest for Windows Users)
-
-Download and use RadzPrower's Launcher: [Zelda-3-Launcher](https://github.com/ajohns6/Zelda-3-Launcher)
-
-This handles asset extraction and provides a GUI for launching the game.
-
-### Option 2: Pre-built Binaries
+### Option 1: Pre-built Binaries
 
 Check the [Releases page](https://github.com/snesrev/zelda3/releases) for pre-built binaries for your platform.
 
-You'll still need to extract assets (see below).
+The desktop packages (`Zelda3.app`, the Windows installer, the Linux `.deb`) include the [launcher](launcher.md), which creates the asset file from your ROM. Otherwise, extract assets as shown below.
 
-### Option 3: Build from Source
+### Option 2: Build from Source
 
 See the [Installation Guide](installation.md) for complete build instructions for your platform.
 

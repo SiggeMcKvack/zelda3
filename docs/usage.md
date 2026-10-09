@@ -502,12 +502,12 @@ Zelda3 supports multiple languages through ROM extraction:
 
 1. **Extract dialogue from translated ROM:**
    ```sh
-   python3 assets/restool.py --extract-dialogue -r german.sfc
+   ./zelda3-restool --extract-from-rom german.sfc --extract-dialogue
    ```
 
 2. **Build assets with language:**
    ```sh
-   python3 assets/restool.py --languages=de
+   ./zelda3-restool --extract-from-rom zelda3.sfc --languages de
    ```
 
 3. **Set language in `zelda3.ini`:**

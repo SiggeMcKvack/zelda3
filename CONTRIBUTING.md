@@ -13,11 +13,11 @@ Thank you for your interest in contributing to Zelda3! This guide will help you 
    ```bash
    git clone https://github.com/YOUR_USERNAME/zelda3.git
    cd zelda3
-   # Install dependencies (see BUILDING.md)
-   python3 assets/restool.py --extract-from-rom
+   # Install dependencies (see docs/installation.md)
    mkdir build && cd build
    cmake .. -DCMAKE_BUILD_TYPE=Debug
    cmake --build . -j$(nproc)
+   ./zelda3-restool --extract-from-rom ../zelda3.sfc
    ```
 4. **Make your changes** on a feature branch
 5. **Test thoroughly** (see [docs/contributing.md#testing-changes](docs/contributing.md#testing-changes))
@@ -73,14 +73,14 @@ zelda3/
 └── build/            # Build directory (generated)
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed architecture overview.
+See [Architecture](docs/architecture.md) for detailed architecture overview.
 
 ## Development Resources
 
 ### Documentation
 
-- **[BUILDING.md](BUILDING.md)** - Build instructions for all platforms
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - High-level architecture overview
+- **[Installation Guide](docs/installation.md)** - Build instructions for all platforms
+- **[Architecture](docs/architecture.md)** - High-level architecture overview
 - **[docs/architecture.md](docs/architecture.md)** - Detailed technical architecture
 - **[docs/contributing.md](docs/contributing.md)** - Complete contribution guidelines
 - **[docs/development.md](docs/development.md)** - Development workflows and patterns
@@ -156,7 +156,7 @@ See [docs/contributing.md#issue-reporting](docs/contributing.md#issue-reporting)
 - Open a GitHub Discussion
 
 **For build problems:**
-- See [BUILDING.md](BUILDING.md) troubleshooting section
+- See [Installation Guide](docs/installation.md) troubleshooting section
 - Check [docs/troubleshooting.md](docs/troubleshooting.md)
 - Ask on Discord
 

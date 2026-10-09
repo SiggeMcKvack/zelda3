@@ -39,7 +39,7 @@ Before building, you must extract game assets from a USA region ROM.
 - Region: USA
 - SHA256: `66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb`
 
-### Method 1: C Restool (Recommended)
+### Extract with zelda3-restool
 
 ```bash
 # Build restool (built automatically with CMake)
@@ -48,23 +48,9 @@ cmake ..
 cmake --build . -j$(sysctl -n hw.ncpu)
 
 # Extract and compile assets
-./src/restool/zelda3-restool --extract-from-rom ../zelda3.sfc --compile
+./zelda3-restool --extract-from-rom ../zelda3.sfc --compile
 ```
 
-### Method 2: Python Restool (Alternative)
-
-```bash
-# Install Python requirements first
-python3 -m pip install -r requirements.txt
-
-# Extract assets
-python3 assets/restool.py --extract-from-rom
-
-# Or specify ROM path:
-python3 assets/restool.py --extract-from-rom -r /path/to/zelda3.sfc
-```
-
-This creates `zelda3_assets.dat` (~680KB) containing all game graphics, text, and maps.
 
 ## Building with CMake
 
@@ -245,11 +231,9 @@ brew install opus
 
 **Solution:**
 ```bash
-# Run asset extraction
-python3 assets/restool.py --extract-from-rom
-
-# Ensure zelda3_assets.dat is in same directory as zelda3 executable
-cp zelda3_assets.dat build/
+# Run asset extraction from the build directory
+cd build
+./zelda3-restool --extract-from-rom ../zelda3.sfc
 ```
 
 ### "Invalid ROM file"
@@ -393,4 +377,3 @@ For maximum performance:
 - [Installation Guide](../installation.md) - Overview of all platforms
 - [Troubleshooting](../troubleshooting.md) - Common issues and solutions
 - [Usage Guide](../usage.md) - Running and configuring the game
-- [BUILDING.md](/Users/carl/Repos/zelda3/BUILDING.md) - Complete build documentation

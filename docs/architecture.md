@@ -261,7 +261,7 @@ enum { kMaxSprites = 16 };
 
 ### Adding New Features
 
-1. **Define flag** in `src/features.h`:
+1. **Define flag** in `src/game_features.h`:
    ```c
    kFeatures0_MyNewFeature = 1024,
    ```
@@ -347,7 +347,7 @@ Each module has update functions called per-frame based on the current state.
 
 **User Documentation:**
 - [Getting Started](getting-started.md)
-- [Building](../BUILDING.md)
+- [Installation](installation.md)
 - [Platform Guides](platforms/)
 
 **References:**
