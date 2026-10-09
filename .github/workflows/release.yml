@@ -48,10 +48,8 @@ jobs:
         vcpkgGitCommitId: '74e6536215718009aae747d86d84b78376bf9e09'
 
     - name: Install dependencies
-      env:
-        VCPKG_OVERLAY_PORTS: ${{ github.workspace }}/vcpkg-overlay
       run: |
-        vcpkg install sdl2:x64-windows opus:x64-windows openal-soft:x64-windows gtk3:x64-windows pkgconf:x64-windows
+        vcpkg install sdl2:x64-windows opus:x64-windows openal-soft:x64-windows libyaml:x64-windows libsamplerate:x64-windows pkgconf:x64-windows
 
     - name: Configure CMake
       run: |
@@ -64,46 +62,38 @@ jobs:
     - name: Build
       run: cmake --build build --config Release -j
 
-    - name: Download Adwaita icon theme
-      run: |
-        Invoke-WebRequest -Uri "https://download.gnome.org/sources/adwaita-icon-theme/46/adwaita-icon-theme-46.0.tar.xz" -OutFile adwaita.tar.xz
-        7z x adwaita.tar.xz
-        7z x adwaita.tar
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: launcher-tauri/src-tauri
+    - name: Install Tauri CLI
+      run: cargo install tauri-cli --version "^2" --locked
 
-    - name: Download hicolor icon theme
+    - name: Stage game sidecar and DLLs
       run: |
-        Invoke-WebRequest -Uri "https://icon-theme.freedesktop.org/releases/hicolor-icon-theme-0.18.tar.xz" -OutFile hicolor.tar.xz
-        7z x hicolor.tar.xz
-        7z x hicolor.tar
+        $bin = "launcher-tauri/src-tauri/binaries"
+        New-Item -ItemType Directory -Force -Path "$bin/dlls" | Out-Null
+        Copy-Item build/Release/zelda3.exe "$bin/zelda3-game-x86_64-pc-windows-msvc.exe"
+        Copy-Item "$env:VCPKG_ROOT/installed/x64-windows/bin/*.dll" "$bin/dlls/"
+
+    - name: Build launcher bundle
+      working-directory: launcher-tauri/src-tauri
+      run: |
+        $env:PKG_CONFIG = "$env:VCPKG_ROOT/installed/x64-windows/tools/pkgconf/pkgconf.exe"
+        $env:PKG_CONFIG_PATH = "$env:VCPKG_ROOT/installed/x64-windows/lib/pkgconfig"
+        $env:ZELDA3_CMAKE_BUILD_DIR = "${{ github.workspace }}/build"
+        cargo tauri build --config tauri.bundle.conf.json --config tauri.bundle.windows.conf.json --bundles nsis
 
     - name: Package
       run: |
-        mkdir -p release/zelda3-windows-v${{ inputs.version }}
-        cp build/Release/zelda3.exe release/zelda3-windows-v${{ inputs.version }}/
-        cp build/Release/zelda3-launcher.exe release/zelda3-windows-v${{ inputs.version }}/
-        cp build/Release/*.dll release/zelda3-windows-v${{ inputs.version }}/ 2>$null || echo "No DLLs found"
-        cp zelda3.ini release/zelda3-windows-v${{ inputs.version }}/
-        cp README.md release/zelda3-windows-v${{ inputs.version }}/
-        cp LICENSE.txt release/zelda3-windows-v${{ inputs.version }}/
-        # Copy GTK icon themes
-        mkdir -p release/zelda3-windows-v${{ inputs.version }}/share/icons
-        Copy-Item -Recurse adwaita-icon-theme-46.0/Adwaita release/zelda3-windows-v${{ inputs.version }}/share/icons/
-        Copy-Item -Recurse hicolor-icon-theme-0.18/hicolor release/zelda3-windows-v${{ inputs.version }}/share/icons/
-        # Create GTK settings
-        mkdir -p release/zelda3-windows-v${{ inputs.version }}/etc/gtk-3.0
-        @"
-        [Settings]
-        gtk-theme-name=Adwaita
-        gtk-icon-theme-name=Adwaita
-        "@ | Out-File -FilePath release/zelda3-windows-v${{ inputs.version }}/etc/gtk-3.0/settings.ini -Encoding utf8
-        cd release
-        Compress-Archive -Path zelda3-windows-v${{ inputs.version }} -DestinationPath zelda3-windows-v${{ inputs.version }}.zip
+        mkdir -p release
+        Copy-Item launcher-tauri/src-tauri/target/release/bundle/nsis/*.exe release/zelda3-windows-v${{ inputs.version }}-setup.exe
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: zelda3-windows-v${{ inputs.version }}
-        path: release/zelda3-windows-v${{ inputs.version }}.zip
+        path: release/zelda3-windows-v${{ inputs.version }}-setup.exe
 
   build-macos-arm64:
     name: macOS ARM64 Release
@@ -115,28 +105,40 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install sdl2 opus openal-soft cmake gtk+3
+        brew install sdl2 opus openal-soft cmake libyaml libsamplerate dylibbundler
 
     - name: Configure CMake
       run: |
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_OSX_ARCHITECTURES=arm64
+          -DCMAKE_OSX_arm64ITECTURES=arm64
 
     - name: Build
       run: cmake --build build -j$(sysctl -n hw.ncpu)
 
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: launcher-tauri/src-tauri
+    - name: Install Tauri CLI
+      run: cargo install tauri-cli --version "^2" --locked
+
+    - name: Stage game sidecar
+      run: |
+        mkdir -p launcher-tauri/src-tauri/binaries
+        cp build/zelda3 "launcher-tauri/src-tauri/binaries/zelda3-game-$(rustc -vV | sed -n 's/^host: //p')"
+
+    - name: Build launcher bundle
+      working-directory: launcher-tauri/src-tauri
+      env:
+        ZELDA3_CMAKE_BUILD_DIR: ${{ github.workspace }}/build
+      run: cargo tauri build --config tauri.bundle.conf.json --bundles app
+
     - name: Package
       run: |
-        mkdir -p release/zelda3-macos-arm64-v${{ inputs.version }}
-        cp build/zelda3 release/zelda3-macos-arm64-v${{ inputs.version }}/
-        cp build/zelda3-launcher release/zelda3-macos-arm64-v${{ inputs.version }}/ 2>/dev/null || echo "No launcher found"
-        cp build/*.dylib release/zelda3-macos-arm64-v${{ inputs.version }}/ 2>/dev/null || echo "No dylibs found"
-        cp zelda3.ini release/zelda3-macos-arm64-v${{ inputs.version }}/
-        cp README.md release/zelda3-macos-arm64-v${{ inputs.version }}/
-        cp LICENSE.txt release/zelda3-macos-arm64-v${{ inputs.version }}/
-        cd release
-        zip -r zelda3-macos-arm64-v${{ inputs.version }}.zip zelda3-macos-arm64-v${{ inputs.version }}
+        scripts/bundle-macos.sh launcher-tauri/src-tauri/target/release/bundle/macos/Zelda3.app
+        mkdir -p release
+        ditto -c -k --keepParent launcher-tauri/src-tauri/target/release/bundle/macos/Zelda3.app release/zelda3-macos-arm64-v${{ inputs.version }}.zip
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -146,7 +148,7 @@ jobs:
 
   build-macos-x86_64:
     name: macOS Intel Release
-    runs-on: macos-13
+    runs-on: macos-15-intel
     if: ${{ inputs.build_macos_x86_64 }}
 
     steps:
@@ -154,28 +156,40 @@ jobs:
 
     - name: Install dependencies
       run: |
-        brew install sdl2 opus openal-soft cmake gtk+3
+        brew install sdl2 opus openal-soft cmake libyaml libsamplerate dylibbundler
 
     - name: Configure CMake
       run: |
         cmake -B build \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_OSX_ARCHITECTURES=x86_64
+          -DCMAKE_OSX_x86_64ITECTURES=x86_64
 
     - name: Build
       run: cmake --build build -j$(sysctl -n hw.ncpu)
 
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: launcher-tauri/src-tauri
+    - name: Install Tauri CLI
+      run: cargo install tauri-cli --version "^2" --locked
+
+    - name: Stage game sidecar
+      run: |
+        mkdir -p launcher-tauri/src-tauri/binaries
+        cp build/zelda3 "launcher-tauri/src-tauri/binaries/zelda3-game-$(rustc -vV | sed -n 's/^host: //p')"
+
+    - name: Build launcher bundle
+      working-directory: launcher-tauri/src-tauri
+      env:
+        ZELDA3_CMAKE_BUILD_DIR: ${{ github.workspace }}/build
+      run: cargo tauri build --config tauri.bundle.conf.json --bundles app
+
     - name: Package
       run: |
-        mkdir -p release/zelda3-macos-x86_64-v${{ inputs.version }}
-        cp build/zelda3 release/zelda3-macos-x86_64-v${{ inputs.version }}/
-        cp build/zelda3-launcher release/zelda3-macos-x86_64-v${{ inputs.version }}/ 2>/dev/null || echo "No launcher found"
-        cp build/*.dylib release/zelda3-macos-x86_64-v${{ inputs.version }}/ 2>/dev/null || echo "No dylibs found"
-        cp zelda3.ini release/zelda3-macos-x86_64-v${{ inputs.version }}/
-        cp README.md release/zelda3-macos-x86_64-v${{ inputs.version }}/
-        cp LICENSE.txt release/zelda3-macos-x86_64-v${{ inputs.version }}/
-        cd release
-        zip -r zelda3-macos-x86_64-v${{ inputs.version }}.zip zelda3-macos-x86_64-v${{ inputs.version }}
+        scripts/bundle-macos.sh launcher-tauri/src-tauri/target/release/bundle/macos/Zelda3.app
+        mkdir -p release
+        ditto -c -k --keepParent launcher-tauri/src-tauri/target/release/bundle/macos/Zelda3.app release/zelda3-macos-x86_64-v${{ inputs.version }}.zip
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -199,10 +213,14 @@ jobs:
           cmake \
           libsdl2-dev \
           libopus-dev \
-          python3 \
-          python3-pip \
           libopenal-dev \
-          libgtk-3-dev
+          libyaml-dev \
+          libsamplerate0-dev \
+          libclang-dev \
+          libwebkit2gtk-4.1-dev \
+          librsvg2-dev \
+          libxdo-dev \
+          libssl-dev
 
     - name: Configure CMake
       run: cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -210,23 +228,34 @@ jobs:
     - name: Build
       run: cmake --build build -j$(nproc)
 
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: launcher-tauri/src-tauri
+    - name: Install Tauri CLI
+      run: cargo install tauri-cli --version "^2" --locked
+
+    - name: Stage game sidecar
+      run: |
+        mkdir -p launcher-tauri/src-tauri/binaries
+        cp build/zelda3 "launcher-tauri/src-tauri/binaries/zelda3-game-$(rustc -vV | sed -n 's/^host: //p')"
+
+    - name: Build launcher bundle
+      working-directory: launcher-tauri/src-tauri
+      env:
+        ZELDA3_CMAKE_BUILD_DIR: ${{ github.workspace }}/build
+      run: cargo tauri build --config tauri.bundle.conf.json --bundles deb
+
     - name: Package
       run: |
-        mkdir -p release/zelda3-linux-v${{ inputs.version }}
-        cp build/zelda3 release/zelda3-linux-v${{ inputs.version }}/
-        cp build/zelda3-launcher release/zelda3-linux-v${{ inputs.version }}/ 2>/dev/null || echo "No launcher found"
-        cp build/*.so release/zelda3-linux-v${{ inputs.version }}/ 2>/dev/null || echo "No SOs found"
-        cp zelda3.ini release/zelda3-linux-v${{ inputs.version }}/
-        cp README.md release/zelda3-linux-v${{ inputs.version }}/
-        cp LICENSE.txt release/zelda3-linux-v${{ inputs.version }}/
-        cd release
-        zip -r zelda3-linux-v${{ inputs.version }}.zip zelda3-linux-v${{ inputs.version }}
+        mkdir -p release
+        cp launcher-tauri/src-tauri/target/release/bundle/deb/*.deb release/zelda3-linux-amd64-v${{ inputs.version }}.deb
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: zelda3-linux-v${{ inputs.version }}
-        path: release/zelda3-linux-v${{ inputs.version }}.zip
+        path: release/zelda3-linux-amd64-v${{ inputs.version }}.deb
 
   build-android:
     name: Android Release
@@ -285,6 +314,8 @@ jobs:
         draft: true
         files: |
           artifacts/**/*.zip
+          artifacts/**/*.exe
+          artifacts/**/*.deb
           artifacts/**/*.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
