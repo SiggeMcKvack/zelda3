@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Focus is the primary affordance on TV: a solid, high-contrast fill. -->
-<selector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:exitFadeDuration="@android:integer/config_shortAnimTime">
+<!-- No fade: an exit fade left the old row's green trailing behind the focus (text color
+     switches instantly), which read as lag when moving up/down. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_focused="true">
         <shape android:shape="rectangle">
             <solid android:color="@color/menu_focus_bg" />
