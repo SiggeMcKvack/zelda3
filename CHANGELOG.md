@@ -50,6 +50,12 @@ Notable changes, improvements, and additions to the Zelda3 project.
 - Removed the unused `GetVulkanGPUName()`.
 - Android: glslang (used for slang shaders) updated to 16.6.0, the same version desktop builds get from the Vulkan SDK 1.4.363.
 
+### Fixed: Overworld Holes Lead to Chris Houlihan's Room
+
+Every overworld hole (Pyramid, Hyrule Castle secret passage, Kakariko well, Lost Woods, etc.) dropped Link into Chris Houlihan's room. Since the December 2025 switch to the C restool, `kFallHole_Pos` was extracted with an extra `+0x400`. The Python pipeline added it when extracting but removed it again when compiling. Now the raw ROM values are used.
+
+**Action required:** re-extract `zelda3_assets.dat` (`zelda3-restool --extract-from-rom zelda3.sfc --compile`, or rebuild assets in the launcher). Save files are not affected.
+
 ## December 2025
 
 ### Android: Vulkan Slang Shader Support

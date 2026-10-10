@@ -3293,8 +3293,7 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
   uint8_t *hole_ent_id = malloc(ROM_HOLE_COUNT);
 
   for (int i = 0; i < ROM_HOLE_COUNT; i++) {
-    // Note: Python adds 0x400 to pos
-    hole_pos[i] = Rom_ReadWord(rom, ROM_HOLE_POS + i * 2) + 0x400;
+    hole_pos[i] = Rom_ReadWord(rom, ROM_HOLE_POS + i * 2);
     hole_area[i] = Rom_ReadWord(rom, ROM_HOLE_AREA + i * 2);
     hole_ent_id[i] = Rom_ReadByte(rom, ROM_HOLE_ENT_ID + i);
   }
