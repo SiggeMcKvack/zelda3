@@ -956,6 +956,7 @@ static bool ExtractDialogueFontFromPNG(Rom *rom, const char *lang, uint8_t **out
     { "sv", "font_sv.png", 99 },
     { "pl", "font_pl.png", 99 },
     { "pt", "font_pt.png", 121 },
+    { "pt-cbt", "font_pt_cbt.png", 99 },  // Font comes from the CBT ROM (font_pt_cbt.bin)
     { "nl", "font_nl.png", 99 },       // Dutch
     { "en-redux", "font.png", 99 },       // Redux uses US font
     { "en-kal", "font.png", 99 }, // Kaleidoscope uses US font
@@ -3849,6 +3850,7 @@ static const FontRomConfig kFontRomConfigs[] = {
   { "es",         0x8E8000, 0x8ECADF, 99 },
   { "pl",         0x8E8000, 0x8ECADF, 99 },
   { "pt",         0x8E8000, 0x8ECADF, 121 },
+  { "pt-cbt",     0x8E8000, 0x8ECADF, 99 },
   { "nl",         0x8E8000, 0x8ECADF, 99 },
   { "sv",         0x8E8000, 0x8ECADF, 99 },
   { "en-redux",      0x8E8000, 0x8ECADF, 99 },

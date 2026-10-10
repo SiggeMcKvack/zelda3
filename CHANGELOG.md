@@ -61,6 +61,7 @@ Every overworld hole (Pyramid, Hyrule Castle secret passage, Kakariko well, Lost
 - Translation patches can also be VCDIFF / xdelta3 files (`.vcdiff`, `.xdelta`), in the launcher, on Android and in `restool_lib`. The format is detected from the file contents. The decoder supports the default code table and xdelta3's checksum; patches with secondary compression are rejected.
 - UPS patches (`.ups`) are supported as well; the base ROM is checked against the patch's CRC32. Tested with the Spanish `ZELDA-t_F01h.ups`, which produces the known Spanish ROM, and `ZELDA-t_F01h-25th.ups`, whose 2 MB result is now recognized as Spanish (same dialogue). `ZELDA-t_ADDONS_F01h.ups` applies to the Spanish ROM and only adds code, so it is not a language.
 - New language `en-gn`, English (Gender Neutral), from `ALTTP_GenderNeutral.vcdiff` applied to the headerless US ROM.
+- New language `pt-cbt`, Portuguese (Brazil) by CBT, from `Legend of Zelda, The - A Link to the Past (USA) (Pt) (v1.1) (CBT).sfc`. It uses the US text engine and dictionary; the accented letters replace unused symbol glyphs, so it has its own alphabet and takes its font from the CBT ROM.
 - Language codes renamed so all English variants start with `en-`: `redux` is now `en-redux`, `retrans-kal` is now `en-kal`. The game accepts either name in `zelda3.ini`, so old configs and old asset files keep working.
 
 ### Launcher: Translation .ips Patches

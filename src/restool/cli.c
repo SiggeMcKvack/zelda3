@@ -98,7 +98,7 @@ static void PrintHelp(void) {
   printf("  --test-link                 Test Link graphics extraction\n");
   printf("  --test-dungeon              Test dungeon sprites extraction\n\n");
   printf("SUPPORTED LANGUAGES:\n");
-  printf("  us (default), de, fr, fr-c, en, es, pl, pt, nl, sv, en-redux, en-kal, en-gn\n\n");
+  printf("  us (default), de, fr, fr-c, en, es, pl, pt, pt-cbt, nl, sv, en-redux, en-kal, en-gn\n\n");
   printf("EXAMPLES:\n");
   printf("  # Extract and compile assets (auto-compiles by default)\n");
   printf("  zelda3-restool --extract-from-rom zelda3.sfc\n\n");

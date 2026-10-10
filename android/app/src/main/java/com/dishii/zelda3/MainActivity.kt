@@ -537,6 +537,7 @@ class MainActivity : SDLActivity() {
             "nl" to "Dutch",
             "pl" to "Polish",
             "pt" to "Portuguese (Brazil)",
+            "pt-cbt" to "Portuguese (Brazil, CBT)",
             "sv" to "Swedish",
             "en-redux" to "English (Redux)",
             "en-kal" to "English (Kaleidoscope)",

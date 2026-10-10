@@ -23,6 +23,19 @@ static const char *kTextAlphabet_US[] = {
   "[3HeartL]", "[3HeartR]", "[4HeartL]", "[4HeartR]", " ", "<", "[A]", "[B]", "[X]", "[Y]",
 };
 
+// PT-CBT alphabet (98 characters) - the US alphabet with unused symbol glyphs
+// redrawn as accented letters, plus 0x60-0x61
+static const char *kTextAlphabet_PT_CBT[] = {
+  "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P",
+  "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f",
+  "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v",
+  "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "!", "?",
+  "-", ".", ",", "[...]", ">", "ê", "ã", "é", "ú", "ó", "[LinkL]", "[LinkR]",
+  "\"", "[Up]", "[Down]", "[Left]", "[Right]", "í", "[1HeartL]", "[1HeartR]", "[2HeartL]",
+  "[3HeartL]", "[3HeartR]", "[4HeartL]", "[4HeartR]", " ", "<", "[A]", "[B]", "[X]", "[Y]",
+  "[5F]", "ç", "á",
+};
+
 // DE/EN alphabet (112 characters - includes extended chars)
 static const char *kTextAlphabet_DE[] = {
   "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P",
@@ -63,6 +76,30 @@ static const char *kTextDictionary_US[] = {
   "is", "it", "just", "know", "ly ",
   "la", "lo", "man", "ma", "me",
   "mu", "n't ", "non", "not", "open",
+  "ound", "out ", "of", "on", "or",
+  "per", "ple", "pow", "pro", "re ",
+  "re", "some", "se", "sh", "so",
+  "st", "ter ", "thin", "ter", "tha",
+  "the", "thi", "to", "tr", "up",
+  "ver", "with", "wa", "we", "wh",
+  "wi", "you", "Her", "Tha", "The",
+  "Thi", "You",
+};
+
+// PT-CBT dictionary - the US dictionary bytes read with the CBT alphabet (' is í)
+static const char *kTextDictionary_PT_CBT[] = {
+  "    ", "   ", "  ", "ís ", "and ",
+  "are ", "all ", "ain", "and", "at ",
+  "ast", "an", "at", "ble", "ba",
+  "be", "bo", "can ", "che", "com",
+  "ck", "des", "di", "do", "en ",
+  "er ", "ear", "ent", "ed ", "en",
+  "er", "ev", "for", "fro", "give ",
+  "get", "go", "have", "has", "her",
+  "hi", "ha", "ight ", "ing ", "in",
+  "is", "it", "just", "know", "ly ",
+  "la", "lo", "man", "ma", "me",
+  "mu", "nít ", "non", "not", "open",
   "ound", "out ", "of", "on", "or",
   "per", "ple", "pow", "pro", "re ",
   "re", "some", "se", "sh", "so",
@@ -448,6 +485,26 @@ static const LanguageConfig kLangPT = {
   .uses_new_format = true  // PT uses "new" EU encoder
 };
 
+static const LanguageConfig kLangPT_CBT = {
+  .alphabet = kTextAlphabet_PT_CBT,
+  .alphabet_size = sizeof(kTextAlphabet_PT_CBT) / sizeof(kTextAlphabet_PT_CBT[0]),
+  .dictionary = kTextDictionary_PT_CBT,
+  .dictionary_size = sizeof(kTextDictionary_PT_CBT) / sizeof(kTextDictionary_PT_CBT[0]),
+  .command_lengths = kText_CommandLengths_US,
+  .command_names = kText_CommandNames_US,
+  .command_count = sizeof(kText_CommandNames_US) / sizeof(kText_CommandNames_US[0]),
+  .rom_addrs = {0x9c8000, 0x8edf40, 0},
+  .rom_addr_count = 2,
+  .COMMAND_START = 0x67,
+  .SWITCH_BANK = 0x80,
+  .FINISH = 0xff,
+  .DICT_BASE_ENC = 0x88,
+  .DICT_BASE_DEC = 0x88,
+  .ESCAPE_CHARACTER = 0,
+  .has_escape = false,
+  .uses_new_format = false
+};
+
 static const LanguageConfig kLangES = {
   .alphabet = kTextAlphabet_ES,
   .alphabet_size = sizeof(kTextAlphabet_ES) / sizeof(kTextAlphabet_ES[0]),
@@ -503,6 +560,7 @@ const LanguageConfig* TextDecode_GetLanguageConfig(const char *lang_code) {
   if (strcmp(lang_code, "sv") == 0) return &kLangSV;
   if (strcmp(lang_code, "pl") == 0) return &kLangPL;
   if (strcmp(lang_code, "pt") == 0) return &kLangPT;
+  if (strcmp(lang_code, "pt-cbt") == 0) return &kLangPT_CBT;
   if (strcmp(lang_code, "es") == 0) return &kLangES;
   if (strcmp(lang_code, "nl") == 0) return &kLangNL;
   if (strcmp(lang_code, "en-redux") == 0) return &kLangUS;  // Redux uses US config
@@ -527,6 +585,7 @@ const char* TextDecode_GetLanguageCode(RomLanguage lang) {
     case ROM_LANG_SV: return "sv";
     case ROM_LANG_RETRANS_KAL: return "en-kal";
     case ROM_LANG_EN_GN: return "en-gn";
+    case ROM_LANG_PT_CBT: return "pt-cbt";
     default: return NULL;
   }
 }
