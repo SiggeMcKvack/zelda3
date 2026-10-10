@@ -7,6 +7,7 @@ import android.util.Log
 import android.view.FocusFinder
 import android.view.KeyEvent
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -246,7 +247,7 @@ class PauseMenuView
                     // Top row goes to the *current* tab, not whichever tab is geometrically closest
                     if (firstDown && focusedRowIndex() == adapter.firstFocusableRow() && !canMoveUpWithinRow()) {
                         saveFocus()
-                        tabStrip.getChildAt(currentTab)?.requestFocus()
+                        tabStrip.getChildAt(currentTab)?.requestFocusFromTouch()
                         return true
                     }
                 }
@@ -359,17 +360,29 @@ class PauseMenuView
             return row !== focused && FocusFinder.getInstance().findNextFocus(row, focused, View.FOCUS_UP) != null
         }
 
+        /**
+         * Focuses a row, leaving touch mode if needed. In touch mode requestFocus() fails, focus
+         * stays on the game surface and it swallows gamepad hat/stick motion, so the D-pad of
+         * controllers that report it as axes (e.g. AYN Thor) could never move into the menu.
+         */
         private fun focusRow(preferred: Int) {
             val target = adapter.nearestFocusableRow(preferred)
             if (target == null) {
-                tabStrip.getChildAt(currentTab)?.requestFocus()
+                tabStrip.getChildAt(currentTab)?.requestFocusFromTouch()
                 return
             }
             list.scrollToPosition(target)
             list.post {
                 val view = list.findViewHolderForAdapterPosition(target)?.itemView
-                if (view?.requestFocus() != true) tabStrip.getChildAt(currentTab)?.requestFocus()
+                if (view?.requestFocusFromTouch() != true) tabStrip.getChildAt(currentTab)?.requestFocusFromTouch()
             }
+        }
+
+        /** Keeps joystick motion away from the game while open; recovers focus if it was lost. */
+        fun handleMotion(event: MotionEvent): Boolean {
+            if (!isOpen || findFocus() != null) return false
+            focusRow(stack.lastOrNull()?.focusIndex ?: -1)
+            return true
         }
 
         // ---- Item behaviour ----

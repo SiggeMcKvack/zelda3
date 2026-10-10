@@ -1614,6 +1614,13 @@ class MainActivity : SDLActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    // Controllers like the AYN Thor report the D-pad as hat axes. Android turns unhandled hat/stick
+    // motion into D-pad keys for the focused view, as long as it doesn't reach the game surface.
+    override fun dispatchGenericMotionEvent(event: android.view.MotionEvent): Boolean {
+        if (pauseMenu.handleMotion(event)) return true
+        return super.dispatchGenericMotionEvent(event)
+    }
+
     /**
      * Start+Select toggles the pause menu, from a gamepad, a keyboard (N+B, the zelda3.ini
      * defaults) or the touch overlay. Returns true when the combo fired and the key is consumed.
