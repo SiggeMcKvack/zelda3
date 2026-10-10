@@ -247,12 +247,13 @@ The tool validates ROMs using SHA1 hashing. Only these versions are supported:
 | Portuguese | `pt` | `d0d09ed41f9c373fe6afdccafbf0da8c88d3d90d` | [romhacking.net/6530](https://www.romhacking.net/translations/6530/) |
 | Dutch | `nl` | `fa8adfdba2697c9a54d583a1284a22ac764c7637` | [romhacking.net/1124](https://www.romhacking.net/translations/1124/) |
 | Swedish | `sv` | `43cd3438469b2c3fe879ea2f410b3ef3cb3f1ca4` | [romhacking.net/982](https://www.romhacking.net/translations/982/) |
-| English Redux (v1) | `redux` | `b2a07a59e64c498bc1b2f28728f9bf4014c8d582` | [romhacking.net/6657](https://www.romhacking.net/translations/6657/) |
-| English Redux (v2) | `redux` | `9325c22eb0a2a1f0017157c8b620bc3a605cede1` | [romhacking.net/hacks/2594](https://www.romhacking.net/hacks/2594/) |
-| English Redux v10.2.3 | `redux` | `0db9eb8af889bb07b8172b5b034ffc971540ada0` | [romhacking.net/hacks/2594](https://www.romhacking.net/hacks/2594/) |
-| English Redux v10.2.4 | `redux` | `92db633bc1fad0d865794eb437ebc81ec076fdc7` | [romhacking.net/hacks/2594](https://www.romhacking.net/hacks/2594/) |
-| English Redux v10.2.3 (alt) | `redux` | `d9786698ea43e5688aeeaaec92502a4bf16c3eb5` | [romhacking.net/hacks/2594](https://www.romhacking.net/hacks/2594/) |
-| English Retranslation (Kaleidoscope) | `retrans-kal` | `ebf8d301ffaf5d412a8c3c832c0f0a92cfa2f16b` | [romhacking.net/hacks/5526](https://www.romhacking.net/hacks/5526/) |
+| English Redux (v1) | `en-redux` | `b2a07a59e64c498bc1b2f28728f9bf4014c8d582` | [romhacking.net/6657](https://www.romhacking.net/translations/6657/) |
+| English Redux (v2) | `en-redux` | `9325c22eb0a2a1f0017157c8b620bc3a605cede1` | [romhacking.net/hacks/2594](https://www.romhacking.net/hacks/2594/) |
+| English Redux v10.2.3 | `en-redux` | `0db9eb8af889bb07b8172b5b034ffc971540ada0` | [romhacking.net/hacks/2594](https://www.romhacking.net/hacks/2594/) |
+| English Redux v10.2.4 | `en-redux` | `92db633bc1fad0d865794eb437ebc81ec076fdc7` | [romhacking.net/hacks/2594](https://www.romhacking.net/hacks/2594/) |
+| English Redux v10.2.3 (alt) | `en-redux` | `d9786698ea43e5688aeeaaec92502a4bf16c3eb5` | [romhacking.net/hacks/2594](https://www.romhacking.net/hacks/2594/) |
+| English (Gender Neutral) | `en-gn` | `c26775415463b6ab3ab35902abbcd96e58a843c9` | `ALTTP_GenderNeutral.vcdiff` applied to the headerless US ROM |
+| English Retranslation (Kaleidoscope) | `en-kal` | `ebf8d301ffaf5d412a8c3c832c0f0a92cfa2f16b` | [romhacking.net/hacks/5526](https://www.romhacking.net/hacks/5526/) |
 
 ### Verify Your ROM
 
@@ -402,8 +403,8 @@ All 11 languages produce byte-perfect output matching the Python tool:
 | Portuguese | pt | 121 chars | 97 entries |
 | Spanish | es | 99 chars | 97 entries |
 | Dutch | nl | 94 chars | 97 entries |
-| Redux | redux | (uses US) | (uses US) |
-| Kaleidoscope | retrans-kal | (uses US) | (uses US) |
+| Redux | en-redux | (uses US) | (uses US) |
+| Kaleidoscope | en-kal | (uses US) | (uses US) |
 
 ### Extract Dialogue for Each Language
 
@@ -425,7 +426,7 @@ Once dialogue files are extracted, the game will select the language based on yo
 
 ```ini
 [General]
-Language=de  # Options: us, de, fr, fr-c, en, es, pl, pt, nl, sv, redux, retrans-kal
+Language=de  # Options: us, de, fr, fr-c, en, es, pl, pt, nl, sv, en-redux, en-kal, en-gn
 ```
 
 ## Troubleshooting

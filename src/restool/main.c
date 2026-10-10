@@ -805,8 +805,8 @@ static bool ExtractDialogueFontFromROM(Rom *rom, const char *lang,
                                        uint8_t **out_font_width, size_t *out_width_count) {
   // Only US-based font extraction from US ROM is supported
   // These languages use the same font layout as US ROM
-  if (strcmp(lang, "us") != 0 && strcmp(lang, "redux") != 0 &&
-      strcmp(lang, "retrans-kal") != 0 && strcmp(lang, "es") != 0 &&
+  if (strcmp(lang, "us") != 0 && strcmp(lang, "en-redux") != 0 &&
+      strcmp(lang, "en-kal") != 0 && strcmp(lang, "en-gn") != 0 && strcmp(lang, "es") != 0 &&
       strcmp(lang, "pl") != 0 && strcmp(lang, "nl") != 0 &&
       strcmp(lang, "sv") != 0 && strcmp(lang, "pt") != 0) {
     // Non-US languages (de, fr, en, fr-c) have different character sets
@@ -957,8 +957,9 @@ static bool ExtractDialogueFontFromPNG(Rom *rom, const char *lang, uint8_t **out
     { "pl", "font_pl.png", 99 },
     { "pt", "font_pt.png", 121 },
     { "nl", "font_nl.png", 99 },       // Dutch
-    { "redux", "font.png", 99 },       // Redux uses US font
-    { "retrans-kal", "font.png", 99 }, // Kaleidoscope uses US font
+    { "en-redux", "font.png", 99 },       // Redux uses US font
+    { "en-kal", "font.png", 99 }, // Kaleidoscope uses US font
+    { "en-gn", "font.png", 99 },  // Gender neutral uses US font
   };
 
   // Find language config
@@ -3850,8 +3851,9 @@ static const FontRomConfig kFontRomConfigs[] = {
   { "pt",         0x8E8000, 0x8ECADF, 121 },
   { "nl",         0x8E8000, 0x8ECADF, 99 },
   { "sv",         0x8E8000, 0x8ECADF, 99 },
-  { "redux",      0x8E8000, 0x8ECADF, 99 },
-  { "retrans-kal",0x8E8000, 0x8ECADF, 99 },
+  { "en-redux",      0x8E8000, 0x8ECADF, 99 },
+  { "en-kal",     0x8E8000, 0x8ECADF, 99 },
+  { "en-gn",      0x8E8000, 0x8ECADF, 99 },
 };
 
 #define FONT_TILE_SIZE 4096  // 256 chars × 16 bytes

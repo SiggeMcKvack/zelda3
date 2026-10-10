@@ -96,9 +96,15 @@ Rom* Rom_LoadFromData(uint8_t *data, size_t size) {
   return rom;
 }
 
-bool Rom_IsIpsPath(const char *path) {
+bool Rom_IsPatchPath(const char *path) {
+  static const char *const kExts[] = { ".ips", ".vcdiff", ".xdelta" };
   size_t n = path ? strlen(path) : 0;
-  return n >= 4 && strcasecmp(path + n - 4, ".ips") == 0;
+  for (int i = 0; i < 3; i++) {
+    size_t e = strlen(kExts[i]);
+    if (n >= e && strcasecmp(path + n - e, kExts[i]) == 0)
+      return true;
+  }
+  return false;
 }
 
 // Applies an IPS patch to `base`. Patch offsets are reduced by `shift`; data
@@ -166,40 +172,236 @@ fail:
   return NULL;
 }
 
-Rom* Rom_LoadIpsPatched(const char *ips_path, const char *base_rom_path) {
+// --- VCDIFF (RFC 3284, as written by xdelta3) --------------------------------
+// Supports the default code table and xdelta3's Adler-32 window checksum; no
+// secondary compression or custom code tables.
+
+typedef struct { const uint8_t *p, *end; bool err; } VcdReader;
+
+static uint32_t VcdByte(VcdReader *r) {
+  if (r->p >= r->end) { r->err = true; return 0; }
+  return *r->p++;
+}
+
+static uint32_t VcdInt(VcdReader *r) {
+  uint32_t v = 0;
+  for (int i = 0; i < 5; i++) {
+    uint32_t c = VcdByte(r);
+    v = v << 7 | (c & 127);
+    if (!(c & 128))
+      return v;
+  }
+  r->err = true;
+  return 0;
+}
+
+enum { kVcdNoop, kVcdAdd, kVcdRun, kVcdCopy };
+typedef struct { uint8_t type, size, mode; } VcdInst;
+
+// RFC 3284 section 5.6 default code table: two instructions per opcode.
+static void VcdBuildCodeTable(VcdInst t[256][2]) {
+  memset(t, 0, sizeof(VcdInst) * 512);
+  int i = 0;
+  t[i++][0] = (VcdInst){ kVcdRun, 0, 0 };
+  for (int s = 0; s <= 17; s++)
+    t[i++][0] = (VcdInst){ kVcdAdd, s, 0 };
+  for (int m = 0; m < 9; m++) {
+    t[i++][0] = (VcdInst){ kVcdCopy, 0, m };
+    for (int s = 4; s <= 18; s++)
+      t[i++][0] = (VcdInst){ kVcdCopy, s, m };
+  }
+  for (int m = 0; m < 9; m++)
+    for (int a = 1; a <= 4; a++)
+      for (int c = 4; c <= (m < 6 ? 6 : 4); c++, i++) {
+        t[i][0] = (VcdInst){ kVcdAdd, a, 0 };
+        t[i][1] = (VcdInst){ kVcdCopy, c, m };
+      }
+  for (int m = 0; m < 9; m++, i++) {
+    t[i][0] = (VcdInst){ kVcdCopy, 4, m };
+    t[i][1] = (VcdInst){ kVcdAdd, 1, 0 };
+  }
+}
+
+static uint32_t Adler32(const uint8_t *p, size_t n) {
+  uint32_t a = 1, b = 0;
+  for (size_t i = 0; i < n; i++) {
+    a = (a + p[i]) % 65521;
+    b = (b + a) % 65521;
+  }
+  return b << 16 | a;
+}
+
+// Decodes one window's instructions into tgt[0..tlen). seg is the source
+// segment (S bytes) that COPY addresses below S refer to.
+static bool VcdDecodeWindow(const VcdInst table[256][2], const uint8_t *seg, size_t S,
+                            uint8_t *tgt, size_t tlen,
+                            VcdReader *data, VcdReader *inst, VcdReader *addr) {
+  uint32_t near[4] = { 0 }, same[768] = { 0 };
+  int next_near = 0;
+  size_t pos = 0;
+  while (inst->p < inst->end) {
+    uint32_t op = VcdByte(inst);
+    for (int h = 0; h < 2; h++) {
+      VcdInst in = table[op][h];
+      if (in.type == kVcdNoop)
+        continue;
+      size_t size = in.size ? in.size : VcdInt(inst);
+      if (inst->err || pos + size > tlen)
+        return false;
+      if (in.type == kVcdAdd) {
+        if ((size_t)(data->end - data->p) < size)
+          return false;
+        memcpy(tgt + pos, data->p, size);
+        data->p += size;
+      } else if (in.type == kVcdRun) {
+        memset(tgt + pos, VcdByte(data), size);
+      } else {
+        size_t here = S + pos, a;
+        if (in.mode == 0) a = VcdInt(addr);
+        else if (in.mode == 1) a = here - VcdInt(addr);
+        else if (in.mode < 6) a = near[in.mode - 2] + VcdInt(addr);
+        else a = same[(in.mode - 6) * 256 + VcdByte(addr)];
+        near[next_near] = (uint32_t)a;
+        next_near = (next_near + 1) & 3;
+        same[a % 768] = (uint32_t)a;
+        if (addr->err || a >= here)
+          return false;
+        for (size_t k = 0; k < size; k++, a++)  // byte-wise: may overlap the output
+          tgt[pos + k] = a < S ? seg[a] : tgt[a - S];
+      }
+      pos += size;
+      if (data->err)
+        return false;
+    }
+  }
+  return pos == tlen;
+}
+
+// Applies a VCDIFF patch to `base`. Returns a malloc'd buffer, or NULL if the
+// patch is malformed or uses an unsupported feature.
+static uint8_t *ApplyVcdiff(const uint8_t *base, size_t base_size, const uint8_t *patch,
+                            size_t patch_size, size_t *out_size) {
+  enum { kMaxRomSize = 16 * 1024 * 1024 };
+  VcdReader r = { patch, patch + patch_size, false };
+  if (patch_size < 5 || memcmp(patch, "\xD6\xC3\xC4", 3) != 0)
+    return NULL;
+  r.p += 4;
+  uint32_t hdr = VcdByte(&r);
+  if (hdr & 3) {
+    LogError("VCDIFF patch uses secondary compression or a custom code table");
+    return NULL;
+  }
+  if (hdr & 4) {  // application header (xdelta3 stores file names here)
+    uint32_t n = VcdInt(&r);
+    if (r.err || (size_t)(r.end - r.p) < n)
+      return NULL;
+    r.p += n;
+  }
+  static VcdInst table[256][2];
+  static bool table_built;
+  if (!table_built) {
+    VcdBuildCodeTable(table);
+    table_built = true;
+  }
+  uint8_t *out = malloc(kMaxRomSize);
+  if (!out)
+    return NULL;
+  size_t size = 0;
+  while (r.p < r.end) {
+    uint32_t win = VcdByte(&r);
+    const uint8_t *seg = NULL;
+    size_t seg_len = 0;
+    if (win & 3) {
+      seg_len = VcdInt(&r);
+      size_t seg_pos = VcdInt(&r);
+      size_t limit = (win & 1) ? base_size : size;
+      if ((win & 3) == 3 || seg_pos > limit || seg_len > limit - seg_pos)
+        goto fail;
+      seg = ((win & 1) ? base : out) + seg_pos;
+    }
+    uint32_t delta_len = VcdInt(&r);
+    if (r.err || delta_len > (size_t)(r.end - r.p))
+      goto fail;
+    const uint8_t *delta_end = r.p + delta_len;
+    size_t tlen = VcdInt(&r);
+    uint32_t delta_ind = VcdByte(&r);
+    size_t data_len = VcdInt(&r), inst_len = VcdInt(&r), addr_len = VcdInt(&r);
+    uint32_t adler = 0;
+    if (win & 4)
+      for (int i = 0; i < 4; i++)
+        adler = adler << 8 | VcdByte(&r);
+    if (r.err || delta_ind != 0 || r.p > delta_end || tlen > kMaxRomSize - size ||
+        data_len + inst_len + addr_len != (size_t)(delta_end - r.p))
+      goto fail;
+    VcdReader data = { r.p, r.p + data_len, false };
+    VcdReader inst = { data.end, data.end + inst_len, false };
+    VcdReader addr = { inst.end, inst.end + addr_len, false };
+    if (!VcdDecodeWindow(table, seg, seg_len, out + size, tlen, &data, &inst, &addr))
+      goto fail;
+    if ((win & 4) && Adler32(out + size, tlen) != adler) {
+      LogError("VCDIFF checksum mismatch: the base ROM does not match the patch");
+      goto fail;
+    }
+    size += tlen;
+    r.p = delta_end;
+  }
+  *out_size = size;
+  return out;
+fail:
+  free(out);
+  return NULL;
+}
+
+// Returns the ROM in data (taking ownership) if it is a known non-US ROM.
+static Rom *KnownTranslatedRom(uint8_t *data, size_t size) {
+  Rom *rom = Rom_LoadFromData(data, size);
+  if (rom && rom->language != ROM_LANG_UNKNOWN && rom->language != ROM_LANG_US)
+    return rom;
+  Rom_Free(rom);
+  return NULL;
+}
+
+Rom* Rom_LoadPatched(const char *patch_path, const char *base_rom_path) {
   Rom *base = base_rom_path ? Rom_Load(base_rom_path) : NULL;
   if (!base || base->language != ROM_LANG_US) {
-    LogError("IPS patch needs the US ROM as base: %s", base_rom_path ? base_rom_path : "(none)");
+    LogError("Patch needs the US ROM as base: %s", base_rom_path ? base_rom_path : "(none)");
     Rom_Free(base);
     return NULL;
   }
-  size_t ips_size;
-  uint8_t *ips = Platform_ReadWholeFile(ips_path, &ips_size);
-  if (!ips) {
-    LogError("Failed to read IPS patch: %s", ips_path);
+  size_t patch_size;
+  uint8_t *patch = Platform_ReadWholeFile(patch_path, &patch_size);
+  if (!patch) {
+    LogError("Failed to read patch: %s", patch_path);
     Rom_Free(base);
     return NULL;
   }
-  // Patches are made for either the headerless ROM or one with a 512-byte
-  // copier header. Try both and keep the result that is a known ROM.
   Rom *result = NULL;
-  static const size_t kShifts[] = { 0, 512 };
-  for (int k = 0; k < 2 && !result; k++) {
-    size_t size;
-    uint8_t *data = ApplyIps(base->data, base->size, ips, ips_size, kShifts[k], &size);
-    if (!data) {
-      LogError("Malformed IPS patch: %s", ips_path);
-      break;
+  size_t size;
+  if (patch_size >= 5 && memcmp(patch, "PATCH", 5) == 0) {
+    // IPS patches are made for either the headerless ROM or one with a 512-byte
+    // copier header. Try both and keep the result that is a known ROM.
+    static const size_t kShifts[] = { 0, 512 };
+    for (int k = 0; k < 2 && !result; k++) {
+      uint8_t *data = ApplyIps(base->data, base->size, patch, patch_size, kShifts[k], &size);
+      if (!data) {
+        LogError("Malformed IPS patch: %s", patch_path);
+        break;
+      }
+      result = KnownTranslatedRom(data, size);
     }
-    Rom *rom = Rom_LoadFromData(data, size);
-    if (rom && rom->language != ROM_LANG_UNKNOWN && rom->language != ROM_LANG_US)
-      result = rom;
+  } else if (patch_size >= 3 && memcmp(patch, "\xD6\xC3\xC4", 3) == 0) {
+    // VCDIFF checks its source, so only the headerless ROM can match
+    uint8_t *data = ApplyVcdiff(base->data, base->size, patch, patch_size, &size);
+    if (data)
+      result = KnownTranslatedRom(data, size);
     else
-      Rom_Free(rom);
+      LogError("Malformed or unsupported VCDIFF patch: %s", patch_path);
+  } else {
+    LogError("Unknown patch format (expected IPS or VCDIFF): %s", patch_path);
   }
   if (!result)
-    LogError("IPS patch does not produce a known translated ROM: %s", ips_path);
-  free(ips);
+    LogError("Patch does not produce a known translated ROM: %s", patch_path);
+  free(patch);
   Rom_Free(base);
   return result;
 }
@@ -270,19 +472,20 @@ static const RomLanguageEntry kRomLanguages[] = {
   { ROM_SHA1_ES,     ROM_LANG_ES,    "Spanish - https://www.romhacking.net/translations/2195/", "es" },
   { ROM_SHA1_PL,     ROM_LANG_PL,    "Polish - https://www.romhacking.net/translations/5760/",  "pl" },
   { ROM_SHA1_PT,     ROM_LANG_PT,    "Portuguese - https://www.romhacking.net/translations/6530/", "pt" },
-  { ROM_SHA1_REDUX1, ROM_LANG_REDUX, "English Redux - https://www.romhacking.net/translations/6657/", "redux" },
-  { ROM_SHA1_REDUX2, ROM_LANG_REDUX, "English Redux - https://www.romhacking.net/hacks/2594/", "redux" },
-  { ROM_SHA1_REDUX3, ROM_LANG_REDUX, "English Redux v10.2.3 - https://www.romhacking.net/hacks/2594/", "redux" },
-  { ROM_SHA1_REDUX4, ROM_LANG_REDUX, "English Redux v10.2.4 - https://www.romhacking.net/hacks/2594/", "redux" },
-  { ROM_SHA1_REDUX5, ROM_LANG_REDUX, "English Redux v10.2.3 - https://www.romhacking.net/hacks/2594/", "redux" },
-  { ROM_SHA1_REDUX6, ROM_LANG_REDUX, "English Retranslation Redux v10.2.3", "redux" },
-  { ROM_SHA1_REDUX7, ROM_LANG_REDUX, "English Retranslation Redux v10.2.4", "redux" },
-  { ROM_SHA1_REDUX8, ROM_LANG_REDUX, "English Retranslation 1.01", "redux" },
-  { ROM_SHA1_REDUX9, ROM_LANG_REDUX, "English Retranslation 1.01 (Translation Quest)", "redux" },
+  { ROM_SHA1_REDUX1, ROM_LANG_REDUX, "English Redux - https://www.romhacking.net/translations/6657/", "en-redux" },
+  { ROM_SHA1_REDUX2, ROM_LANG_REDUX, "English Redux - https://www.romhacking.net/hacks/2594/", "en-redux" },
+  { ROM_SHA1_REDUX3, ROM_LANG_REDUX, "English Redux v10.2.3 - https://www.romhacking.net/hacks/2594/", "en-redux" },
+  { ROM_SHA1_REDUX4, ROM_LANG_REDUX, "English Redux v10.2.4 - https://www.romhacking.net/hacks/2594/", "en-redux" },
+  { ROM_SHA1_REDUX5, ROM_LANG_REDUX, "English Redux v10.2.3 - https://www.romhacking.net/hacks/2594/", "en-redux" },
+  { ROM_SHA1_REDUX6, ROM_LANG_REDUX, "English Retranslation Redux v10.2.3", "en-redux" },
+  { ROM_SHA1_REDUX7, ROM_LANG_REDUX, "English Retranslation Redux v10.2.4", "en-redux" },
+  { ROM_SHA1_REDUX8, ROM_LANG_REDUX, "English Retranslation 1.01", "en-redux" },
+  { ROM_SHA1_REDUX9, ROM_LANG_REDUX, "English Retranslation 1.01 (Translation Quest)", "en-redux" },
+  { ROM_SHA1_EN_GN,  ROM_LANG_EN_GN, "English (Gender Neutral)", "en-gn" },
   { ROM_SHA1_NL,     ROM_LANG_NL,    "Dutch - https://www.romhacking.net/translations/1124/", "nl" },
   { ROM_SHA1_SV,     ROM_LANG_SV,    "Swedish - https://www.romhacking.net/translations/982/", "sv" },
   { ROM_SHA1_SV_NOHDR, ROM_LANG_SV,  "Swedish - https://www.romhacking.net/translations/982/", "sv" },
-  { ROM_SHA1_RETRANS_KAL, ROM_LANG_RETRANS_KAL, "English Retranslation (Kaleidoscope v1.0) - https://www.romhacking.net/hacks/5526/", "retrans-kal" },
+  { ROM_SHA1_RETRANS_KAL, ROM_LANG_RETRANS_KAL, "English Retranslation (Kaleidoscope v1.0) - https://www.romhacking.net/hacks/5526/", "en-kal" },
   { NULL, ROM_LANG_UNKNOWN, NULL, NULL }  // Terminator
 };
 

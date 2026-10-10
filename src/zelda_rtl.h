@@ -57,7 +57,7 @@ void ZeldaApuUnlock();
 bool ZeldaIsPlayingMusicTrack(uint8 track);
 uint8 ZeldaGetEntranceMusicTrack(int track);
 void ZeldaSetLanguage(const char *language);
-int ZeldaGetAvailableLanguages(char languages[][8], int max_languages);
+int ZeldaGetAvailableLanguages(char languages[][16], int max_languages);
 void PatchCommand(char cmd);
 
 // Things for state management

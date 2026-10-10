@@ -67,7 +67,7 @@ pub fn reset_config_defaults(ini_path: &str) -> Option<String> {
 }
 
 /// Identify a ROM. Returns `{"read":bool,"valid":bool,"lang_code":str,"lang_name":str}`.
-/// `rom_path` may be an `.ips` translation patch, applied to the US ROM `base_rom_path`.
+/// `rom_path` may be a translation patch (`.ips`, `.vcdiff` or `.xdelta`), applied to the US ROM `base_rom_path`.
 pub fn identify_rom(rom_path: &str, base_rom_path: Option<&str>) -> Option<String> {
     let c_path = CString::new(rom_path).ok()?;
     let c_base = match base_rom_path {

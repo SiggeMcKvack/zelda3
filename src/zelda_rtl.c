@@ -766,37 +766,51 @@ bool ZeldaRunFrame(int inputs) {
   return is_replay;
 }
 
+static bool FindLanguage(const char *language, MemBlk *found) {
+  size_t n = strlen(language);
+  for (int i = 0; ; i++) {
+    MemBlk mb = kDialogueMap(i);
+    if (mb.ptr == 0)
+      return false;
+    MemBlk name = FindIndexInMemblk(mb, 0);
+    if (name.size == n && !memcmp(name.ptr, language, n)) {
+      *found = FindIndexInMemblk(mb, 1);
+      return true;
+    }
+  }
+}
+
 void ZeldaSetLanguage(const char *language) {
   static const uint8 kDefaultConf[3] = { 0, 0, 0 };
+  // Language codes renamed in asset files; configs may use either name.
+  static const char *const kRenamed[][2] = {
+    { "redux", "en-redux" }, { "retrans-kal", "en-kal" },
+  };
   MemBlk found = { kDefaultConf, 3 };
-  if (language) {
-    size_t n = strlen(language);
-    for (int i = 0; ; i++) {
-      MemBlk mb = kDialogueMap(i);
-      if (mb.ptr == 0) {
-        LogError("Unable to find language '%s'", language);
-        break;
-      }
-      MemBlk name = FindIndexInMemblk(mb, 0);
-      if (name.size == n && !memcmp(name.ptr, language, n)) {
-        found = FindIndexInMemblk(mb, 1);
-        break;
+  if (language && !FindLanguage(language, &found)) {
+    bool ok = false;
+    for (int i = 0; i < 2 && !ok; i++) {
+      for (int j = 0; j < 2 && !ok; j++) {
+        if (strcmp(language, kRenamed[i][j]) == 0)
+          ok = FindLanguage(kRenamed[i][1 - j], &found);
       }
     }
+    if (!ok)
+      LogError("Unable to find language '%s'", language);
   }
   g_zenv.dialogue_blk = kDialogue(found.ptr[0]);
   g_zenv.dialogue_font_blk = kDialogueFont(found.ptr[1]);
   g_zenv.dialogue_flags = found.ptr[2];
 }
 
-int ZeldaGetAvailableLanguages(char languages[][8], int max_languages) {
+int ZeldaGetAvailableLanguages(char languages[][16], int max_languages) {
   int count = 0;
   for (int i = 0; i < max_languages; i++) {
     MemBlk mb = kDialogueMap(i);
     if (mb.ptr == 0)
       break;
     MemBlk name = FindIndexInMemblk(mb, 0);
-    if (name.size < 8 && name.size > 0) {
+    if (name.size < 16 && name.size > 0) {
       memcpy(languages[count], name.ptr, name.size);
       languages[count][name.size] = '\0';
       count++;

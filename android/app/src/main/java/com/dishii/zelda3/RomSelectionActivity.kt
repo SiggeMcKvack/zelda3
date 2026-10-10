@@ -59,7 +59,7 @@ class RomSelectionActivity : AppCompatActivity() {
     private lateinit var createBtn: Button
 
     // Native functions
-    // baseRomPath: US ROM that .ips patches are applied to (ignored for ROM files)
+    // baseRomPath: US ROM that patches are applied to (ignored for ROM files)
     private external fun nativeIdentifyRom(
         romPath: String,
         baseRomPath: String?,
@@ -147,8 +147,8 @@ class RomSelectionActivity : AppCompatActivity() {
     }
 
     /**
-     * Copies a picked file to the cache as `<baseName>.sfc`, or `<baseName>.ips` if it
-     * is an IPS patch (restool tells patches by extension; the URI has no usable name).
+     * Copies a picked file to the cache as `<baseName>.sfc`, or `.ips` / `.vcdiff` if it
+     * is a patch (restool tells patches by extension; the URI has no usable name).
      */
     private suspend fun copyToCache(
         uri: Uri,
@@ -160,8 +160,14 @@ class RomSelectionActivity : AppCompatActivity() {
                 tmp.outputStream().use { output -> input.copyTo(output) }
             }
             val header = ByteArray(5)
-            val isIps = tmp.inputStream().use { it.read(header) == 5 } && String(header, Charsets.US_ASCII) == "PATCH"
-            val dest = File(cacheDir, baseName + if (isIps) ".ips" else ".sfc")
+            val n = tmp.inputStream().use { it.read(header) }
+            val ext =
+                when {
+                    n == 5 && String(header, Charsets.US_ASCII) == "PATCH" -> ".ips"
+                    n >= 3 && header[0] == 0xD6.toByte() && header[1] == 0xC3.toByte() && header[2] == 0xC4.toByte() -> ".vcdiff"
+                    else -> ".sfc"
+                }
+            val dest = File(cacheDir, baseName + ext)
             dest.delete()
             tmp.renameTo(dest)
             dest
@@ -229,8 +235,8 @@ class RomSelectionActivity : AppCompatActivity() {
                 tempFile = copyToCache(uri, "temp_lang_$uniqueId")
 
                 val baseRomPath = baseRomInfo?.path
-                if (tempFile.extension == "ips" && baseRomPath == null) {
-                    showToast("Select the base US ROM first; .ips patches are applied to it.", Toast.LENGTH_LONG)
+                if (tempFile.extension != "sfc" && baseRomPath == null) {
+                    showToast("Select the base US ROM first; patches are applied to it.", Toast.LENGTH_LONG)
                     tempFile.delete()
                     return@launch
                 }

@@ -538,8 +538,9 @@ class MainActivity : SDLActivity() {
             "pl" to "Polish",
             "pt" to "Portuguese (Brazil)",
             "sv" to "Swedish",
-            "redux" to "English (Redux)",
-            "retrans-kal" to "English (Kaleidoscope)",
+            "en-redux" to "English (Redux)",
+            "en-kal" to "English (Kaleidoscope)",
+            "en-gn" to "English (Gender Neutral)",
         )
 
     private fun getLanguageDisplayName(code: String): String = languageDisplayNames[code] ?: code.uppercase()

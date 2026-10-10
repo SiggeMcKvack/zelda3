@@ -36,9 +36,9 @@ bool Restool_IdentifyRomEx(const char *rom_path, const char *base_rom_path, Rest
 
     memset(out_info, 0, sizeof(*out_info));
 
-    if (Rom_IsIpsPath(rom_path)) {
+    if (Rom_IsPatchPath(rom_path)) {
         // Patches are identified by the ROM they produce from the base ROM
-        Rom *rom = Rom_LoadIpsPatched(rom_path, base_rom_path);
+        Rom *rom = Rom_LoadPatched(rom_path, base_rom_path);
         if (rom) {
             // Same display names as for ROM files
             RomSha1_Identify(rom->sha1, out_info->lang_code, out_info->lang_name);
@@ -68,7 +68,7 @@ int Restool_ExtractDialogue(const char *rom_path, const char *output_dir) {
 
 int Restool_ExtractDialogueEx(const char *rom_path, const char *base_rom_path, const char *output_dir) {
     // Load ROM, or apply an IPS patch to the base ROM
-    Rom *rom = Rom_IsIpsPath(rom_path) ? Rom_LoadIpsPatched(rom_path, base_rom_path)
+    Rom *rom = Rom_IsPatchPath(rom_path) ? Rom_LoadPatched(rom_path, base_rom_path)
                                        : Rom_Load(rom_path);
     if (!rom) {
         return RESTOOL_ERR_ROM_LOAD;

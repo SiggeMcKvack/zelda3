@@ -505,8 +505,9 @@ const LanguageConfig* TextDecode_GetLanguageConfig(const char *lang_code) {
   if (strcmp(lang_code, "pt") == 0) return &kLangPT;
   if (strcmp(lang_code, "es") == 0) return &kLangES;
   if (strcmp(lang_code, "nl") == 0) return &kLangNL;
-  if (strcmp(lang_code, "redux") == 0) return &kLangUS;  // Redux uses US config
-  if (strcmp(lang_code, "retrans-kal") == 0) return &kLangUS;  // Kaleidoscope uses US config
+  if (strcmp(lang_code, "en-redux") == 0) return &kLangUS;  // Redux uses US config
+  if (strcmp(lang_code, "en-kal") == 0) return &kLangUS;  // Kaleidoscope uses US config
+  if (strcmp(lang_code, "en-gn") == 0) return &kLangUS;  // Gender neutral uses US config
 
   return NULL;
 }
@@ -521,10 +522,11 @@ const char* TextDecode_GetLanguageCode(RomLanguage lang) {
     case ROM_LANG_ES: return "es";
     case ROM_LANG_PL: return "pl";
     case ROM_LANG_PT: return "pt";
-    case ROM_LANG_REDUX: return "redux";
+    case ROM_LANG_REDUX: return "en-redux";
     case ROM_LANG_NL: return "nl";
     case ROM_LANG_SV: return "sv";
-    case ROM_LANG_RETRANS_KAL: return "retrans-kal";
+    case ROM_LANG_RETRANS_KAL: return "en-kal";
+    case ROM_LANG_EN_GN: return "en-gn";
     default: return NULL;
   }
 }

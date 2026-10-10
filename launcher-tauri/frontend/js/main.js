@@ -372,7 +372,7 @@ function renderGeneralPanel(panel) {
     </div>
     <div id="base-rom-info" class="muted assets-info"></div>
     <div class="row">
-      <label class="field-label">Language ROMs or .ips patches (optional)</label>
+      <label class="field-label">Language ROMs or patches (optional)</label>
       <button id="add-lang" class="btn">Browse…</button>
     </div>
     <ul id="lang-rom-list" class="lang-list"></ul>
@@ -618,7 +618,8 @@ async function refreshDatStatus() {
 const kLanguageNames = {
   us: "English (USA)", de: "German", fr: "French", "fr-c": "French (Canada)",
   en: "English (Europe)", es: "Spanish", pl: "Polish", pt: "Portuguese",
-  nl: "Dutch", sv: "Swedish", redux: "English Redux", "retrans-kal": "English (Kaleidoscope)",
+  nl: "Dutch", sv: "Swedish", "en-redux": "English Redux", "en-kal": "English (Kaleidoscope)",
+  "en-gn": "English (Gender Neutral)",
 };
 
 // Fill the Language dropdown with "(default)" + the languages present in the DAT.
@@ -641,7 +642,7 @@ function populateLanguages(languages) {
 async function pickBaseRom() {
   const path = await pickRom();
   if (!path) return;
-  // Only the US ROM is accepted as base (it is also what .ips patches apply to).
+  // Only the US ROM is accepted as base (it is also what patches apply to).
   baseRom = null;
   let msg;
   try {
@@ -659,12 +660,12 @@ async function pickBaseRom() {
 
 async function addLanguageRom() {
   const paths = await invoke("pick_files", {
-    filterName: "SNES ROM or IPS patch", extensions: ["sfc", "smc", "fig", "bin", "ips"],
+    filterName: "SNES ROM or patch", extensions: ["sfc", "smc", "fig", "bin", "ips", "vcdiff", "xdelta"],
   });
   for (const path of paths) {
-    const isPatch = path.toLowerCase().endsWith(".ips");
+    const isPatch = /\.(ips|vcdiff|xdelta)$/i.test(path);
     if (isPatch && !baseRom) {
-      setStatus("Select the base US ROM first; .ips patches are applied to it.", "err");
+      setStatus("Select the base US ROM first; patches are applied to it.", "err");
       continue;
     }
     let lang = "", name = "";

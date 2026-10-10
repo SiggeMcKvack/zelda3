@@ -21,6 +21,7 @@ typedef enum {
   ROM_LANG_NL,      // Dutch translation
   ROM_LANG_SV,      // Swedish translation
   ROM_LANG_RETRANS_KAL,  // Kaleidoscope retranslation
+  ROM_LANG_EN_GN,   // English, gender neutral
 } RomLanguage;
 
 // ROM structure

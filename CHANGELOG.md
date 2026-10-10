@@ -55,11 +55,17 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 Every overworld hole (Pyramid, Hyrule Castle secret passage, Kakariko well, Lost Woods, etc.) dropped Link into Chris Houlihan's room. Since the December 2025 switch to the C restool, `kFallHole_Pos` was extracted with an extra `+0x400`. The Python pipeline added it when extracting but removed it again when compiling. Now the raw ROM values are used.
 
+### Translation Patches: VCDIFF and Gender-Neutral English
+
+- Translation patches can also be VCDIFF / xdelta3 files (`.vcdiff`, `.xdelta`), in the launcher, on Android and in `restool_lib`. The format is detected from the file contents. The decoder supports the default code table and xdelta3's checksum; patches with secondary compression are rejected.
+- New language `en-gn`, English (Gender Neutral), from `ALTTP_GenderNeutral.vcdiff` applied to the headerless US ROM.
+- Language codes renamed so all English variants start with `en-`: `redux` is now `en-redux`, `retrans-kal` is now `en-kal`. The game accepts either name in `zelda3.ini`, so old configs and old asset files keep working.
+
 ### Launcher: Translation .ips Patches
 
 The launcher's language list now accepts `.ips` translation patches as well as translated ROMs. The patch is applied to the base US ROM in memory. Patches made for a headered ROM (512-byte copier header) or a headerless ROM both work; the result must be a known translated ROM. Tested with the Dutch and Swedish patches, and with the English Retranslation patches (`Zelda 3 - Retranslation Only 1,0.ips`, `Retranslation Redux.ips`).
 
-- More English Retranslation ROMs are recognized as `redux`: Retranslation Redux v10.2.3 (patched from `Retranslation Redux.ips`), Retranslation Redux v10.2.4, Retranslation 1.01 and Translation Quest v1.01. They share the same translation and differ in a few strings.
+- More English Retranslation ROMs are recognized as `en-redux`: Retranslation Redux v10.2.3 (patched from `Retranslation Redux.ips`), Retranslation Redux v10.2.4, Retranslation 1.01 and Translation Quest v1.01. They share the same translation and differ in a few strings.
 
 - Android: the ROM selection screen also accepts `.ips` translation patches as language files (select the base US ROM first). Picking a non-US base ROM now clears the previous selection.
 - The Swedish ROM is also recognized when patched onto the headerless US ROM.
