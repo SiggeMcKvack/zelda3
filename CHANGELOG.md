@@ -4,6 +4,10 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## October 2026
 
+### Fixed: Triforce Room Shifted With Widescreen
+
+With the widescreen camera, the room where Link receives the Triforce had its floor and Link shifted 96px to the left, with part of the room wrapped to the right side. The camera was moved inside the bounds of an ordinary overworld screen before the room's own bounds were loaded. Special areas now skip that adjustment.
+
 ### Widescreen: Rooms Fill the Screen
 
 With an extended aspect ratio, rooms locked to 256px, such as most houses, had black bars on both sides. Now a side whose outermost column is a single color, like the filler around a house, is filled with that color to the screen edge. Sides with mixed colors stay black.

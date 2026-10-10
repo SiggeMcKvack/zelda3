@@ -1856,6 +1856,10 @@ void LoadOverworldFromDungeon() {  // 82e4a3
     overworld_unk3_neg = -overworld_unk3;
   }
   Overworld_LoadNewScreenProperties();
+  // Special areas get their own scroll bounds in Overworld_EnterSpecialArea, so snapping
+  // to this screen's bounds would move the camera off the room (Triforce room)
+  if (dungeon_room_index < 0x180)
+    Overworld_WidescreenSnapCamera();
 }
 
 void Overworld_LoadNewScreenProperties() {  // 82e58b
@@ -1872,7 +1876,6 @@ void Overworld_LoadNewScreenProperties() {  // 82e58b
   link_direction_mask_a = link_direction_mask_b = 0xf;
   BYTE(link_z_coord) = 0xff;
   link_actual_vel_z = 0xff;
-  Overworld_WidescreenSnapCamera();
 }
 
 static void Overworld_WidescreenSnapAxis(bool vertical) {
@@ -2089,6 +2092,7 @@ void Overworld_LoadBirdTravelPos(int k) {  // 82ec47
   ow_entrance_value = 0;
   big_rock_starting_address = 0;
   Overworld_LoadNewScreenProperties();
+  Overworld_WidescreenSnapCamera();
   Sprite_ResetAll();
   Sprite_ReloadAll_Overworld();
   is_standing_in_doorway = 0;
