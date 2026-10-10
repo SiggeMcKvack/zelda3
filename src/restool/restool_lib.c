@@ -40,8 +40,8 @@ bool Restool_IdentifyRomEx(const char *rom_path, const char *base_rom_path, Rest
         // Patches are identified by the ROM they produce from the base ROM
         Rom *rom = Rom_LoadIpsPatched(rom_path, base_rom_path);
         if (rom) {
-            strncpy(out_info->lang_code, Rom_GetLanguageCode(rom->language), sizeof(out_info->lang_code) - 1);
-            strncpy(out_info->lang_name, rom->language_name, sizeof(out_info->lang_name) - 1);
+            // Same display names as for ROM files
+            RomSha1_Identify(rom->sha1, out_info->lang_code, out_info->lang_name);
             out_info->valid = true;
             Rom_Free(rom);
         } else {

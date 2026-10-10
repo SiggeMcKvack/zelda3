@@ -345,6 +345,7 @@ pub fn run() {
             commands::validate_config,
             commands::reset_config,
             commands::pick_file,
+            commands::pick_files,
             commands::pick_msu_folder,
             commands::scan_msu_folder,
             commands::finish_opus_encode,

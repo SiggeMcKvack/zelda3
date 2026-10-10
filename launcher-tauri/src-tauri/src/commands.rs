@@ -120,6 +120,26 @@ pub async fn pick_file(
         .map(|p| p.to_string_lossy().into_owned())
 }
 
+/// Like `pick_file`, but allows selecting several files; returns their paths
+/// (empty if cancelled).
+#[tauri::command]
+pub async fn pick_files(
+    app: tauri::AppHandle,
+    filter_name: String,
+    extensions: Vec<String>,
+) -> Vec<String> {
+    let exts: Vec<&str> = extensions.iter().map(String::as_str).collect();
+    app.dialog()
+        .file()
+        .add_filter(filter_name, &exts)
+        .blocking_pick_files()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|fp| fp.into_path().ok())
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect()
+}
+
 /// Open a native folder dialog (for the MSU directory); returns the path or null.
 #[tauri::command]
 pub async fn pick_msu_folder(app: tauri::AppHandle) -> Option<String> {

@@ -394,10 +394,10 @@ char *LauncherFfi_CreateDat(const char *options_json) {
     // Validate the base ROM is a usable US ROM up front for a clear error.
     RestoolRomInfo base;
     memset(&base, 0, sizeof(base));
-    if (!Restool_IdentifyRom(us_rom, &base) || !base.valid) {
+    if (!Restool_IdentifyRom(us_rom, &base) || !base.valid || strcmp(base.lang_code, "us") != 0) {
         cJSON_Delete(root);
         free(us_rom); free(out_dir);
-        return make_result(false, "base ROM is not a recognized ROM");
+        return make_result(false, "base ROM is not the US ROM");
     }
 
     // Extract dialogue for each valid, non-US language ROM; build the language list.
@@ -427,6 +427,8 @@ char *LauncherFfi_CreateDat(const char *options_json) {
                 temp_files_note(&temp, out_dir, name);
             }
 
+            // Same-language files extract to the same files: the last one wins
+            // (the launcher's language list relies on this).
             int rc = Restool_ExtractDialogueEx(item->valuestring, us_rom, out_dir);
             if (rc != RESTOOL_OK) { err = restool_err_string(rc); break; }
             if (languages[0]) strncat(languages, ",", sizeof(languages) - strlen(languages) - 1);

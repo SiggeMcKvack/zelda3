@@ -62,6 +62,9 @@ The launcher's language list now accepts `.ips` translation patches as well as t
 - More English Retranslation ROMs are recognized as `redux`: Retranslation Redux v10.2.3 (patched from `Retranslation Redux.ips`), Retranslation Redux v10.2.4, Retranslation 1.01 and Translation Quest v1.01. They share the same translation and differ in a few strings.
 
 - The Swedish ROM is also recognized when patched onto the headerless US ROM.
+- The language list shows the detected translation by name, including the Redux / Retranslation version when it is known (e.g. "English Redux v10.2.4", "English Retranslation 1.0"); the file path is in the tooltip. ROMs and patches now get the same names. Each entry has an icon showing whether it will be included; unrecognized files and all but the last file of the same language are marked as skipped. The Language dropdown shows language names next to the codes.
+- Several language ROMs / patches can be selected at once.
+- The base ROM must be the US ROM; a translated ROM (e.g. an English Retranslation) is rejected there with a hint to add it as a language ROM instead.
 - `restool_lib`: new `Restool_IdentifyRomEx()` / `Restool_ExtractDialogueEx()` take the base ROM for patches. The existing functions are unchanged.
 - `LauncherFfi_IdentifyRom()` now takes a base ROM path (may be NULL).
 

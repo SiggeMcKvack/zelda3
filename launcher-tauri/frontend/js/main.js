@@ -8,7 +8,7 @@ let activeTab = "General";
 
 // Assets-tab state
 let baseRom = null;                 // absolute path to the base US ROM
-let languageRoms = [];              // [{ path, lang }]
+let languageRoms = [];              // [{ path, lang, name }]
 
 const statusEl = () => document.getElementById("status");
 
@@ -377,13 +377,14 @@ function renderGeneralPanel(panel) {
     </div>
     <ul id="lang-rom-list" class="lang-list"></ul>
     <div class="row row-end">
-      <button id="create-dat" class="btn btn-primary">Create Asset File</button>
+      <span id="create-dat-wrap"><button id="create-dat" class="btn btn-primary">Create Asset File</button></span>
     </div>`;
 
   panel.querySelector("#pick-base").addEventListener("click", pickBaseRom);
   panel.querySelector("#add-lang").addEventListener("click", addLanguageRom);
   const createBtn = panel.querySelector("#create-dat");
-  createBtn.addEventListener("click", () => whileDisabled(createBtn, createDat));
+  // renderBaseRom restores the base-ROM gating that whileDisabled clears.
+  createBtn.addEventListener("click", () => whileDisabled(createBtn, createDat).then(renderBaseRom));
   panel.querySelector("#language-select").addEventListener("change", (e) => {
     config.language = e.target.value;   // "" = default
   });
@@ -540,17 +541,54 @@ function setOpusProgress(fraction, message) {
 
 function renderBaseRom() {
   setPathText(document.getElementById("base-rom-path"), baseRom);
+  // Tooltip on the wrapper: a disabled button gets no hover events.
+  document.getElementById("create-dat").disabled = !baseRom;
+  document.getElementById("create-dat-wrap").title = baseRom ? "" : "Select a base US ROM first.";
+}
+
+// Small coloured status icon: kind is "ok", "warn" or "err".
+function statusIcon(kind) {
+  const icon = document.createElement("span");
+  icon.className = "status-icon " + kind;
+  icon.textContent = { ok: "\u2713", warn: "!", err: "\u2715" }[kind];   // check mark / ! / cross
+  return icon;
 }
 
 function renderLangList() {
   const ul = document.getElementById("lang-rom-list");
   if (!ul) return;
   ul.innerHTML = "";
+  // Files of the same language extract to the same dialogue file in CreateDat,
+  // so only the last one of each language ends up in the DAT.
+  const lastOfLang = {};
+  languageRoms.forEach((r, i) => { if (r.lang) lastOfLang[r.lang] = i; });
   languageRoms.forEach((r, i) => {
+    let skipped = "";
+    if (!r.lang) skipped = "not recognized, will be skipped";
+    else if (r.lang === "us") skipped = "base language, will be skipped";
+    else if (lastOfLang[r.lang] !== i) skipped = `replaced by a later ${r.lang} file, will be skipped`;
     const li = document.createElement("li");
     li.className = "lang-item";
+    // never innerHTML: names/paths are user data
     const label = document.createElement("span");
-    label.textContent = (r.lang ? `[${r.lang}] ` : "") + r.path;   // never innerHTML: paths are user data
+    label.title = r.path;
+    label.append(statusIcon(!r.lang ? "err" : skipped ? "warn" : "ok"));
+    if (r.lang) {
+      const name = document.createElement("strong");
+      name.textContent = r.name;
+      const code = document.createElement("span");
+      code.className = "lang-code";
+      code.textContent = r.lang;
+      label.append(name, " ", code);
+    } else {
+      label.append(r.path.split(/[\\/]/).pop());
+    }
+    if (skipped) {
+      const note = document.createElement("span");
+      note.className = "lang-note";
+      note.textContent = ` (${skipped})`;
+      label.append(note);
+    }
     li.appendChild(label);
     const rm = document.createElement("button");
     rm.className = "btn";
@@ -576,6 +614,13 @@ async function refreshDatStatus() {
   }
 }
 
+// Display names for the DAT language codes (versions are not stored in the DAT).
+const kLanguageNames = {
+  us: "English (USA)", de: "German", fr: "French", "fr-c": "French (Canada)",
+  en: "English (Europe)", es: "Spanish", pl: "Polish", pt: "Portuguese",
+  nl: "Dutch", sv: "Swedish", redux: "English Redux", "retrans-kal": "English (Kaleidoscope)",
+};
+
 // Fill the Language dropdown with "(default)" + the languages present in the DAT.
 function populateLanguages(languages) {
   const sel = document.getElementById("language-select");
@@ -583,7 +628,7 @@ function populateLanguages(languages) {
   const langs = languages && languages.length ? languages : ["us"];
   const current = config.language || "";
   sel.innerHTML = "";
-  const opts = [["", "(default)"], ...langs.map((l) => [l, l])];
+  const opts = [["", "(default)"], ...langs.map((l) => [l, kLanguageNames[l] ? `${kLanguageNames[l]} (${l})` : l])];
   for (const [value, text] of opts) {
     const o = document.createElement("option");
     o.value = value;
@@ -596,41 +641,43 @@ function populateLanguages(languages) {
 async function pickBaseRom() {
   const path = await pickRom();
   if (!path) return;
-  baseRom = path;
-  renderBaseRom();
-  const info = document.getElementById("base-rom-info");
+  // Only the US ROM is accepted as base (it is also what .ips patches apply to).
+  baseRom = null;
+  let msg;
   try {
     const id = JSON.parse(await invoke("identify_rom", { path }));
-    if (!id.read) info.textContent = "Could not read that file.";
-    else if (!id.valid) info.textContent = "Not a recognized ALttP ROM.";
-    else info.textContent = `Recognized: ${id.lang_name} (${id.lang_code})`;
+    if (!id.read) msg = "Could not read that file.";
+    else if (!id.valid) msg = "Not a recognized ALttP ROM.";
+    else if (id.lang_code !== "us") msg = `${id.lang_name} is not the US ROM. Add it as a language ROM below instead.`;
+    else { baseRom = path; msg = `Recognized: ${id.lang_name} (${id.lang_code})`; }
   } catch (e) {
-    info.textContent = "Identify failed: " + e;
+    msg = "Identify failed: " + e;
   }
+  document.getElementById("base-rom-info").replaceChildren(statusIcon(baseRom ? "ok" : "err"), msg);
+  renderBaseRom();
 }
 
 async function addLanguageRom() {
-  const path = await invoke("pick_file", {
+  const paths = await invoke("pick_files", {
     filterName: "SNES ROM or IPS patch", extensions: ["sfc", "smc", "fig", "bin", "ips"],
   });
-  if (!path) return;
-  const isPatch = path.toLowerCase().endsWith(".ips");
-  if (isPatch && !baseRom) {
-    setStatus("Select the base US ROM first; .ips patches are applied to it.", "err");
-    return;
+  for (const path of paths) {
+    const isPatch = path.toLowerCase().endsWith(".ips");
+    if (isPatch && !baseRom) {
+      setStatus("Select the base US ROM first; .ips patches are applied to it.", "err");
+      continue;
+    }
+    let lang = "", name = "";
+    try {
+      const id = JSON.parse(await invoke("identify_rom", { path, baseRom: isPatch ? baseRom : null }));
+      if (id.valid) { lang = id.lang_code; name = id.lang_name; }
+    } catch (_) { /* ignore identify errors; backend re-validates */ }
+    languageRoms.push({ path, lang, name });
   }
-  let lang = "";
-  try {
-    const id = JSON.parse(await invoke("identify_rom", { path, baseRom: isPatch ? baseRom : null }));
-    if (id.valid) lang = id.lang_code;
-    else if (isPatch) setStatus("That patch does not produce a known translation from the base ROM.", "err");
-  } catch (_) { /* ignore identify errors; backend re-validates */ }
-  languageRoms.push({ path, lang });
   renderLangList();
 }
 
 async function createDat() {
-  if (!baseRom) { setStatus("Select a base US ROM first.", "err"); return; }
   setStatus("Creating DAT… this can take a while.", "");
   try {
     const result = JSON.parse(await invoke("create_dat", {

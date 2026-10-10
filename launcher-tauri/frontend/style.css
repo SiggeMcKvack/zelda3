@@ -250,3 +250,15 @@ body {
   margin-bottom: 4px;
   word-break: break-all;
 }
+.status-icon { font-weight: bold; margin-right: 8px; }
+.status-icon.ok { color: var(--ok); }
+.status-icon.warn { color: var(--warn); }
+.status-icon.err { color: var(--err); }
+.lang-note { color: var(--muted); }
+.lang-code {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 5px;
+}
