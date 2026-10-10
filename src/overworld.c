@@ -1857,8 +1857,9 @@ void LoadOverworldFromDungeon() {  // 82e4a3
   }
   Overworld_LoadNewScreenProperties();
   // Special areas get their own scroll bounds in Overworld_EnterSpecialArea, so snapping
-  // to this screen's bounds would move the camera off the room (Triforce room)
-  if (dungeon_room_index < 0x180)
+  // to this screen's bounds would move the camera off the room (Triforce room). The
+  // credits pan the camera to fixed targets, so their scenes keep the original start.
+  if (dungeon_room_index < 0x180 && main_module_index != 26)
     Overworld_WidescreenSnapCamera();
 }
 

@@ -4,6 +4,12 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## October 2026
 
+### Widescreen: Ending Credits
+
+The ending scenes, like Sahasrahla's homecoming in Kakariko, now use the extended width instead of being pillarboxed. Overworld scenes are limited to the area like regular play, and the dungeon scenes to the room. The closing triangles and "The End" stay 4:3, and the scene captions stay centered.
+
+- The widescreen camera no longer moves the credits camera when a scene loads. Four scenes (5, 7, 8 and 12) started from a different spot than the original, even when pillarboxed, so their pans were shorter and one ended 9px off.
+
 ### Fixed: Triforce Room Shifted With Widescreen
 
 With the widescreen camera, the room where Link receives the Triforce had its floor and Link shifted 96px to the left, with part of the room wrapped to the right side. The camera was moved inside the bounds of an ordinary overworld screen before the room's own bounds were loaded. Special areas now skip that adjustment.
