@@ -147,7 +147,7 @@ class RomSelectionActivity : AppCompatActivity() {
     }
 
     /**
-     * Copies a picked file to the cache as `<baseName>.sfc`, or `.ips` / `.vcdiff` / `.ups` if it
+     * Copies a picked file to the cache as `<baseName>.sfc`, or `.ips` / `.vcdiff` / `.ups` / `.bps` if it
      * is a patch (restool tells patches by extension; the URI has no usable name).
      */
     private suspend fun copyToCache(
@@ -165,6 +165,7 @@ class RomSelectionActivity : AppCompatActivity() {
                 when {
                     n == 5 && String(header, Charsets.US_ASCII) == "PATCH" -> ".ips"
                     n >= 4 && String(header, 0, 4, Charsets.US_ASCII) == "UPS1" -> ".ups"
+                    n >= 4 && String(header, 0, 4, Charsets.US_ASCII) == "BPS1" -> ".bps"
                     n >= 3 && header[0] == 0xD6.toByte() && header[1] == 0xC3.toByte() && header[2] == 0xC4.toByte() -> ".vcdiff"
                     else -> ".sfc"
                 }

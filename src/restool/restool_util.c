@@ -97,9 +97,9 @@ Rom* Rom_LoadFromData(uint8_t *data, size_t size) {
 }
 
 bool Rom_IsPatchPath(const char *path) {
-  static const char *const kExts[] = { ".ips", ".vcdiff", ".xdelta", ".ups" };
+  static const char *const kExts[] = { ".ips", ".vcdiff", ".xdelta", ".ups", ".bps" };
   size_t n = path ? strlen(path) : 0;
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 5; i++) {
     size_t e = strlen(kExts[i]);
     if (n >= e && strcasecmp(path + n - e, kExts[i]) == 0)
       return true;
@@ -433,6 +433,80 @@ fail:
   return NULL;
 }
 
+// --- BPS ---------------------------------------------------------------------
+
+// Applies a BPS patch to `base`. Returns a malloc'd buffer, or NULL if the patch
+// is malformed or `base` is not the ROM it was made for (source CRC32).
+static uint8_t *ApplyBps(const uint8_t *base, size_t base_size, const uint8_t *patch,
+                         size_t patch_size, size_t *out_size) {
+  enum { kMaxRomSize = 16 * 1024 * 1024 };
+  if (patch_size < 16 || memcmp(patch, "BPS1", 4) != 0)
+    return NULL;
+  const uint8_t *p = patch + 4, *end = patch + patch_size - 12;
+  size_t src_size, tgt_size, meta_size;
+  if (!UpsInt(&p, end, &src_size) || !UpsInt(&p, end, &tgt_size) || tgt_size > kMaxRomSize ||
+      !UpsInt(&p, end, &meta_size) || meta_size > (size_t)(end - p))
+    return NULL;
+  p += meta_size;
+  if (Crc32(patch, patch_size - 4) != ReadLe32(end + 8))
+    return NULL;
+  if (base_size != src_size || Crc32(base, base_size) != ReadLe32(end)) {
+    LogError("BPS patch was made for a different base ROM");
+    return NULL;
+  }
+  uint8_t *out = calloc(tgt_size ? tgt_size : 1, 1);
+  if (!out)
+    return NULL;
+  size_t pos = 0, src_rel = 0, tgt_rel = 0;
+  while (p < end) {
+    size_t data, delta;
+    if (!UpsInt(&p, end, &data))
+      goto fail;
+    size_t len = (data >> 2) + 1;
+    if (len > tgt_size - pos)
+      goto fail;
+    switch (data & 3) {
+    case 0:  // SourceRead: copy from the same offset in the source
+      if (pos + len > src_size)
+        goto fail;
+      memcpy(out + pos, base + pos, len);
+      break;
+    case 1:  // TargetRead: literal bytes
+      if (len > (size_t)(end - p))
+        goto fail;
+      memcpy(out + pos, p, len);
+      p += len;
+      break;
+    case 2:  // SourceCopy: copy from a relative source offset
+    case 3:  // TargetCopy: copy from a relative output offset (may overlap)
+      if (!UpsInt(&p, end, &delta))
+        goto fail;
+      size_t *rel = (data & 3) == 2 ? &src_rel : &tgt_rel;
+      *rel = delta & 1 ? *rel - (delta >> 1) : *rel + (delta >> 1);
+      if ((data & 3) == 2) {
+        if (*rel > src_size || len > src_size - *rel)
+          goto fail;
+        memcpy(out + pos, base + *rel, len);
+      } else {
+        if (*rel >= pos)
+          goto fail;
+        for (size_t i = 0; i < len; i++)
+          out[pos + i] = out[*rel + i];
+      }
+      *rel += len;
+      break;
+    }
+    pos += len;
+  }
+  if (pos != tgt_size || Crc32(out, tgt_size) != ReadLe32(end + 4))
+    goto fail;
+  *out_size = tgt_size;
+  return out;
+fail:
+  free(out);
+  return NULL;
+}
+
 // Returns the ROM in data (taking ownership) if it is a known non-US ROM.
 static Rom *KnownTranslatedRom(uint8_t *data, size_t size) {
   Rom *rom = Rom_LoadFromData(data, size);
@@ -484,8 +558,15 @@ Rom* Rom_LoadPatched(const char *patch_path, const char *base_rom_path) {
       result = KnownTranslatedRom(data, size);
     else
       LogError("Malformed UPS patch, or not made for the US ROM: %s", patch_path);
+  } else if (patch_size >= 4 && memcmp(patch, "BPS1", 4) == 0) {
+    // BPS checks its source, so only the headerless ROM can match
+    uint8_t *data = ApplyBps(base->data, base->size, patch, patch_size, &size);
+    if (data)
+      result = KnownTranslatedRom(data, size);
+    else
+      LogError("Malformed BPS patch, or not made for the US ROM: %s", patch_path);
   } else {
-    LogError("Unknown patch format (expected IPS, VCDIFF or UPS): %s", patch_path);
+    LogError("Unknown patch format (expected IPS, VCDIFF, UPS or BPS): %s", patch_path);
   }
   if (!result)
     LogError("Patch does not produce a known translated ROM: %s", patch_path);

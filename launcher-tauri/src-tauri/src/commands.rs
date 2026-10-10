@@ -156,7 +156,7 @@ pub fn scan_msu_folder(folder: String) -> String {
     crate::scan_msu_folder(&folder)
 }
 
-/// Identify a ROM file or translation patch (`.ips`, `.vcdiff`, `.xdelta`, `.ups`) (applied to `base_rom`).
+/// Identify a ROM file or translation patch (`.ips`, `.vcdiff`, `.xdelta`, `.ups`, `.bps`) (applied to `base_rom`).
 /// Returns `{"read","valid","lang_code","lang_name"}`.
 #[tauri::command]
 pub async fn identify_rom(path: String, base_rom: Option<String>) -> Result<String, String> {

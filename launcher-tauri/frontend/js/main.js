@@ -660,10 +660,10 @@ async function pickBaseRom() {
 
 async function addLanguageRom() {
   const paths = await invoke("pick_files", {
-    filterName: "SNES ROM or patch", extensions: ["sfc", "smc", "fig", "bin", "ips", "vcdiff", "xdelta", "ups"],
+    filterName: "SNES ROM or patch", extensions: ["sfc", "smc", "fig", "bin", "ips", "vcdiff", "xdelta", "ups", "bps"],
   });
   for (const path of paths) {
-    const isPatch = /\.(ips|vcdiff|xdelta|ups)$/i.test(path);
+    const isPatch = /\.(ips|vcdiff|xdelta|ups|bps)$/i.test(path);
     if (isPatch && !baseRom) {
       setStatus("Select the base US ROM first; patches are applied to it.", "err");
       continue;

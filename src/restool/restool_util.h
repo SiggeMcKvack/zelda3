@@ -19,10 +19,10 @@ Rom* Rom_Load(const char *path);
 // Same as Rom_Load, but from a malloc'd buffer (takes ownership)
 Rom* Rom_LoadFromData(uint8_t *data, size_t size);
 
-// True if path ends in .ips, .vcdiff, .xdelta or .ups
+// True if path ends in .ips, .vcdiff, .xdelta, .ups or .bps
 bool Rom_IsPatchPath(const char *path);
 
-// Apply an IPS, VCDIFF (xdelta3) or UPS translation patch to the US ROM at
+// Apply an IPS, VCDIFF (xdelta3), UPS or BPS translation patch to the US ROM at
 // base_rom_path; the format is detected from the file contents. IPS patches
 // may be made for headerless or headered (512-byte) ROMs.
 // Returns NULL unless the result is a known non-US ROM.
