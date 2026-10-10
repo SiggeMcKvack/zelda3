@@ -357,11 +357,27 @@ char *LauncherFfi_IdentifyRom(const char *rom_path, const char *base_rom_path) {
     return out;
 }
 
+// Files CreateDat writes into the output dir that did not exist before; they
+// are removed again when it is done.
+typedef struct {
+    char paths[64][600];
+    int count;
+} TempFiles;
+
+static void temp_files_note(TempFiles *t, const char *dir, const char *name) {
+    if (t->count >= 64) return;
+    char *p = t->paths[t->count];
+    snprintf(p, sizeof(t->paths[0]), "%s/%s", dir, name);
+    FILE *f = fopen(p, "rb");
+    if (f) { fclose(f); return; }   // pre-existing (user's own file): keep it
+    t->count++;
+}
+
 // options_json: { "us_rom_path": str, "output_dir": str, "language_roms": [path,...] }
 // language_roms may also be .ips translation patches; they are applied to the US ROM.
 // Mirrors the GTK launcher workflow: extract dialogue from each non-US language
 // ROM into output_dir, compile assets (US + languages) to output_dir/zelda3_assets.dat,
-// then remove the temporary dialogue_{lang}.txt files.
+// then remove the temporary dialogue and font files it created.
 char *LauncherFfi_CreateDat(const char *options_json) {
     if (!options_json) return make_result(false, "null options");
     cJSON *root = cJSON_Parse(options_json);
@@ -386,8 +402,7 @@ char *LauncherFfi_CreateDat(const char *options_json) {
 
     // Extract dialogue for each valid, non-US language ROM; build the language list.
     char languages[256] = "";
-    char extracted[16][16];   // lang codes we created dialogue files for (to clean up)
-    int extracted_count = 0;
+    TempFiles temp = { .count = 0 };
     const char *err = NULL;
 
     const cJSON *roms = cJSON_GetObjectItemCaseSensitive(root, "language_roms");
@@ -401,14 +416,19 @@ char *LauncherFfi_CreateDat(const char *options_json) {
             if (!Restool_IdentifyRomEx(item->valuestring, us_rom, &li) || !li.valid) continue;
             if (strcmp(li.lang_code, "us") == 0) continue;
 
+            // Dialogue extraction writes these files ('-' in the code becomes '_')
+            static const char *kExtracted[] = { "dialogue_%s.txt", "font_%s.bin", "fontwidth_%s.bin" };
+            char name[64], file_lang[16];
+            strncpy(file_lang, li.lang_code, sizeof(file_lang) - 1);
+            file_lang[sizeof(file_lang) - 1] = '\0';
+            for (char *c = file_lang; *c; c++) if (*c == '-') *c = '_';
+            for (int k = 0; k < 3; k++) {
+                snprintf(name, sizeof(name), kExtracted[k], file_lang);
+                temp_files_note(&temp, out_dir, name);
+            }
+
             int rc = Restool_ExtractDialogueEx(item->valuestring, us_rom, out_dir);
             if (rc != RESTOOL_OK) { err = restool_err_string(rc); break; }
-
-            if (extracted_count < 16) {
-                strncpy(extracted[extracted_count], li.lang_code, 15);
-                extracted[extracted_count][15] = '\0';
-                extracted_count++;
-            }
             if (languages[0]) strncat(languages, ",", sizeof(languages) - strlen(languages) - 1);
             strncat(languages, li.lang_code, sizeof(languages) - strlen(languages) - 1);
         }
@@ -426,16 +446,14 @@ char *LauncherFfi_CreateDat(const char *options_json) {
             .sprites_from_png = false,
             .custom_sprites = false,
         };
+        temp_files_note(&temp, out_dir, "dialogue.txt");  // US dialogue, extracted if missing
         compile_rc = Restool_CompileAssetsEx(&opt);
         if (compile_rc != RESTOOL_OK) err = restool_err_string(compile_rc);
     }
 
-    // Clean up the temporary dialogue files we created.
-    for (int i = 0; i < extracted_count; i++) {
-        char p[600];
-        snprintf(p, sizeof(p), "%s/dialogue_%s.txt", out_dir, extracted[i]);
-        remove(p);
-    }
+    // Clean up the temporary files we created.
+    for (int i = 0; i < temp.count; i++)
+        remove(temp.paths[i]);
 
     bool ok = (err == NULL);
     cJSON *r = cJSON_CreateObject();

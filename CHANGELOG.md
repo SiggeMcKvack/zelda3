@@ -35,6 +35,7 @@ Notable changes, improvements, and additions to the Zelda3 project.
 - Reset to defaults asks for confirmation.
 - ROM file names in the language list are shown as text, never parsed as HTML.
 - Windows: the launcher runs with the UTF-8 code page, so non-ASCII paths (e.g. in the user name) work.
+- Create Asset File no longer leaves `dialogue.txt`, `font_<lang>.bin` and `fontwidth_<lang>.bin` in the data directory. Only files it created are removed; your own files there are kept.
 
 ### Vulkan Renderer Fixes
 
