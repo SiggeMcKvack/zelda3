@@ -29,7 +29,7 @@ typedef struct {
 // Returns: true if ROM was read successfully (even if unknown)
 bool Restool_IdentifyRom(const char *rom_path, RestoolRomInfo *out_info);
 
-// Same, but rom_path may also be a translation patch (.ips, .vcdiff or .xdelta); it is applied to
+// Same, but rom_path may also be a translation patch (.ips, .vcdiff, .xdelta or .ups); it is applied to
 // the US ROM at base_rom_path and identified by the resulting ROM.
 bool Restool_IdentifyRomEx(const char *rom_path, const char *base_rom_path, RestoolRomInfo *out_info);
 
@@ -39,7 +39,7 @@ bool Restool_IdentifyRomEx(const char *rom_path, const char *base_rom_path, Rest
 // Returns: RESTOOL_OK on success, error code on failure
 int Restool_ExtractDialogue(const char *rom_path, const char *output_dir);
 
-// Same, but rom_path may also be a translation patch (.ips, .vcdiff or .xdelta) applied to the
+// Same, but rom_path may also be a translation patch (.ips, .vcdiff, .xdelta or .ups) applied to the
 // US ROM at base_rom_path.
 int Restool_ExtractDialogueEx(const char *rom_path, const char *base_rom_path, const char *output_dir);
 

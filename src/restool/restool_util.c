@@ -97,9 +97,9 @@ Rom* Rom_LoadFromData(uint8_t *data, size_t size) {
 }
 
 bool Rom_IsPatchPath(const char *path) {
-  static const char *const kExts[] = { ".ips", ".vcdiff", ".xdelta" };
+  static const char *const kExts[] = { ".ips", ".vcdiff", ".xdelta", ".ups" };
   size_t n = path ? strlen(path) : 0;
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 4; i++) {
     size_t e = strlen(kExts[i]);
     if (n >= e && strcasecmp(path + n - e, kExts[i]) == 0)
       return true;
@@ -352,6 +352,87 @@ fail:
   return NULL;
 }
 
+// --- UPS ---------------------------------------------------------------------
+
+static uint32_t Crc32(const uint8_t *p, size_t n) {
+  uint32_t crc = ~0u;
+  for (size_t i = 0; i < n; i++) {
+    crc ^= p[i];
+    for (int k = 0; k < 8; k++)
+      crc = crc >> 1 ^ (0xEDB88320 & -(crc & 1));
+  }
+  return ~crc;
+}
+
+static bool UpsInt(const uint8_t **p, const uint8_t *end, size_t *out) {
+  size_t v = 0, shift = 1;
+  for (int i = 0; i < 8; i++) {
+    if (*p >= end)
+      return false;
+    uint8_t x = *(*p)++;
+    v += (x & 0x7f) * shift;
+    if (x & 0x80) {
+      *out = v;
+      return true;
+    }
+    shift <<= 7;
+    v += shift;
+  }
+  return false;
+}
+
+static uint32_t ReadLe32(const uint8_t *p) {
+  return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24;
+}
+
+// Applies a UPS patch to `base`. Returns a malloc'd buffer, or NULL if the patch
+// is malformed or `base` is not the ROM it was made for (source CRC32).
+static uint8_t *ApplyUps(const uint8_t *base, size_t base_size, const uint8_t *patch,
+                         size_t patch_size, size_t *out_size) {
+  enum { kMaxRomSize = 16 * 1024 * 1024 };
+  if (patch_size < 16 || memcmp(patch, "UPS1", 4) != 0)
+    return NULL;
+  const uint8_t *p = patch + 4, *end = patch + patch_size - 12;
+  size_t src_size, tgt_size;
+  if (!UpsInt(&p, end, &src_size) || !UpsInt(&p, end, &tgt_size) || tgt_size > kMaxRomSize)
+    return NULL;
+  if (Crc32(patch, patch_size - 4) != ReadLe32(end + 8))
+    return NULL;
+  if (base_size != src_size || Crc32(base, base_size) != ReadLe32(end)) {
+    LogError("UPS patch was made for a different base ROM");
+    return NULL;
+  }
+  uint8_t *out = calloc(tgt_size ? tgt_size : 1, 1);
+  if (!out)
+    return NULL;
+  memcpy(out, base, base_size < tgt_size ? base_size : tgt_size);
+  size_t pos = 0;
+  while (p < end) {  // hunks: skip count, then XOR bytes up to a 0 terminator
+    size_t skip;
+    if (!UpsInt(&p, end, &skip))
+      goto fail;
+    pos += skip;
+    for (;;) {
+      if (p >= end)
+        goto fail;
+      uint8_t x = *p++;
+      if (x == 0)
+        break;
+      if (pos < tgt_size)
+        out[pos] ^= x;
+      pos++;
+    }
+    pos++;
+  }
+  if (Crc32(out, tgt_size) != ReadLe32(end + 4))
+    goto fail;
+  *out_size = tgt_size;
+  return out;
+fail:
+  free(out);
+  return NULL;
+}
+
 // Returns the ROM in data (taking ownership) if it is a known non-US ROM.
 static Rom *KnownTranslatedRom(uint8_t *data, size_t size) {
   Rom *rom = Rom_LoadFromData(data, size);
@@ -396,8 +477,15 @@ Rom* Rom_LoadPatched(const char *patch_path, const char *base_rom_path) {
       result = KnownTranslatedRom(data, size);
     else
       LogError("Malformed or unsupported VCDIFF patch: %s", patch_path);
+  } else if (patch_size >= 4 && memcmp(patch, "UPS1", 4) == 0) {
+    // UPS checks its source, so only the headerless ROM can match
+    uint8_t *data = ApplyUps(base->data, base->size, patch, patch_size, &size);
+    if (data)
+      result = KnownTranslatedRom(data, size);
+    else
+      LogError("Malformed UPS patch, or not made for the US ROM: %s", patch_path);
   } else {
-    LogError("Unknown patch format (expected IPS or VCDIFF): %s", patch_path);
+    LogError("Unknown patch format (expected IPS, VCDIFF or UPS): %s", patch_path);
   }
   if (!result)
     LogError("Patch does not produce a known translated ROM: %s", patch_path);
@@ -470,6 +558,7 @@ static const RomLanguageEntry kRomLanguages[] = {
   { ROM_SHA1_FR_C,   ROM_LANG_FR_C,  "Legend of Zelda, The - A Link to the Past (Canada)",  "fr-c" },
   { ROM_SHA1_EN,     ROM_LANG_EN,    "Legend of Zelda, The - A Link to the Past (Europe)",  "en" },
   { ROM_SHA1_ES,     ROM_LANG_ES,    "Spanish - https://www.romhacking.net/translations/2195/", "es" },
+  { ROM_SHA1_ES_25TH, ROM_LANG_ES,   "Spanish (25th Anniversary)", "es" },
   { ROM_SHA1_PL,     ROM_LANG_PL,    "Polish - https://www.romhacking.net/translations/5760/",  "pl" },
   { ROM_SHA1_PT,     ROM_LANG_PT,    "Portuguese - https://www.romhacking.net/translations/6530/", "pt" },
   { ROM_SHA1_REDUX1, ROM_LANG_REDUX, "English Redux - https://www.romhacking.net/translations/6657/", "en-redux" },

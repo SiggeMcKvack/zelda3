@@ -14,6 +14,7 @@
 #define ROM_SHA1_EN     "7c073a222569b9b8e8ca5fcb5dfec3b5e31da895"
 #define ROM_SHA1_ES     "461fcbd700d1332009c0e85a7a136e2a8e4b111e"
 #define ROM_SHA1_PL     "3c4d605eefda1d76f101965138f238476655b11d"
+#define ROM_SHA1_ES_25TH "ec8d7784e69e8b886ea0465dee6e03a5253e5dc9"  // ZELDA-t_F01h-25th.ups on headerless US ROM (2 MB, same dialogue)
 #define ROM_SHA1_PT     "d0d09ed41f9c373fe6afdccafbf0da8c88d3d90d"
 #define ROM_SHA1_REDUX1 "b2a07a59e64c498bc1b2f28728f9bf4014c8d582"  // Retranslation Only 1.0 on headerless US ROM
 #define ROM_SHA1_REDUX2 "9325c22eb0a2a1f0017157c8b620bc3a605cede1"

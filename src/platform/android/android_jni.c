@@ -469,7 +469,7 @@ void Android_UpdateRendererConfig(const char *renderer) {
  * Identifies a ROM file and returns language information as JSON.
  * Called from RomSelectionActivity when user selects a ROM file.
  *
- * @param romPath Path to the ROM file or translation patch (.ips, .vcdiff, .xdelta)
+ * @param romPath Path to the ROM file or translation patch (.ips, .vcdiff, .xdelta, .ups)
  * @param baseRomPath US ROM the patch is applied to (null for ROM files)
  * @return JSON string: {"lang_code":"us","lang_name":"USA","valid":true} or null on error
  */
@@ -510,7 +510,7 @@ JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeIden
  * Extracts dialogue from a ROM file to a text file.
  * Called from RomSelectionActivity for each language ROM.
  *
- * @param romPath Path to the ROM file or translation patch (.ips, .vcdiff, .xdelta)
+ * @param romPath Path to the ROM file or translation patch (.ips, .vcdiff, .xdelta, .ups)
  * @param baseRomPath US ROM the patch is applied to (null for ROM files)
  * @param outputDir Directory to write dialogue_{lang}.txt
  * @return RESTOOL_OK (0) on success, error code on failure

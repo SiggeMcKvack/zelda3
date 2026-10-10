@@ -374,7 +374,7 @@ static void temp_files_note(TempFiles *t, const char *dir, const char *name) {
 }
 
 // options_json: { "us_rom_path": str, "output_dir": str, "language_roms": [path,...] }
-// language_roms may also be translation patches (.ips, .vcdiff, .xdelta); they are applied to the US ROM.
+// language_roms may also be translation patches (.ips, .vcdiff, .xdelta, .ups); they are applied to the US ROM.
 // Mirrors the GTK launcher workflow: extract dialogue from each non-US language
 // ROM into output_dir, compile assets (US + languages) to output_dir/zelda3_assets.dat,
 // then remove the temporary dialogue and font files it created.

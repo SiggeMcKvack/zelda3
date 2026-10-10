@@ -252,6 +252,7 @@ The tool validates ROMs using SHA1 hashing. Only these versions are supported:
 | English Redux v10.2.3 | `en-redux` | `0db9eb8af889bb07b8172b5b034ffc971540ada0` | [romhacking.net/hacks/2594](https://www.romhacking.net/hacks/2594/) |
 | English Redux v10.2.4 | `en-redux` | `92db633bc1fad0d865794eb437ebc81ec076fdc7` | [romhacking.net/hacks/2594](https://www.romhacking.net/hacks/2594/) |
 | English Redux v10.2.3 (alt) | `en-redux` | `d9786698ea43e5688aeeaaec92502a4bf16c3eb5` | [romhacking.net/hacks/2594](https://www.romhacking.net/hacks/2594/) |
+| Spanish (25th Anniversary) | `es` | `ec8d7784e69e8b886ea0465dee6e03a5253e5dc9` | `ZELDA-t_F01h-25th.ups` applied to the headerless US ROM (2 MB; same dialogue as Spanish) |
 | English (Gender Neutral) | `en-gn` | `c26775415463b6ab3ab35902abbcd96e58a843c9` | `ALTTP_GenderNeutral.vcdiff` applied to the headerless US ROM |
 | English Retranslation (Kaleidoscope) | `en-kal` | `ebf8d301ffaf5d412a8c3c832c0f0a92cfa2f16b` | [romhacking.net/hacks/5526](https://www.romhacking.net/hacks/5526/) |
 

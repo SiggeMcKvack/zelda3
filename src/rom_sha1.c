@@ -159,6 +159,7 @@ static const struct {
   { ROM_SHA1_FR_C,   "fr-c",  "French (Canada)" },
   { ROM_SHA1_EN,     "en",    "European English" },
   { ROM_SHA1_ES,     "es",    "Spanish" },
+  { ROM_SHA1_ES_25TH, "es",   "Spanish (25th Anniversary)" },
   { ROM_SHA1_PL,     "pl",    "Polish" },
   { ROM_SHA1_PT,     "pt",    "Portuguese" },
   { ROM_SHA1_REDUX1, "en-redux", "English Retranslation 1.0" },

@@ -55,9 +55,10 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 Every overworld hole (Pyramid, Hyrule Castle secret passage, Kakariko well, Lost Woods, etc.) dropped Link into Chris Houlihan's room. Since the December 2025 switch to the C restool, `kFallHole_Pos` was extracted with an extra `+0x400`. The Python pipeline added it when extracting but removed it again when compiling. Now the raw ROM values are used.
 
-### Translation Patches: VCDIFF and Gender-Neutral English
+### Translation Patches: VCDIFF, UPS and Gender-Neutral English
 
 - Translation patches can also be VCDIFF / xdelta3 files (`.vcdiff`, `.xdelta`), in the launcher, on Android and in `restool_lib`. The format is detected from the file contents. The decoder supports the default code table and xdelta3's checksum; patches with secondary compression are rejected.
+- UPS patches (`.ups`) are supported as well; the base ROM is checked against the patch's CRC32. Tested with the Spanish `ZELDA-t_F01h.ups`, which produces the known Spanish ROM, and `ZELDA-t_F01h-25th.ups`, whose 2 MB result is now recognized as Spanish (same dialogue). `ZELDA-t_ADDONS_F01h.ups` applies to the Spanish ROM and only adds code, so it is not a language.
 - New language `en-gn`, English (Gender Neutral), from `ALTTP_GenderNeutral.vcdiff` applied to the headerless US ROM.
 - Language codes renamed so all English variants start with `en-`: `redux` is now `en-redux`, `retrans-kal` is now `en-kal`. The game accepts either name in `zelda3.ini`, so old configs and old asset files keep working.
 

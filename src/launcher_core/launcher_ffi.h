@@ -27,7 +27,7 @@ char *LauncherFfi_ValidateConfigJson(const char *config_json);
 char *LauncherFfi_ResetDefaults(const char *ini_path);
 
 // Identify a ROM file. Returns {"read":bool,"valid":bool,"lang_code":str,"lang_name":str}.
-// rom_path may be a translation patch (.ips, .vcdiff or .xdelta); it is then applied to the US ROM at
+// rom_path may be a translation patch (.ips, .vcdiff, .xdelta or .ups); it is then applied to the US ROM at
 // base_rom_path (may be NULL for plain ROMs).
 char *LauncherFfi_IdentifyRom(const char *rom_path, const char *base_rom_path);
 
