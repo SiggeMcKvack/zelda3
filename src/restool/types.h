@@ -24,6 +24,9 @@ typedef enum {
   ROM_LANG_EN_GN,   // English, gender neutral
   ROM_LANG_PT_CBT,  // Portuguese translation by CBT
   ROM_LANG_IT,      // Italian translation
+  ROM_LANG_GL,      // Galician translation
+  ROM_LANG_CA,      // Catalan translation
+  ROM_LANG_GA,      // Irish translation
 } RomLanguage;
 
 // ROM structure

@@ -18,6 +18,9 @@
 #define ROM_SHA1_PT     "d0d09ed41f9c373fe6afdccafbf0da8c88d3d90d"
 #define ROM_SHA1_PT_CBT "3b3feb7d34aa7ef3a544157a584131a07d99b98a"  // Legend of Zelda, The - A Link to the Past (USA) (Pt) (v1.1) (CBT)
 #define ROM_SHA1_IT     "ab839464566b2fadb8c5748c4df49b71bef065f4"  // The Legend of Zelda - A Link to the Past (U) [ITA v1.1].ips on headered US ROM
+#define ROM_SHA1_GL     "2c14618edc9808c1bbf550cd15791912d668e0a7"  // ZeldaGz 1.0.ips on headerless US ROM
+#define ROM_SHA1_GA     "ada2b22bbdff14dc25b0a4b224656bfd043c083d"  // Zelda-in-Irish_ALTTP.ips on headerless US ROM
+#define ROM_SHA1_CA     "26e12e97634d0880e34ce58379762b4d385e306e"  // zelda_a_link_to_the_past_catala_ntsc.bps on US ROM
 #define ROM_SHA1_REDUX1 "b2a07a59e64c498bc1b2f28728f9bf4014c8d582"  // Retranslation Only 1.0 on headerless US ROM
 #define ROM_SHA1_REDUX2 "9325c22eb0a2a1f0017157c8b620bc3a605cede1"
 #define ROM_SHA1_REDUX3 "0db9eb8af889bb07b8172b5b034ffc971540ada0"

@@ -850,6 +850,43 @@ static bool ExtractDialogueFontFromROM(Rom *rom, const char *lang,
   return true;
 }
 
+// Copies the 8x16 glyph of character src_c in src to character dst_c in dst
+static void CopyGlyph(uint8_t *dst, int dst_c, const uint8_t *src, int src_c) {
+  int d = (dst_c & 0x70) * 2 + (dst_c & 0xf), s = (src_c & 0x70) * 2 + (src_c & 0xf);
+  memcpy(dst + d * 16, src + s * 16, 16);
+  memcpy(dst + (d + 16) * 16, src + (s + 16) * 16, 16);
+}
+
+// The Irish ROM draws its accented letters over W w [Waves] [Snake] ' (and
+// some unused glyphs), which breaks the English text of the messages it does
+// not translate. Move those letters to the free characters 0x62-0x66 (see
+// kTextAlphabet_GA) and put the US glyphs back. us_rom is the US ROM.
+static bool FixIrishFont(Rom *us_rom, uint8_t *font, uint8_t **font_width, size_t *width_count) {
+  static const uint8_t kMoved[] = { 0x16, 0x30, 0x48, 0x49, 0x51 };  // Ó ó ú á í
+  static const uint8_t kRestored[] = { 0x16, 0x18, 0x30, 0x31, 0x45, 0x46, 0x47, 0x48, 0x49, 0x51 };
+  enum { kCount = 0x62 + sizeof(kMoved) };
+  const uint8_t *us_font = Rom_ReadPtr(us_rom, ROM_FONT_US, ROM_FONT_SIZE);
+  const uint8_t *us_width = Rom_ReadPtr(us_rom, ROM_FONT_WIDTH_US, 99);
+  uint8_t *width = calloc(kCount, 1);
+  if (!us_font || !us_width || !width || *width_count < 99) {
+    free(width);
+    return false;
+  }
+  memcpy(width, *font_width, 99);
+  for (size_t i = 0; i < sizeof(kMoved); i++) {
+    CopyGlyph(font, 0x62 + (int)i, font, kMoved[i]);
+    width[0x62 + i] = width[kMoved[i]];
+  }
+  for (size_t i = 0; i < sizeof(kRestored); i++) {
+    CopyGlyph(font, kRestored[i], us_font, kRestored[i]);
+    width[kRestored[i]] = us_width[kRestored[i]];
+  }
+  free(*font_width);
+  *font_width = width;
+  *width_count = kCount;
+  return true;
+}
+
 // Load font from extracted binary files (font_{lang}.bin + fontwidth_{lang}.bin)
 // These files are created by --extract-dialogue from language ROMs
 // Returns: font_data (4096 bytes), font_width (width_count bytes)
@@ -961,6 +998,9 @@ static bool ExtractDialogueFontFromPNG(Rom *rom, const char *lang, uint8_t **out
     { "pt", "font_pt.png", 121 },
     { "pt-cbt", "font_pt_cbt.png", 99 },  // Font comes from the CBT ROM (font_pt_cbt.bin)
     { "it", "font.png", 99 },          // Italian uses US font
+    { "gl", "font_gl.png", 99 },       // Font comes from the Galician ROM (font_gl.bin)
+    { "ca", "font_ca.png", 99 },       // Font comes from the Catalan ROM (font_ca.bin)
+    { "ga", "font_ga.png", 99 },       // Font comes from the Irish ROM (font_ga.bin), see FixIrishFont
     { "nl", "font_nl.png", 99 },       // Dutch
     { "en-redux", "font.png", 99 },       // Redux uses US font
     { "en-kal", "font.png", 99 }, // Kaleidoscope uses US font
@@ -1751,6 +1791,19 @@ bool ExtractDialogueAssets(AssetBuilder *builder, Rom *rom, const char *language
 
     if (!ExtractDialogueFontFromPNG(rom, lang, &font_data, &font_width, &font_width_count)) {
       LogError("Failed to extract dialogue font for %s", lang);
+      for (size_t j = 0; j <= i; j++) free(all_dialogue[j]);
+      for (size_t j = 0; j < i; j++) { free(all_fonts[j]); free(all_maps[j]); }
+      free(all_dialogue); free(all_dialogue_lens);
+      free(all_fonts); free(all_font_lens);
+      free(all_maps); free(all_map_lens);
+      if (languages_copy) free(languages_copy);
+      return false;
+    }
+
+    if (strcmp(lang, "ga") == 0 && !FixIrishFont(rom, font_data, &font_width, &font_width_count)) {
+      LogError("Failed to fix the Irish font");
+      free(font_data);
+      free(font_width);
       for (size_t j = 0; j <= i; j++) free(all_dialogue[j]);
       for (size_t j = 0; j < i; j++) { free(all_fonts[j]); free(all_maps[j]); }
       free(all_dialogue); free(all_dialogue_lens);
@@ -3856,6 +3909,9 @@ static const FontRomConfig kFontRomConfigs[] = {
   { "pt",         0x8E8000, 0x8ECADF, 121 },
   { "pt-cbt",     0x8E8000, 0x8ECADF, 99 },
   { "it",         0x8E8000, 0x8ECADF, 99 },
+  { "gl",         0x8E8000, 0x8ECADF, 99 },
+  { "ca",         0x8E8000, 0x8ECADF, 99 },
+  { "ga",         0x8E8000, 0x8ECADF, 99 },
   { "nl",         0x8E8000, 0x8ECADF, 99 },
   { "sv",         0x8E8000, 0x8ECADF, 99 },
   { "en-redux",      0x8E8000, 0x8ECADF, 99 },

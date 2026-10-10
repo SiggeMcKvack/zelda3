@@ -49,6 +49,73 @@ static const char *kTextAlphabet_IT[] = {
   "[5F]", "[60]", "[!]",
 };
 
+// GL alphabet (95 characters) - the US alphabet with letters Galician does not
+// need (j w ' and some symbols) redrawn as accented letters, ñ and a note
+static const char *kTextAlphabet_GL[] = {
+  "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P",
+  "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f",
+  "g", "h", "i", "í", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v",
+  "ú", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "!", "?",
+  "-", ".", ",", "Á", ">", "é", "ó", "[Ankh]", "[Waves]", "[Snake]", "[LinkL]", "[LinkR]", "\"", "[Up]", "[Down]", "[Left]",
+  "[Right]", "ñ", "[1HeartL]", "[1HeartR]", "[2HeartL]", "[3HeartL]", "[3HeartR]", "[Note]", "[4HeartR]", " ", "<", "á", "É", "Ó", "Ú",
+};
+
+// CA alphabet (99 characters) - the US alphabet with symbol glyphs redrawn as
+// accented letters, plus 0x61 (·) and 0x62 (É). 'l' is written with the
+// capital I glyph, so 0x08 decodes as l and 0x25 is ç
+static const char *kTextAlphabet_CA[] = {
+  "A", "B", "C", "D", "E", "F", "G", "H", "l", "J", "K", "L", "M", "N", "O", "P",
+  "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f",
+  "g", "h", "i", "j", "k", "ç", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v",
+  "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "!", "?",
+  "-", ".", ",", "à", ">", "(", ")", "[Ankh]", "[Waves]", "[Snake]", "[LinkL]", "[LinkR]", "ü", "[Up]", "[Down]", "í",
+  "è", "'", "[1HeartL]", "[1HeartR]", "[2HeartL]", "[3HeartL]", "[3HeartR]", "é", "[4HeartR]", " ", "<", "ï", "ò", "ó", "ú", "[5F]",
+  "[60]", "·", "É",
+};
+
+// GA alphabet (103 characters) - the US alphabet, with 0x17 (X, unused) as é
+// and the Irish letters that the Irish ROM draws over W w [Waves] [Snake] '
+// moved to 0x62-0x66, so that the untranslated English messages keep their
+// letters (see FixIrishFont in main.c)
+static const char *kTextAlphabet_GA[] = {
+  "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P",
+  "Q", "R", "S", "T", "U", "V", "W", "é", "Y", "Z", "a", "b", "c", "d", "e", "f",
+  "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v",
+  "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "!", "?",
+  "-", ".", ",", "[...]", ">", "(", ")", "[Ankh]", "[Waves]", "[Snake]", "[LinkL]", "[LinkR]", "\"", "[Up]", "[Down]", "[Left]",
+  "[Right]", "'", "[1HeartL]", "[1HeartR]", "[2HeartL]", "[3HeartL]", "[3HeartR]", "[4HeartL]", "[4HeartR]", " ", "<", "[A]", "[B]", "[X]", "[Y]", "[5F]",
+  "[60]", "[61]", "Ó", "ó", "ú", "á", "í",
+};
+
+// The Irish ROM's own alphabet, used to decode the messages it translates
+static const char *kTextAlphabet_GA_ROM[] = {
+  "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P",
+  "Q", "R", "S", "T", "U", "V", "Ó", "é", "Y", "Z", "a", "b", "c", "d", "e", "f",
+  "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v",
+  "ó", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "!", "?",
+  "-", ".", ",", "[...]", ">", "(", ")", "[Ankh]", "ú", "á", "[LinkL]", "[LinkR]", "\"", "[Up]", "[Down]", "[Left]",
+  "[Right]", "í", "[1HeartL]", "[1HeartR]", "[2HeartL]", "[3HeartL]", "[3HeartR]", "[4HeartL]", "[4HeartR]", " ", "<", "[A]", "[B]", "[X]", "[Y]",
+};
+
+// The Irish ROM translates only these messages; the rest are the US text
+static const uint16_t kIrishMessages[] = {
+  3, 13, 14, 15, 16, 17, 18, 19, 20, 21, 31, 32, 81, 82, 95, 96, 108, 123, 178, 179,
+  274, 275, 276, 277, 390,
+};
+
+// Messages the Irish ROM overwrote with requests for translation help, or
+// emptied; they get the US text back
+static const struct { uint16_t id; const char *text; } kIrishRestored[] = {
+  { 28, "Thank you, [Name].  I had a[2]feeling you were getting close." },
+  { 36, "All right,  let's get out of here[2]before the wizard notices.  I[3]know a secret path, but first[Waitkey][Scroll]we have to go to the[Scroll]first floor.  Let's  go!" },
+  { 37, "[Name], listen carefully.  The[2]wizard is magically controlling[3]all the soldiers in the castle.[Waitkey][Scroll]I fear the worst for[Scroll]my father[...][Scroll]The wizard is an inhuman fiend[Waitkey][Scroll]with strong magical powers![Scroll][...]   [...]   [...][Waitkey][Scroll]Do you understand?[Scroll]    > Yes[Scroll]       Not at all[Choose]" },
+  { 58, "I will give 100 Rupees to the[2]man who finds the descendants[3]of the wise men.   THE KING" },
+  { 393, "I see.  Then I give up.  Save[2]some Rupees and come back." },
+  { 394, "OK!  Time's up, game over.[2]Come back again.  Good bye[...]" },
+  { 395, "Come back again![2]I will be waiting for you." },
+  { 396, "I can't tell you details, but[2]it's not a convenient time for[3]me now.  Come back here again.[Waitkey][Scroll]Sorry." },
+};
+
 // DE/EN alphabet (112 characters - includes extended chars)
 static const char *kTextAlphabet_DE[] = {
   "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P",
@@ -121,6 +188,40 @@ static const char *kTextDictionary_PT_CBT[] = {
   "ver", "with", "wa", "we", "wh",
   "wi", "you", "Her", "Tha", "The",
   "Thi", "You",
+};
+
+// GL dictionary (97 entries) - from the Galician ROM
+static const char *kTextDictionary_GL[] = {
+  "     ", "razas", "Alfa", "Caba", "Donc", "Dour", "Hyli", "leir",
+  "máis", "Non ", "orza", "unha", "que ", "    ", "Rupi", "Sabi",
+  "Sete", "Trif", "Xaro", "   ", "...", "ada", "ado", "ame",
+  "ar ", "ara", "as ", "che", "da ", "de ", "der", "des",
+  "do ", "dos", "ent", "er ", "ero", "es ", "est", "la ",
+  "lo ", "ndo", "non", "nte", "ode", "on ", "or ", "ora",
+  "os ", "par", "pod", "por", "que", "ra ", "res", "ro ",
+  "te ", "tra", "un ", "a ", "ad", "al", "an", "ar",
+  "as", "ca", "co", "e ", "ei", "en", "er", "es",
+  "ha", "he", "la", "lo", "me", "n ", "no", "nt",
+  "o ", "od", "or", "os", "pa", "po", "ra", "re",
+  "ro", "se", "st", "ta", "te", "to", "tr", "ue",
+  "un",
+};
+
+// CA dictionary (97 entries) - from the Catalan ROM
+static const char *kTextDictionary_CA[] = {
+  "    ", "   ", "  ", "...", " la ", " el ", " del", "eu ",
+  "res", " se", " co", "an", "at", "ent", "ba", "be",
+  "bo", " per", " a ", " de", "ck", " no", "di", "do",
+  "ies", "que", "ra ", "ar ", "ort", "en", "er", "ev",
+  "est", " to", " que ", "es ", "go", " de ", "ant", " l'",
+  "hi", "ha", " de l", "... ", "in", "is", "it", " un ",
+  "ques", " ha", "la", "lo", " ca", "ma", "me", "mu",
+  " en ", " d'", "Per", "una ", "els ", " us ", "of", "on",
+  "or", " al", "ada", " és", "ell", "pas", "re", " amb",
+  "se", "sh", "so", "st", "pode", "les ", "i, ", "ing",
+  " po", "tre", "to", "tr", "up", "cor", " més", "wa",
+  "we", "wh", "wi", " ma", "par", " ll", "per", "ona",
+  "vos",
 };
 
 // DE dictionary (112 entries) - must match Python kTextDictionary_DE exactly
@@ -538,6 +639,66 @@ static const LanguageConfig kLangIT = {
   .uses_new_format = false
 };
 
+static const LanguageConfig kLangGL = {
+  .alphabet = kTextAlphabet_GL,
+  .alphabet_size = sizeof(kTextAlphabet_GL) / sizeof(kTextAlphabet_GL[0]),
+  .dictionary = kTextDictionary_GL,
+  .dictionary_size = sizeof(kTextDictionary_GL) / sizeof(kTextDictionary_GL[0]),
+  .command_lengths = kText_CommandLengths_US,
+  .command_names = kText_CommandNames_US,
+  .command_count = sizeof(kText_CommandNames_US) / sizeof(kText_CommandNames_US[0]),
+  .rom_addrs = {0x9c8000, 0x8edf40, 0},
+  .rom_addr_count = 2,
+  .COMMAND_START = 0x67,
+  .SWITCH_BANK = 0x80,
+  .FINISH = 0xff,
+  .DICT_BASE_ENC = 0x88,
+  .DICT_BASE_DEC = 0x88,
+  .ESCAPE_CHARACTER = 0,
+  .has_escape = false,
+  .uses_new_format = false
+};
+
+static const LanguageConfig kLangCA = {
+  .alphabet = kTextAlphabet_CA,
+  .alphabet_size = sizeof(kTextAlphabet_CA) / sizeof(kTextAlphabet_CA[0]),
+  .dictionary = kTextDictionary_CA,
+  .dictionary_size = sizeof(kTextDictionary_CA) / sizeof(kTextDictionary_CA[0]),
+  .command_lengths = kText_CommandLengths_US,
+  .command_names = kText_CommandNames_US,
+  .command_count = sizeof(kText_CommandNames_US) / sizeof(kText_CommandNames_US[0]),
+  .rom_addrs = {0x9c8000, 0x8edf40, 0},
+  .rom_addr_count = 2,
+  .COMMAND_START = 0x67,
+  .SWITCH_BANK = 0x80,
+  .FINISH = 0xff,
+  .DICT_BASE_ENC = 0x88,
+  .DICT_BASE_DEC = 0x88,
+  .ESCAPE_CHARACTER = 0,
+  .has_escape = false,
+  .uses_new_format = false
+};
+
+static const LanguageConfig kLangGA = {
+  .alphabet = kTextAlphabet_GA,
+  .alphabet_size = sizeof(kTextAlphabet_GA) / sizeof(kTextAlphabet_GA[0]),
+  .dictionary = kTextDictionary_US,
+  .dictionary_size = sizeof(kTextDictionary_US) / sizeof(kTextDictionary_US[0]),
+  .command_lengths = kText_CommandLengths_US,
+  .command_names = kText_CommandNames_US,
+  .command_count = sizeof(kText_CommandNames_US) / sizeof(kText_CommandNames_US[0]),
+  .rom_addrs = {0x9c8000, 0x8edf40, 0},
+  .rom_addr_count = 2,
+  .COMMAND_START = 0x67,
+  .SWITCH_BANK = 0x80,
+  .FINISH = 0xff,
+  .DICT_BASE_ENC = 0x88,
+  .DICT_BASE_DEC = 0x88,
+  .ESCAPE_CHARACTER = 0,
+  .has_escape = false,
+  .uses_new_format = false
+};
+
 static const LanguageConfig kLangES = {
   .alphabet = kTextAlphabet_ES,
   .alphabet_size = sizeof(kTextAlphabet_ES) / sizeof(kTextAlphabet_ES[0]),
@@ -595,6 +756,9 @@ const LanguageConfig* TextDecode_GetLanguageConfig(const char *lang_code) {
   if (strcmp(lang_code, "pt") == 0) return &kLangPT;
   if (strcmp(lang_code, "pt-cbt") == 0) return &kLangPT_CBT;
   if (strcmp(lang_code, "it") == 0) return &kLangIT;
+  if (strcmp(lang_code, "gl") == 0) return &kLangGL;
+  if (strcmp(lang_code, "ca") == 0) return &kLangCA;
+  if (strcmp(lang_code, "ga") == 0) return &kLangGA;
   if (strcmp(lang_code, "es") == 0) return &kLangES;
   if (strcmp(lang_code, "nl") == 0) return &kLangNL;
   if (strcmp(lang_code, "en-redux") == 0) return &kLangUS;  // Redux uses US config
@@ -621,6 +785,9 @@ const char* TextDecode_GetLanguageCode(RomLanguage lang) {
     case ROM_LANG_EN_GN: return "en-gn";
     case ROM_LANG_PT_CBT: return "pt-cbt";
     case ROM_LANG_IT: return "it";
+    case ROM_LANG_GL: return "gl";
+    case ROM_LANG_CA: return "ca";
+    case ROM_LANG_GA: return "ga";
     default: return NULL;
   }
 }
@@ -647,6 +814,23 @@ static void AppendFormatted(char **buf, size_t *len, size_t *cap, const char *fm
   AppendString(buf, len, cap, temp);
 }
 
+static bool IsIrishMessage(size_t id) {
+  for (size_t i = 0; i < sizeof(kIrishMessages) / sizeof(kIrishMessages[0]); i++) {
+    if (kIrishMessages[i] == id) return true;
+  }
+  return false;
+}
+
+static void RestoreIrishMessages(DecodedStringsArray *result) {
+  for (size_t i = 0; i < sizeof(kIrishRestored) / sizeof(kIrishRestored[0]); i++) {
+    if (kIrishRestored[i].id < result->count) {
+      DecodedString *s = &result->strings[kIrishRestored[i].id];
+      free(s->text);
+      s->text = strdup(kIrishRestored[i].text);
+    }
+  }
+}
+
 DecodedStringsArray* TextDecode_DecodeStrings(Rom *rom, const char *lang_code) {
   const LanguageConfig *config = TextDecode_GetLanguageConfig(lang_code);
   if (!config) {
@@ -668,6 +852,14 @@ DecodedStringsArray* TextDecode_DecodeStrings(Rom *rom, const char *lang_code) {
   size_t rom_idx = 1;
 
   while (1) {
+    // Irish: translated messages use the ROM's alphabet, the others the US one
+    const char **alphabet = config->alphabet;
+    size_t alphabet_size = config->alphabet_size;
+    if (config == &kLangGA && IsIrishMessage(result->count)) {
+      alphabet = kTextAlphabet_GA_ROM;
+      alphabet_size = sizeof(kTextAlphabet_GA_ROM) / sizeof(kTextAlphabet_GA_ROM[0]);
+    }
+
     // Allocate text buffer
     size_t text_cap = 1024;
     size_t text_len = 0;
@@ -719,8 +911,8 @@ DecodedStringsArray* TextDecode_DecodeStrings(Rom *rom, const char *lang_code) {
         }
 
         // Alphabet character
-        if (c < config->alphabet_size) {
-          AppendString(&text, &text_len, &text_cap, config->alphabet[c]);
+        if (c < alphabet_size) {
+          AppendString(&text, &text_len, &text_cap, alphabet[c]);
         }
       } else if (c < config->SWITCH_BANK) {
         // Command
@@ -744,6 +936,8 @@ DecodedStringsArray* TextDecode_DecodeStrings(Rom *rom, const char *lang_code) {
         // Done with all strings
         free(text);
         free(raw);
+        if (config == &kLangGA)
+          RestoreIrishMessages(result);
         return result;
       } else if (c == config->SWITCH_BANK) {
         // Switch to next ROM bank

@@ -617,7 +617,7 @@ async function refreshDatStatus() {
 // Display names for the DAT language codes (versions are not stored in the DAT).
 const kLanguageNames = {
   us: "English (USA)", de: "German", fr: "French", "fr-c": "French (Canada)",
-  en: "English (Europe)", es: "Spanish", pl: "Polish", pt: "Portuguese", "pt-cbt": "Portuguese (CBT)", it: "Italian",
+  en: "English (Europe)", es: "Spanish", pl: "Polish", pt: "Portuguese", "pt-cbt": "Portuguese (CBT)", it: "Italian", gl: "Galician", ca: "Catalan", ga: "Irish",
   nl: "Dutch", sv: "Swedish", "en-redux": "English Redux", "en-kal": "English (Kaleidoscope)",
   "en-gn": "English (Gender Neutral)",
 };

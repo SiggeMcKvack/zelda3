@@ -96,6 +96,9 @@ Output files created in `assets/`:
 - `dialogue_pt.txt` (Portuguese)
 - `dialogue_pt_cbt.txt` (Portuguese, CBT)
 - `dialogue_it.txt` (Italian)
+- `dialogue_gl.txt` (Galician)
+- `dialogue_ca.txt` (Catalan)
+- `dialogue_ga.txt` (Irish)
 - `dialogue_nl.txt` (Dutch)
 - `dialogue_sv.txt` (Swedish)
 
@@ -249,6 +252,9 @@ The tool validates ROMs using SHA1 hashing. Only these versions are supported:
 | Portuguese | `pt` | `d0d09ed41f9c373fe6afdccafbf0da8c88d3d90d` | [romhacking.net/6530](https://www.romhacking.net/translations/6530/) |
 | Portuguese (CBT) | `pt-cbt` | `3b3feb7d34aa7ef3a544157a584131a07d99b98a` | `Legend of Zelda, The - A Link to the Past (USA) (Pt) (v1.1) (CBT).sfc` |
 | Italian | `it` | `ab839464566b2fadb8c5748c4df49b71bef065f4` | `The Legend of Zelda - A Link to the Past (U) [ITA v1.1].ips` applied to the US ROM with a 512-byte header |
+| Galician | `gl` | `2c14618edc9808c1bbf550cd15791912d668e0a7` | `ZeldaGz 1.0.ips` applied to the headerless US ROM |
+| Catalan | `ca` | `26e12e97634d0880e34ce58379762b4d385e306e` | `zelda_a_link_to_the_past_catala_ntsc.bps` applied to the US ROM |
+| Irish | `ga` | `ada2b22bbdff14dc25b0a4b224656bfd043c083d` | `Zelda-in-Irish_ALTTP.ips` applied to the headerless US ROM |
 | Dutch | `nl` | `fa8adfdba2697c9a54d583a1284a22ac764c7637` | [romhacking.net/1124](https://www.romhacking.net/translations/1124/) |
 | Swedish | `sv` | `43cd3438469b2c3fe879ea2f410b3ef3cb3f1ca4` | [romhacking.net/982](https://www.romhacking.net/translations/982/) |
 | English Redux (v1) | `en-redux` | `b2a07a59e64c498bc1b2f28728f9bf4014c8d582` | [romhacking.net/6657](https://www.romhacking.net/translations/6657/) |
@@ -408,6 +414,9 @@ All 11 languages produce byte-perfect output matching the Python tool:
 | Portuguese | pt | 121 chars | 97 entries |
 | Portuguese (CBT) | pt-cbt | 98 chars (US with accents in unused symbol slots) | (uses US) |
 | Italian | it | 98 chars (US plus 0x5F-0x61; 0x61 is a wide `[!]`) | (uses US) |
+| Galician | gl | 95 chars (US with accents and ñ in unneeded slots) | 97 entries |
+| Catalan | ca | 99 chars (US with accents in symbol slots, plus · and É) | 97 entries |
+| Irish | ga | 103 chars (US, with é at 0x17 and Ó ó ú á í at 0x62-0x66) | (uses US) |
 | Spanish | es | 99 chars | 97 entries |
 | Dutch | nl | 94 chars | 97 entries |
 | Redux | en-redux | (uses US) | (uses US) |
@@ -433,7 +442,7 @@ Once dialogue files are extracted, the game will select the language based on yo
 
 ```ini
 [General]
-Language=de  # Options: us, de, fr, fr-c, en, es, pl, pt, pt-cbt, it, nl, sv, en-redux, en-kal, en-gn
+Language=de  # Options: us, de, fr, fr-c, en, es, pl, pt, pt-cbt, it, gl, ca, ga, nl, sv, en-redux, en-kal, en-gn
 ```
 
 ## Troubleshooting
