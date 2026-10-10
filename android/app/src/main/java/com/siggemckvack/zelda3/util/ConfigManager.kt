@@ -46,7 +46,7 @@ object ConfigManager {
                             inTargetSection = false
                         }
 
-                        inTargetSection && trimmed.startsWith(key, ignoreCase = true) && trimmed.contains("=") -> {
+                        inTargetSection && isKeyLine(trimmed, key) -> {
                             val value = trimmed.substringAfter("=").trim()
                             if (value.isNotEmpty()) {
                                 Log.d(TAG, "Read [$section] $key = $value")
@@ -126,7 +126,7 @@ object ConfigManager {
                             inTargetSection = false
                         }
 
-                        inTargetSection && trimmed.startsWith(key, ignoreCase = true) && trimmed.contains("=") -> {
+                        inTargetSection && isKeyLine(trimmed, key) -> {
                             lines[i] = "$key = $value"
                             keyUpdated = true
                             Log.d(TAG, "Updated [$section] $key = $value")
@@ -177,6 +177,12 @@ object ConfigManager {
         key: String,
         value: Boolean,
     ): Boolean = writeString(context, section, key, if (value) "1" else "0")
+
+    // Exact key match, so "ItemSwitchLR" doesn't also hit "ItemSwitchLRLimit = ..."
+    private fun isKeyLine(
+        trimmed: String,
+        key: String,
+    ): Boolean = trimmed.substringBefore('=', "").trim().equals(key, ignoreCase = true)
 
     private fun getConfigFile(context: Context): File? {
         val externalDir = context.getExternalFilesDir(null) ?: return null
