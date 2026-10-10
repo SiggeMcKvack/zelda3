@@ -514,7 +514,7 @@ class MainActivity : SDLActivity() {
     // JNI function for language settings
     private external fun nativeGetAvailableLanguages(path: String): Array<String>?
 
-    // Language display name mapping (matches launcher_ui.c get_language_display_name)
+    // Language display name mapping (keep in sync with kLanguageNames in launcher-tauri/frontend/js/main.js)
     private val languageDisplayNames =
         mapOf(
             "us" to "English (US)",
