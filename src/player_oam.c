@@ -1110,9 +1110,17 @@ continue_after_set:
     }
   }
 
+  // Link is hidden in a doorway once he's at the screen edge, which is where the room edge
+  // is with the original camera. The widescreen camera stops before it, so use the room edge.
+  uint16 xl = link_x_coord - BG2HOFS_copy2, xr = xl;
+  if ((enhanced_features0 & kFeatures0_WidescreenCamera) && player_is_indoors) {
+    int qm = quadrant_fullsize_x >> 1;
+    int16 l = link_x_coord - room_bounds_x.v[qm], r = link_x_coord - room_bounds_x.v[qm + 2];
+    xl = l < 4 ? 0 : 4, xr = r >= 252 ? 252 : 0;
+  }
   uint16 t;
   bool hide_shadow = true;
-  if ((is_standing_in_doorway && ((t = link_x_coord - BG2HOFS_copy2) < 4 || t >= 252 || (t = link_y_coord - BG2VOFS_copy2) < 4 || t >= 224)) ||
+  if ((is_standing_in_doorway && (xl < 4 || xr >= 252 || (t = link_y_coord - BG2VOFS_copy2) < 4 || t >= 224)) ||
       (hide_shadow = false,
       (submodule_index == 0 && countdown_for_blink && --countdown_for_blink >= 4 && (countdown_for_blink & 1) == 0) ||
       link_visibility_status == 12 ||

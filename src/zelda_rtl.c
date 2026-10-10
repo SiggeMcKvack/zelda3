@@ -1,6 +1,7 @@
 #include "zelda_rtl.h"
 #include "variables.h"
 #include "misc.h"
+#include "dungeon.h"
 #include "nmi.h"
 #include "poly.h"
 #include "attract.h"
@@ -171,10 +172,19 @@ static void ConfigurePpuSideSpace() {
       int qm = quadrant_fullsize_x >> 1;
       extra_left = IntMax(BG2HOFS_copy2 - room_bounds_x.v[qm], 0);
       extra_right = IntMax(room_bounds_x.v[qm + 2] - BG2HOFS_copy2, 0);
+      int lo, hi;
+      if (Dungeon_WidescreenTransitionWindow(&lo, &hi)) {
+        extra_left = IntMax(BG2HOFS_copy2 - lo, 0);
+        extra_right = IntMax(hi - 256 - BG2HOFS_copy2, 0);
+      }
     }
 
     int qy = quadrant_fullsize_y >> 1;
     extra_bottom = IntMax(room_bounds_y.v[qy + 2] - BG2VOFS_copy2, 0);
+    // The whole room is in VRAM and its lowest camera position still leaves 16 lines
+    // of room below a 224 line view, so show those too.
+    if (enhanced_features0 & kFeatures0_WidescreenCamera)
+      extra_bottom = IntMax(room_bounds_y.b1 + 16 - BG2VOFS_copy2, 0);
   } else if (mod == 20 || mod == 0 || mod == 1 || mod == 2 || mod == 3 || mod == 4) {
     extra_left = kPpuExtraLeftRight, extra_right = kPpuExtraLeftRight;
     extra_bottom = 16;

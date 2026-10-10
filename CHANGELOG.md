@@ -11,7 +11,7 @@ With an extended aspect ratio, the overworld camera used the 4:3 bounds. At an a
 - On by default whenever `ExtendedAspectRatio` is set. Add `no_camera_clamp` to keep the old camera.
 - Moving the camera changes sprite activation, so it is a separate feature flag (`kFeatures0_WidescreenCamera`) and stays off for replays recorded without it.
 - Horizontal area transitions scroll farther, so they take a bit longer (up to 24 frames at 16:9).
-- Dungeons are unchanged for now.
+- Dungeons: rooms that scroll horizontally keep the camera inside the room the same way. The camera glides out to the room edge before a room transition, because the transition overwrites the old room's far half in VRAM. Afterwards it glides back inside. The 16px bottom bar is gone in every room. Rooms locked to a single 256px half keep their side bars, because only the other half of the room or an unloaded room could fill them.
 
 ### Desktop Launcher Rewritten in Tauri
 

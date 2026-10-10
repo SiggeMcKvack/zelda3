@@ -413,6 +413,7 @@ void Dung_SaveDataForCurrentRoom();
 void HandleEdgeTransition_AdjustCameraBoundaries(uint8 arg);
 void Dungeon_AdjustQuadrant();
 void Dungeon_HandleCamera();
+bool Dungeon_WidescreenTransitionWindow(int *lo, int *hi);
 void MirrorBg1Bg2Offs();
 void DungeonTransition_AdjustCamera_X(uint8 arg);
 void DungeonTransition_AdjustCamera_Y(uint8 arg);

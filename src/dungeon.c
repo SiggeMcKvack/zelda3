@@ -6670,9 +6670,57 @@ void DungeonTransition_Subtile_TriggerShutters() {  // 8289f0
   }
 }
 
+// Widescreen camera: where a horizontal room transition starts with the vanilla camera,
+// on the 256px edge of the old room. Uploading the new room overwrites the old room's
+// far half, which vanilla never shows.
+static uint16 Dungeon_WidescreenTransitionStart() {
+  uint16 cam = BG2HOFS_copy2;
+  return overworld_screen_transition == 3 ? cam & ~0xff : (cam + 0xff) & ~0xff;
+}
+
+static bool Dungeon_WidescreenGlideToTransitionStart() {
+  if (!(enhanced_features0 & kFeatures0_WidescreenCamera) || overworld_screen_transition < 2)
+    return false;
+  int16 d = Dungeon_WidescreenTransitionStart() - BG2HOFS_copy2;
+  if (d == 0)
+    return false;
+  BG1HOFS_copy2 = BG2HOFS_copy2 += IntMax(IntMin(d, 16), -16);
+  return true;
+}
+
+// Widescreen camera: the world x range [lo, hi) that holds valid tilemap during a
+// horizontal room transition, so the extended view never shows stale VRAM.
+bool Dungeon_WidescreenTransitionWindow(int *lo, int *hi) {
+  if (!(enhanced_features0 & kFeatures0_WidescreenCamera) || main_module_index != 7 ||
+      submodule_index != 2 || overworld_screen_transition < 2)
+    return false;
+  bool left = overworld_screen_transition == 3;
+  uint16 cam = BG2HOFS_copy2;
+  if (subsubmodule_index == 0) {
+    // Gliding to the start, nothing of the new room is uploaded yet: the whole old room
+    uint16 s = Dungeon_WidescreenTransitionStart();
+    *lo = left ? s : s - 256;
+  } else if (subsubmodule_index == 8) {
+    // Scrolling: the old room's near half and the new room's near half
+    uint16 target = (&up_down_scroll_target)[overworld_screen_transition];
+    uint16 end = left ? cam - ((cam - target) & 0x1ff) : cam + ((target - cam) & 0x1ff);
+    *lo = left ? end : end - 256;
+  } else {
+    // Uploading: only what vanilla shows
+    *lo = cam, *hi = cam + 256;
+    return true;
+  }
+  *hi = *lo + 512;
+  return true;
+}
+
 void Module07_02_SupertileTransition() {  // 828a26
   link_y_coord_prev = link_y_coord;
   link_x_coord_prev = link_x_coord;
+  if (subsubmodule_index == 0 && Dungeon_WidescreenGlideToTransitionStart()) {
+    Link_HandleMovingAnimation_FullLongEntry();
+    return;
+  }
   if (subsubmodule_index != 0) {
     if (subsubmodule_index >= 7)
       Graphics_IncrementalVRAMUpload();
@@ -8087,6 +8135,45 @@ void Dungeon_AdjustQuadrant() {  // 82ba27
   composite_of_layout_and_quadrant = dung_layout_and_starting_quadrant | link_quadrant_y | link_quadrant_x;
 }
 
+static void Dungeon_ScrollCameraX(int scrollamt) {
+  BG2HOFS_copy2 += scrollamt;
+  if (dungeon_room_index == 0xffff)
+    return;
+  BG1HOFS_subpixel += 0x8000;
+  BG1HOFS_copy2 += (scrollamt >> 1) + ((BG1HOFS_subpixel & 0x8000) == 0);
+  camera_x_coord_scroll_low += scrollamt;
+  camera_x_coord_scroll_hi = camera_x_coord_scroll_low + 2;
+}
+
+// Widescreen camera: in rooms that scroll horizontally, keep the camera far enough
+// inside the room that the extended view doesn't show outside it. Rooms locked to
+// one 256px quadrant can't be helped and keep their bars.
+static bool Dungeon_WidescreenClampX() {
+  return (enhanced_features0 & kFeatures0_WidescreenCamera) && quadrant_fullsize_x == 2;
+}
+
+static bool Dungeon_CameraAtBoundX(int qm, int scrollamt) {
+  if (!Dungeon_WidescreenClampX())
+    return BG2HOFS_copy2 == room_bounds_x.v[qm];
+  int16 d = BG2HOFS_copy2 - (room_bounds_x.v[qm] + (qm < 2 ? 1 : -1) * Overworld_WidescreenMarginX());
+  return scrollamt < 0 ? d <= 0 : d >= 0;
+}
+
+// The camera may start outside the narrowed bounds, for example at the room edge
+// after a room transition. Glide it inside.
+static void Dungeon_WidescreenGlideCameraX() {
+  if (!Dungeon_WidescreenClampX() || main_module_index != 7 || submodule_index != 0)
+    return;
+  int margin = Overworld_WidescreenMarginX();
+  for (int i = 0; i < 16; i++) {
+    int16 lo = BG2HOFS_copy2 - (room_bounds_x.b0 + margin);
+    int16 hi = BG2HOFS_copy2 - (room_bounds_x.b1 - margin);
+    if (lo >= 0 && hi <= 0)
+      break;
+    Dungeon_ScrollCameraX(lo < 0 ? 1 : -1);
+  }
+}
+
 void Dungeon_HandleCamera() {  // 82ba31
   if (link_y_vel) {
     int z = (allow_scroll_z && link_z_coord != 0xffff) ? link_z_coord : 0;
@@ -8129,17 +8216,12 @@ void Dungeon_HandleCamera() {  // 82ba31
           continue;
         qm += 2;
       }
-      if (BG2HOFS_copy2 == room_bounds_x.v[qm])
+      if (Dungeon_CameraAtBoundX(qm, scrollamt))
         continue;
-      BG2HOFS_copy2 += scrollamt;
-      if (dungeon_room_index == 0xffff)
-        continue;
-      BG1HOFS_subpixel += 0x8000;
-      BG1HOFS_copy2 += (scrollamt >> 1) + ((BG1HOFS_subpixel & 0x8000) == 0);
-      camera_x_coord_scroll_low += scrollamt;
-      camera_x_coord_scroll_hi = camera_x_coord_scroll_low + 2;
+      Dungeon_ScrollCameraX(scrollamt);
     } while (--x_vel_abs);
   }
+  Dungeon_WidescreenGlideCameraX();
   if (dungeon_room_index != 0xffff) {
     if (dung_hdr_bg2_properties == 0 || dung_hdr_bg2_properties == 2 || dung_hdr_bg2_properties == 3 || dung_hdr_bg2_properties == 4 || dung_hdr_bg2_properties >= 6) {
       BG1HOFS_copy2 = BG2HOFS_copy2;
