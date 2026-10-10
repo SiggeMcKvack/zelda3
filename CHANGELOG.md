@@ -54,6 +54,15 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 Every overworld hole (Pyramid, Hyrule Castle secret passage, Kakariko well, Lost Woods, etc.) dropped Link into Chris Houlihan's room. Since the December 2025 switch to the C restool, `kFallHole_Pos` was extracted with an extra `+0x400`. The Python pipeline added it when extracting but removed it again when compiling. Now the raw ROM values are used.
 
+### Fixed: C Restool Output Now Matches the Python Restool
+
+A full asset-by-asset diff against the old Python pipeline found more differences:
+
+- `kStartingPoint_entrance` was wrong for most spawn points (used when respawning after death or game over). 16-bit values were read into an 8-bit buffer, which also overflowed the heap buffer.
+- Chests, pits, holes, whirlpools, dungeon secrets, room headers, special exits, overworld palettes and overworld sprite lists were in a different order or had extra data. None of these changed gameplay, but they are now byte-identical to the Python output.
+
+The only remaining differences are the sound banks. The C restool copies the ROM's upload chunks, while Python re-serialized only the song data. Every byte the game uses is the same. Checked with the US and Dutch ROMs.
+
 **Action required:** re-extract `zelda3_assets.dat` (`zelda3-restool --extract-from-rom zelda3.sfc --compile`, or rebuild assets in the launcher). Save files are not affected.
 
 ## December 2025

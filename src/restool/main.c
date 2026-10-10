@@ -2350,10 +2350,7 @@ void ExtractDungeonSecrets(AssetBuilder *builder, Rom *rom) {
     rooms_with_secrets++;
   }
 
-  // For rooms with no secrets, set offset to point to end of data (last terminator)
-  // We need to add a final terminator for empty rooms to point to
-  data[data_len++] = 0xff;
-  data[data_len++] = 0xff;
+  // Rooms with no secrets point at the last room's terminator
   uint16_t empty_offset = 640 + data_len - 2;
 
   for (int i = 0; i < 320; i++) {
@@ -2463,6 +2460,7 @@ void ExtractDungeonRoomHeaders(AssetBuilder *builder, Rom *rom) {
     for (int j = 0; j < 14; j++) {
       header[j] = Rom_ReadByte(rom, header_addr + j);
     }
+    header[8] &= 3;  // Only the stair3 plane is stored (game reads hdr[8] & 3)
 
     // Deduplicate and store offset
     header_offsets[i] = AppendScanBytes(&headers, &headers_len, &headers_cap, header, 14);
@@ -2501,6 +2499,14 @@ void ExtractDungeonRoomSimple(AssetBuilder *builder, Rom *rom) {
   for (int i = 0; i < ROM_CHEST_COUNT * 3; i++) {
     chests[i] = Rom_ReadByte(rom, ROM_CHEST_DATA + i);
   }
+  // Python grouped chests by room (stable, keeps the per-room order the game relies on)
+  for (int i = 1; i < ROM_CHEST_COUNT; i++) {
+    for (int j = i; j > 0; j--) {
+      uint8_t *a = chests + (j - 1) * 3, *b = chests + j * 3;
+      if (((a[0] | a[1] << 8) & 0x7fff) <= ((b[0] | b[1] << 8) & 0x7fff)) break;
+      uint8_t t[3]; memcpy(t, a, 3); memcpy(a, b, 3); memcpy(b, t, 3);
+    }
+  }
 
   // kDungeonRoomTeleMsg: Read 320 entries from ROM
   uint16_t *sign_texts = malloc(320 * sizeof(uint16_t));
@@ -2512,6 +2518,13 @@ void ExtractDungeonRoomSimple(AssetBuilder *builder, Rom *rom) {
   uint16_t *pits_rooms = malloc(ROM_PITS_HURT_COUNT * sizeof(uint16_t));
   for (int i = 0; i < ROM_PITS_HURT_COUNT; i++) {
     pits_rooms[i] = Rom_ReadWord(rom, ROM_PITS_HURT_DATA + i * 2);
+  }
+  // Python listed these rooms in ascending order
+  for (int i = 1; i < ROM_PITS_HURT_COUNT; i++) {
+    uint16_t v = pits_rooms[i];
+    int j = i;
+    for (; j > 0 && pits_rooms[j - 1] > v; j--) pits_rooms[j] = pits_rooms[j - 1];
+    pits_rooms[j] = v;
   }
 
   // Add assets
@@ -2951,7 +2964,8 @@ void ExtractEntrancesAndStartingPoints(AssetBuilder *builder, Rom *rom) {
   ReadRomArray8(rom, ROM_SP_QUADFLAG, s_q1, ROM_SP_COUNT);
   ReadRomArray8(rom, ROM_SP_QUADSTART, s_q2, ROM_SP_COUNT);
   ReadRomArray16(rom, ROM_SP_EXITDOOR, s_door, ROM_SP_COUNT);
-  ReadRomArray16(rom, ROM_SP_ASSOCENT, (uint16_t*)s_ent, ROM_SP_COUNT);  // Actually word values
+  for (int i = 0; i < ROM_SP_COUNT; i++)
+    s_ent[i] = (uint8_t)Rom_ReadWord(rom, ROM_SP_ASSOCENT + i * 2);  // Word values, low byte kept
   ReadRomArray8(rom, ROM_SP_MUSIC, s_mus, ROM_SP_COUNT);
 
   // Add starting point assets
@@ -3168,6 +3182,14 @@ void ExtractOverworldCompressed(Rom *rom, AssetBuilder *builder) {
 #define ROM_OW_SPRITE_GFX      0x80FA41   // 256 bytes (64 areas × 4 stages)
 #define ROM_OW_SPRITE_PAL      0x80FB41   // 256 bytes
 
+// Reorders bird travel slots 9-16 (whirlpools) so slot 9+i takes slot 9+src[i]
+static void PermuteWhirlpools(void *arr, size_t elem_size, const int *src) {
+  uint8_t *p = (uint8_t *)arr + 9 * elem_size, tmp[8 * 2];
+  for (int i = 0; i < 8; i++)
+    memcpy(tmp + i * elem_size, p + src[i] * elem_size, elem_size);
+  memcpy(p, tmp, 8 * elem_size);
+}
+
 // Extract overworld data from ROM (~48 assets)
 void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
   printf("  Extracting overworld data from ROM (160 areas)...\n");
@@ -3195,6 +3217,12 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
   }
   for (int i = 0; i < 136; i++) {
     bg_palettes[i] = Rom_ReadByte(rom, ROM_OW_PALETTE + i);
+  }
+  // Like the Python pipeline, non-head screens of large areas take the head's
+  // palette (the ROM has a stray value at 0x31; the game reads the head only)
+  for (int i = 0; i < 128; i++) {
+    if (Overworld_IsAreaHead(rom, i) && !map_is_small[i])
+      bg_palettes[i + 1] = bg_palettes[i + 8] = bg_palettes[i + 9] = bg_palettes[i];
   }
   for (int i = 0; i < 256; i++) {
     music_sets[i] = Rom_ReadByte(rom, ROM_OW_MUSIC + i);
@@ -3240,8 +3268,24 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
     bird_unk1[i] = (int8_t)Rom_ReadByte(rom, ROM_BIRD_UNK1 + i * 2);
     bird_unk3[i] = (int8_t)Rom_ReadByte(rom, ROM_BIRD_UNK3 + i * 2);
   }
+  // Whirlpools (bird slots 9-16) are ordered by destination screen, stable,
+  // like the Python pipeline. The ROM index order differs.
+  int wp_src[8];
   for (int i = 0; i < 8; i++) {
-    whirlpool_areas[i] = Rom_ReadWord(rom, ROM_WHIRLPOOL_AREAS + i * 2);
+    int j = i;
+    while (j > 0 && bird_screen[9 + wp_src[j - 1]] > bird_screen[9 + i]) {
+      wp_src[j] = wp_src[j - 1];
+      j--;
+    }
+    wp_src[j] = i;
+  }
+  PermuteWhirlpools(bird_screen, 2, wp_src); PermuteWhirlpools(bird_load, 2, wp_src);
+  PermuteWhirlpools(bird_sx, 2, wp_src); PermuteWhirlpools(bird_sy, 2, wp_src);
+  PermuteWhirlpools(bird_px, 2, wp_src); PermuteWhirlpools(bird_py, 2, wp_src);
+  PermuteWhirlpools(bird_cx, 2, wp_src); PermuteWhirlpools(bird_cy, 2, wp_src);
+  PermuteWhirlpools(bird_unk1, 1, wp_src); PermuteWhirlpools(bird_unk3, 1, wp_src);
+  for (int i = 0; i < 8; i++) {
+    whirlpool_areas[i] = Rom_ReadWord(rom, ROM_WHIRLPOOL_AREAS + wp_src[i] * 2);
   }
 
   AssetBuilder_AddAsset(builder, "kBirdTravel_ScreenIndex", ASSET_TYPE_UINT16, (uint8_t*)bird_screen, 17*2);
@@ -3297,6 +3341,17 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
     hole_area[i] = Rom_ReadWord(rom, ROM_HOLE_AREA + i * 2);
     hole_ent_id[i] = Rom_ReadByte(rom, ROM_HOLE_ENT_ID + i);
   }
+  // Python sorted holes by (entrance, pos, area)
+  for (int i = 1; i < ROM_HOLE_COUNT; i++) {
+    for (int j = i; j > 0; j--) {
+      uint32_t a = hole_ent_id[j - 1] << 24 | hole_pos[j - 1] << 8 | hole_area[j - 1];
+      uint32_t b = hole_ent_id[j] << 24 | hole_pos[j] << 8 | hole_area[j];
+      if (a <= b) break;
+      uint16_t tp = hole_pos[j]; hole_pos[j] = hole_pos[j - 1]; hole_pos[j - 1] = tp;
+      uint16_t ta = hole_area[j]; hole_area[j] = hole_area[j - 1]; hole_area[j - 1] = ta;
+      uint8_t te = hole_ent_id[j]; hole_ent_id[j] = hole_ent_id[j - 1]; hole_ent_id[j - 1] = te;
+    }
+  }
 
   AssetBuilder_AddAsset(builder, "kFallHole_Area", ASSET_TYPE_UINT16, (uint8_t*)hole_area, ROM_HOLE_COUNT*2);
   AssetBuilder_AddAsset(builder, "kFallHole_Pos", ASSET_TYPE_UINT16, (uint8_t*)hole_pos, ROM_HOLE_COUNT*2);
@@ -3347,8 +3402,22 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
   uint8_t *sp_spr_gfx = malloc(ROM_SPECIAL_EXIT_COUNT), *sp_aux_gfx = malloc(ROM_SPECIAL_EXIT_COUNT);
   uint8_t *sp_pal_bg = malloc(ROM_SPECIAL_EXIT_COUNT), *sp_pal_spr = malloc(ROM_SPECIAL_EXIT_COUNT);
 
+  // Only slots used by an exit (rooms 0x180-0x18F) are filled, like the
+  // Python pipeline; unused slots are zero.
+  bool sp_used[ROM_SPECIAL_EXIT_COUNT] = { 0 };
+  for (int i = 0; i < ROM_EXIT_COUNT; i++) {
+    if (exit_rooms[i] >= 0x180 && exit_rooms[i] < 0x180 + ROM_SPECIAL_EXIT_COUNT)
+      sp_used[exit_rooms[i] - 0x180] = true;
+  }
+
   for (int i = 0; i < ROM_SPECIAL_EXIT_COUNT; i++) {
-    sp_dir[i] = Rom_ReadByte(rom, ROM_SPECIAL_EXIT_DIR + i);
+    if (!sp_used[i]) {
+      sp_dir[i] = sp_spr_gfx[i] = sp_aux_gfx[i] = sp_pal_bg[i] = sp_pal_spr[i] = 0;
+      sp_top[i] = sp_bottom[i] = sp_left[i] = sp_right[i] = sp_left_edge[i] = 0;
+      sp_tab4[i] = sp_tab5[i] = sp_tab6[i] = sp_tab7[i] = 0;
+      continue;
+    }
+    sp_dir[i] = Rom_ReadByte(rom, ROM_SPECIAL_EXIT_DIR + i) & ~1;
     sp_spr_gfx[i] = Rom_ReadByte(rom, ROM_SPECIAL_EXIT_SPR_GFX + i);
     sp_aux_gfx[i] = Rom_ReadByte(rom, ROM_SPECIAL_EXIT_AUX_GFX + i);
     sp_pal_bg[i] = Rom_ReadByte(rom, ROM_SPECIAL_EXIT_PAL_BG + i);
@@ -3525,53 +3594,22 @@ void ExtractOverworldYAML(AssetBuilder *builder, Rom *rom) {
     } \
   } while(0)
 
-  // Process Light World areas (0-63) - 3 stages
-  for (int i = 0; i < 64; i++) {
-    if (!Overworld_IsAreaHead(rom, i)) continue;
-
-    // Stage 0: Beginning sprites (ptr table at 0x89C881)
-    EXTRACT_SPRITES(i, ROM_OW_SPRITES_BASE0, 0);
-    // Mirror for big maps
-    if (map_is_small[i] == 0) {
-      sprite_offs[0 * 144 + i + 1] = sprite_offs[0 * 144 + i];
-      sprite_offs[0 * 144 + i + 8] = sprite_offs[0 * 144 + i];
-      sprite_offs[0 * 144 + i + 9] = sprite_offs[0 * 144 + i];
-    }
-
-    // Stage 1: FirstPart sprites (ptr table at 0x89C901)
-    EXTRACT_SPRITES(i, ROM_OW_SPRITES_BASE1, 1);
-    if (map_is_small[i] == 0) {
-      sprite_offs[1 * 144 + i + 1] = sprite_offs[1 * 144 + i];
-      sprite_offs[1 * 144 + i + 8] = sprite_offs[1 * 144 + i];
-      sprite_offs[1 * 144 + i + 9] = sprite_offs[1 * 144 + i];
-    }
-
-    // Stage 2: SecondPart sprites (ptr table at 0x89CA21)
-    EXTRACT_SPRITES(i, ROM_OW_SPRITES_BASE2, 2);
-    if (map_is_small[i] == 0) {
-      sprite_offs[2 * 144 + i + 1] = sprite_offs[2 * 144 + i];
-      sprite_offs[2 * 144 + i + 8] = sprite_offs[2 * 144 + i];
-      sprite_offs[2 * 144 + i + 9] = sprite_offs[2 * 144 + i];
+  // Same order as the Python pipeline: all areas per stage, area heads only.
+  // Non-head screens of large areas keep offset 0 (empty list); the game
+  // always indexes by the parent area.
+  static const uint32_t kStageTables[3] = { ROM_OW_SPRITES_BASE0, ROM_OW_SPRITES_BASE1, ROM_OW_SPRITES_BASE2 };
+  for (int stage = 0; stage < 3; stage++) {
+    for (int i = 0; i < 64; i++) {
+      if (Overworld_IsAreaHead(rom, i))
+        EXTRACT_SPRITES(i, kStageTables[stage], stage);
     }
   }
 
-  // Process Dark World and special areas (64-143) - stages 1 and 2 use the same data
+  // Dark World and special areas (64-143): stages 1 and 2 share one list
   for (int i = 64; i < 144; i++) {
     if (!Overworld_IsAreaHead(rom, i)) continue;
-
-    // Areas 64-143 use SecondPart sprites for both stage 1 and 2
     EXTRACT_SPRITES(i, ROM_OW_SPRITES_BASE2, 1);
-    // Copy same offset to stage 2
     sprite_offs[2 * 144 + i] = sprite_offs[1 * 144 + i];
-
-    if (i < 128 && map_is_small[i] == 0) {
-      sprite_offs[1 * 144 + i + 1] = sprite_offs[1 * 144 + i];
-      sprite_offs[1 * 144 + i + 8] = sprite_offs[1 * 144 + i];
-      sprite_offs[1 * 144 + i + 9] = sprite_offs[1 * 144 + i];
-      sprite_offs[2 * 144 + i + 1] = sprite_offs[2 * 144 + i];
-      sprite_offs[2 * 144 + i + 8] = sprite_offs[2 * 144 + i];
-      sprite_offs[2 * 144 + i + 9] = sprite_offs[2 * 144 + i];
-    }
   }
 
   #undef EXTRACT_SPRITES
