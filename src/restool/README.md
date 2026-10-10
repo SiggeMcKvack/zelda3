@@ -134,12 +134,15 @@ The tool validates ROMs against known SHA-1 hashes to ensure correct version:
 - France (French)
 - Canada (French Canadian)
 - Europe (English PAL)
-- Spanish translation
+- Spanish translation (also the 25th Anniversary version)
 - Polish translation
-- Portuguese translation
-- English Redux (2 versions)
+- Portuguese translations (spyblack e Denim, and CBT)
+- Italian, Galician, Catalan and Irish (partial) translations
 - Dutch translation
 - Swedish translation
+- English retranslations: Redux / Retranslation (several versions), Kaleidoscope, gender neutral
+
+See the ROM tables in [docs/RESTOOL_C.md](../../docs/RESTOOL_C.md) for the SHA-1 of each.
 
 **Implementation Note:**
 SHA-1 calculation requires hashing a **copy** of the ROM data, as the implementation modifies the input buffer during byte-swapping. See `Rom_Load()` in `restool_util.c` for details.

@@ -77,19 +77,33 @@ With an extended aspect ratio, the overworld camera used the 4:3 bounds. At an a
 
 Every overworld hole (Pyramid, Hyrule Castle secret passage, Kakariko well, Lost Woods, etc.) dropped Link into Chris Houlihan's room. Since the December 2025 switch to the C restool, `kFallHole_Pos` was extracted with an extra `+0x400`. The Python pipeline added it when extracting but removed it again when compiling. Now the raw ROM values are used.
 
-### Translation Patches: VCDIFF, UPS and Gender-Neutral English
+### Translation Patches: VCDIFF, UPS and BPS
 
 - Translation patches can also be VCDIFF / xdelta3 files (`.vcdiff`, `.xdelta`), in the launcher, on Android and in `restool_lib`. The format is detected from the file contents. The decoder supports the default code table and xdelta3's checksum; patches with secondary compression are rejected.
 - UPS patches (`.ups`) are supported as well; the base ROM is checked against the patch's CRC32. Tested with the Spanish `ZELDA-t_F01h.ups`, which produces the known Spanish ROM, and `ZELDA-t_F01h-25th.ups`, whose 2 MB result is now recognized as Spanish (same dialogue). `ZELDA-t_ADDONS_F01h.ups` applies to the Spanish ROM and only adds code, so it is not a language.
-- New language `en-gn`, English (Gender Neutral), from `ALTTP_GenderNeutral.vcdiff` applied to the headerless US ROM.
-- New language `pt-cbt`, Portuguese (Brazil) by CBT, from `Legend of Zelda, The - A Link to the Past (USA) (Pt) (v1.1) (CBT).sfc`. It uses the US text engine and dictionary; the accented letters replace unused symbol glyphs, so it has its own alphabet and takes its font from the CBT ROM.
-- New language `it`, Italian v1.1, from `The Legend of Zelda - A Link to the Past (U) [ITA v1.1].ips`. The patch is made for a ROM with a 512-byte header; applied to a headerless ROM it shifts everything by 512 bytes and breaks the text, so only the correctly patched ROM is recognized (the launcher's IPS support handles this). It uses the US text engine, dictionary and font; its alphabet adds 0x5F-0x61, where 0x61 (`[!]`) is a "!" in an 8 pixel wide cell used for most exclamations.
 - BPS patches (`.bps`) are supported, in the launcher, on Android and in `restool_lib`; the base ROM is checked against the patch's CRC32.
-- New language `gl`, Galician v1.0 by RetGal, from `ZeldaGz 1.0.ips` on the headerless US ROM. It uses the US text engine with its own dictionary; letters Galician does not need (j, w, ') and some symbols were redrawn as accented letters, ñ and a musical note, so it has its own alphabet and takes its font from the Galician ROM. The patch's title screen, menu graphics and L/R item switching are not ported.
-- New language `ca`, Catalan, from `zelda_a_link_to_the_past_catala_ntsc.bps`. It uses the US text engine with its own dictionary and font; symbol glyphs were redrawn as accented letters, and 0x61-0x62 are · and É. The ROM writes l with the capital I glyph and puts ç in the l slot, so 0x08 decodes as l. The PAL version of the patch is not supported: it needs the European ROM as base, and the US ROM is required anyway.
-- New language `ga`, Irish, from `Zelda-in-Irish_ALTTP.ips` on the headerless US ROM. The patch is partial: it translates 25 messages and leaves the rest in English, but draws Ó ó ú á í over W w [Waves] [Snake] ', which garbles that English text in the ROM. restool decodes the translated messages with the Irish letters and the others with the US ones, moves the Irish letters to the free characters 0x62-0x66 and puts the US glyphs back. Eight messages the patch replaced with requests for translation help or emptied (Zelda's rescue, the King's sign, shop messages) get their US text back.
 - `--extract-dialogue` writes `font_<lang>.bin` and `fontwidth_<lang>.bin` to `assets/` like the dialogue file, or to `--output`. Compiling looked for them in the current directory, so extracting with `--output assets` left the font unused. Fonts from older versions in the current directory are still found.
 - Language codes renamed so all English variants start with `en-`: `redux` is now `en-redux`, `retrans-kal` is now `en-kal`. The game accepts either name in `zelda3.ini`, so old configs and old asset files keep working.
+
+### New Languages: Italian, Galician, Catalan, Irish, Portuguese (CBT), Gender-Neutral English
+
+Add the translated ROM, or its patch together with the US ROM, in the launcher or on Android, then pick the language.
+
+| Code | Language | From |
+|------|----------|------|
+| `it` | Italian v1.1 | `The Legend of Zelda - A Link to the Past (U) [ITA v1.1].ips` |
+| `gl` | Galician v1.0 (RetGal) | `ZeldaGz 1.0.ips` |
+| `ca` | Catalan | `zelda_a_link_to_the_past_catala_ntsc.bps` |
+| `ga` | Irish (partial) | `Zelda-in-Irish_ALTTP.ips` |
+| `pt-cbt` | Portuguese (Brazil), CBT v1.1 | `Legend of Zelda, The - A Link to the Past (USA) (Pt) (v1.1) (CBT).sfc` |
+| `en-gn` | English, gender neutral | `ALTTP_GenderNeutral.vcdiff` |
+
+- `it`: the patch is made for a ROM with a 512-byte header; applied to a headerless ROM it shifts everything by 512 bytes and breaks the text, so only the correctly patched ROM is recognized (the launcher's IPS support handles this). It uses the US text engine, dictionary and font; its alphabet adds 0x5F-0x61, where 0x61 (`[!]`) is a "!" in an 8 pixel wide cell used for most exclamations.
+- `gl`: made for the headerless US ROM. It uses the US text engine with its own dictionary; letters Galician does not need (j, w, ') and some symbols were redrawn as accented letters, ñ and a musical note, so it has its own alphabet and takes its font from the Galician ROM. The patch's title screen, menu graphics and L/R item switching are not ported.
+- `ca`: it uses the US text engine with its own dictionary and font; symbol glyphs were redrawn as accented letters, and 0x61-0x62 are · and É. The ROM writes l with the capital I glyph and puts ç in the l slot, so 0x08 decodes as l. The PAL version of the patch is not supported: it needs the European ROM as base, and the US ROM is required anyway.
+- `ga`: made for the headerless US ROM. The patch is partial: it translates 25 messages and leaves the rest in English, but draws Ó ó ú á í over W w [Waves] [Snake] ', which garbles that English text in the ROM. restool decodes the translated messages with the Irish letters and the others with the US ones, moves the Irish letters to the free characters 0x62-0x66 and puts the US glyphs back. Eight messages the patch replaced with requests for translation help or emptied (Zelda's rescue, the King's sign, shop messages) get their US text back.
+- `pt-cbt`: it uses the US text engine and dictionary; the accented letters replace unused symbol glyphs, so it has its own alphabet and takes its font from the CBT ROM.
+- `en-gn`: made for the headerless US ROM.
 
 ### Launcher: Translation .ips Patches
 

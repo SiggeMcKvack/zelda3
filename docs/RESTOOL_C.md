@@ -400,7 +400,7 @@ Total size: ~680KB (679,700 bytes)
 
 ### Supported Languages
 
-All 11 languages produce byte-perfect output matching the Python tool:
+The languages the Python restool supported produce byte-identical output to it; `pt-cbt`, `it`, `gl`, `ca`, `ga` and `en-gn` were added in the C restool.
 
 | Language | Code | Alphabet | Dictionary |
 |----------|------|----------|------------|
@@ -421,6 +421,7 @@ All 11 languages produce byte-perfect output matching the Python tool:
 | Dutch | nl | 94 chars | 97 entries |
 | Redux | en-redux | (uses US) | (uses US) |
 | Kaleidoscope | en-kal | (uses US) | (uses US) |
+| Gender Neutral | en-gn | (uses US) | (uses US) |
 
 ### Extract Dialogue for Each Language
 
@@ -435,6 +436,8 @@ All 11 languages produce byte-perfect output matching the Python tool:
 ./zelda3-restool --extract-from-rom dutch.sfc --extract-dialogue
 ./zelda3-restool --extract-from-rom swedish.sfc --extract-dialogue
 ```
+
+`--extract-from-rom` needs the translated ROM itself. For translations that come as a patch (`it`, `gl`, `ca`, `ga`, `en-gn`, ...), add the patch in the launcher, which applies it to the US ROM, or apply it with a patcher such as Flips first. Apply the Italian `.ips` to a US ROM **with** a 512-byte header (it was made for one; restool strips the header when loading). On a headerless ROM it produces a ROM with broken text that is not recognized.
 
 ### Language Selection at Runtime
 
