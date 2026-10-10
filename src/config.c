@@ -175,7 +175,8 @@ void GamepadMap_Add(int button, uint32 modifiers, uint16 cmd) {
   if ((joymap_size & 0xff) == 0) {
     if (joymap_size > 1000)
       Die("Too many joypad keys");
-    DYNARR_GROW_STEP(joymap_ents, joymap_size, 64, {
+    // Step must match the 0xff check above, or entries past the step overflow the buffer
+    DYNARR_GROW_STEP(joymap_ents, joymap_size, 256, {
       Die("realloc failure");
     });
   }
