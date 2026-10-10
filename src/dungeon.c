@@ -6688,29 +6688,30 @@ static bool Dungeon_WidescreenGlideToTransitionStart() {
   return true;
 }
 
-// Widescreen camera: the world x range [lo, hi) that holds valid tilemap during a
-// horizontal room transition, so the extended view never shows stale VRAM.
+// Widescreen camera: the world x range [lo, hi) the extended view shows during a
+// horizontal room transition. It only holds valid tilemap, and never the old room
+// beyond the vanilla view once the new room scrolls in, so the old room doesn't pop.
 bool Dungeon_WidescreenTransitionWindow(int *lo, int *hi) {
   if (!(enhanced_features0 & kFeatures0_WidescreenCamera) || main_module_index != 7 ||
       submodule_index != 2 || overworld_screen_transition < 2)
     return false;
   bool left = overworld_screen_transition == 3;
   uint16 cam = BG2HOFS_copy2;
-  if (subsubmodule_index == 0) {
+  if (subsubmodule_index == 0 && quadrant_fullsize_x == 2) {
     // Gliding to the start, nothing of the new room is uploaded yet: the whole old room
     uint16 s = Dungeon_WidescreenTransitionStart();
     *lo = left ? s : s - 256;
+    *hi = *lo + 512;
   } else if (subsubmodule_index == 8) {
-    // Scrolling: the old room's near half and the new room's near half
+    // Scrolling: the vanilla view and what has scrolled into it of the new room's near half
     uint16 target = (&up_down_scroll_target)[overworld_screen_transition];
     uint16 end = left ? cam - ((cam - target) & 0x1ff) : cam + ((target - cam) & 0x1ff);
-    *lo = left ? end : end - 256;
+    *lo = left ? end : cam;
+    *hi = (left ? cam : end) + 256;
   } else {
-    // Uploading: only what vanilla shows
+    // Uploading, or an old room that is one quadrant wide: only what vanilla shows
     *lo = cam, *hi = cam + 256;
-    return true;
   }
-  *hi = *lo + 512;
   return true;
 }
 

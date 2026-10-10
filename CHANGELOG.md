@@ -4,6 +4,12 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## October 2026
 
+### Widescreen: Rooms Fill the Screen
+
+With an extended aspect ratio, rooms locked to 256px, such as most houses, had black bars on both sides. Now a side whose outermost column is a single color, like the filler around a house, is filled with that color to the screen edge. Sides with mixed colors stay black.
+
+- Horizontal room transitions with the widescreen camera no longer flash a stale room on the far side, and the old room no longer pops out of the extra width when the scroll ends. The side keeps its filler color while walls scroll past.
+
 ### Fixed: Player Name in Translated Dialogue
 
 The player name is stored with US character codes, and dialogue showed those codes with the translation's font. Where a translation puts a different letter at the same position, the name came out wrong, e.g. `O` as `Ö` in Swedish.

@@ -234,6 +234,11 @@ void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
     SimpleHdma_DoLine(&hdma_chans[0]);
     SimpleHdma_DoLine(&hdma_chans[1]);
   }
+
+  if (g_zenv.ppu->extraLeftRight != 0) {
+    int lo, hi;
+    PpuFillUnusedSides(g_zenv.ppu, Dungeon_WidescreenTransitionWindow(&lo, &hi));
+  }
 }
 
 void HdmaSetup(uint32 addr6, uint32 addr7, uint8 transfer_unit, uint8 reg6, uint8 reg7, uint8 indirect_bank) {

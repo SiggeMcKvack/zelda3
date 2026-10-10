@@ -50,6 +50,7 @@ void ppu_reset(Ppu* ppu) {
   ppu->extraLeftCur = 0;
   ppu->extraRightCur = 0;
   ppu->extraBottomCur = 0;
+  memset(ppu->sideFillColor, 0, sizeof(ppu->sideFillColor));
   ppu->vramPointer = 0;
   ppu->vramIncrementOnHigh = false;
   ppu->vramIncrement = 1;
@@ -702,6 +703,45 @@ void PpuSetExtraSideSpace(Ppu *ppu, int left, int right, int bottom) {
   ppu->extraLeftCur = UintMin(left, ppu->extraLeftRight);
   ppu->extraRightCur = UintMin(right, ppu->extraLeftRight);
   ppu->extraBottomCur = UintMin(bottom, 16);
+}
+
+// Fills an unused side with the color of its outermost drawn column if that column
+// is a single color, such as the filler around a house, so the frame reaches the edge.
+// With hold_color, a side whose edge isn't a single color keeps the last fill color,
+// so the filler stays while a room transition scrolls walls past the edge.
+static void PpuFillSideFromEdge(Ppu *ppu, int side, bool hold_color, int lines, int edge, int start, int width) {
+  uint32 color = *(uint32 *)&ppu->renderBuffer[edge * 4];
+  for (int y = 1; y < lines; y++) {
+    if (*(uint32 *)&ppu->renderBuffer[y * ppu->renderPitch + edge * 4] != color) {
+      color = hold_color ? ppu->sideFillColor[side] : 0;
+      break;
+    }
+  }
+  ppu->sideFillColor[side] = color;
+  if (color == 0)
+    return;
+  for (int y = 0; y < lines; y++) {
+    uint32 *dst = (uint32 *)&ppu->renderBuffer[y * ppu->renderPitch] + start;
+    for (int x = 0; x < width; x++)
+      dst[x] = color;
+  }
+}
+
+void PpuFillUnusedSides(Ppu *ppu, bool hold_color) {
+  if (PpuGetCurrentRenderScale(ppu, ppu->renderFlags) != 1)
+    return;
+  int lines = 224 + (ppu->renderFlags & kPpuRenderFlags_Height240 ? ppu->extraBottomCur : 0);
+  int left = ppu->extraLeftRight - ppu->extraLeftCur;
+  int right = ppu->extraLeftRight - ppu->extraRightCur;
+  int right_start = 256 + ppu->extraLeftRight + ppu->extraRightCur;
+  if (left)
+    PpuFillSideFromEdge(ppu, 0, hold_color, lines, left, 0, left);
+  else if (!hold_color)
+    ppu->sideFillColor[0] = 0;
+  if (right)
+    PpuFillSideFromEdge(ppu, 1, hold_color, lines, right_start - 1, right_start, right);
+  else if (!hold_color)
+    ppu->sideFillColor[1] = 0;
 }
 
 static FORCEINLINE float FloatInterpolate(float x, float xmin, float xmax, float ymin, float ymax) {
