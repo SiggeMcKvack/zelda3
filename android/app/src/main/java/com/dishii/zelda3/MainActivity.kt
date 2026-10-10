@@ -575,6 +575,8 @@ class MainActivity : SDLActivity() {
     private var resumeAfterEdit = false
     private var availableLanguages: List<String> = emptyList()
     private var startupAudioFreq: Int? = null
+    private var menuDensityDpi = 0
+    private var menuFontScale = 0f
     private val configExecutor = Executors.newSingleThreadExecutor()
     private val configDispatcher = configExecutor.asCoroutineDispatcher()
 
@@ -986,6 +988,20 @@ class MainActivity : SDLActivity() {
      * paused) and offers a restart if a restart-only setting changed.
      */
     private fun setupPauseMenu() {
+        wirePauseMenu()
+
+        // The language row only appears when more than one dialogue language is available
+        Thread {
+            val externalDir = getExternalFilesDir(null)?.absolutePath ?: ""
+            val languages = nativeGetAvailableLanguages(externalDir) ?: return@Thread
+            Log.d(TAG, "setupPauseMenu: availableLanguages = ${languages.joinToString()}")
+            runOnUiThread { availableLanguages = languages.map { normalizeLanguageCode(it) }.distinct() }
+        }.start()
+    }
+
+    private fun wirePauseMenu() {
+        menuDensityDpi = resources.configuration.densityDpi
+        menuFontScale = resources.configuration.fontScale
         pauseMenu.onOpened = {
             wasPausedBeforeMenu = nativeIsPaused()
             if (!wasPausedBeforeMenu) nativeTogglePause()
@@ -998,14 +1014,22 @@ class MainActivity : SDLActivity() {
             if (restartNeeded) showRestartDialog()
         }
         setMenuTabs()
+    }
 
-        // The language row only appears when more than one dialogue language is available
-        Thread {
-            val externalDir = getExternalFilesDir(null)?.absolutePath ?: ""
-            val languages = nativeGetAvailableLanguages(externalDir) ?: return@Thread
-            Log.d(TAG, "setupPauseMenu: availableLanguages = ${languages.joinToString()}")
-            runOnUiThread { availableLanguages = languages.map { normalizeLanguageCode(it) }.distinct() }
-        }.start()
+    /**
+     * Views keep the density and font scale they were inflated with. Since MainActivity handles
+     * those config changes itself (it can't be recreated, see the manifest), swap in a freshly
+     * inflated menu so it doesn't mix old and new sizes.
+     */
+    private fun rebuildPauseMenuIfNeeded(newConfig: Configuration) {
+        if (newConfig.densityDpi == menuDensityDpi && newConfig.fontScale == menuFontScale) return
+        pauseMenu.close()
+        val parent = pauseMenu.parent as ViewGroup
+        val index = parent.indexOfChild(pauseMenu)
+        parent.removeView(pauseMenu)
+        pauseMenu = PauseMenuView(this).also { it.id = R.id.pause_menu }
+        parent.addView(pauseMenu, index, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        wirePauseMenu()
     }
 
     private fun setMenuTabs() {
@@ -1590,6 +1614,8 @@ class MainActivity : SDLActivity() {
                 it.dismiss()
             }
         }
+
+        rebuildPauseMenuIfNeeded(newConfig)
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

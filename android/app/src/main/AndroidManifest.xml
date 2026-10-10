@@ -102,12 +102,16 @@
             android:screenOrientation="landscape"
             android:theme="@style/AppTheme" />
 
-        <!-- Main game activity (SDL) -->
+        <!-- Main game activity (SDL)
+             SDL cannot survive being recreated: the old SDL thread finishing calls finish() on the
+             new activity and the app exits. So every config change that can happen while playing
+             (display size, density, font scale/weight, controller/touch, SIM, color mode) is
+             handled in place instead of restarting the activity. -->
         <activity android:name=".MainActivity"
             android:label="@string/app_name"
             android:alwaysRetainTaskState="true"
             android:launchMode="singleInstance"
-            android:configChanges="orientation|screenSize|screenLayout|layoutDirection|locale|uiMode|smallestScreenSize|keyboard|keyboardHidden|navigation"
+            android:configChanges="orientation|screenSize|screenLayout|layoutDirection|locale|uiMode|smallestScreenSize|keyboard|keyboardHidden|navigation|density|fontScale|fontWeightAdjustment|touchscreen|colorMode|mcc|mnc"
             android:preferMinimalPostProcessing="true"
             android:exported="false"
             android:screenOrientation="landscape"
