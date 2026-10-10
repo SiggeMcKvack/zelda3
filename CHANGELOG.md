@@ -16,6 +16,7 @@ Notable changes, improvements, and additions to the Zelda3 project.
 - Existing files are **not** migrated automatically. Copy them over, or let the launcher create new ones.
 - Release packages: `Zelda3.app` (macOS zip), an NSIS installer (Windows) and a `.deb` (Linux). Each bundles the game, which the launcher starts.
 - When run directly, the game now keeps the current directory if it contains `zelda3_assets.dat`, and otherwise falls back to its executable directory as before.
+- The launcher uses bundled fonts instead of system fonts, so it looks the same on every OS: Inter v4.1 for text and JetBrains Mono v2.304 for key bindings (both SIL OFL).
 
 **Technical Details:**
 - The INI reader/writer, keymap state and asset/MSU tooling are exposed through a GTK-free C FFI (`src/launcher_core/`, `launcher_core_lib`). INI output is byte-for-byte identical to the previous launcher.
