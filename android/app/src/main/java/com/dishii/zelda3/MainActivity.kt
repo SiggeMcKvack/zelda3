@@ -539,6 +539,12 @@ class MainActivity : SDLActivity() {
 
     private fun getLanguageDisplayName(code: String): String = languageDisplayNames[code] ?: code.uppercase()
 
+    // Older asset files and configs use the pre-rename codes; the game accepts both
+    // (ZeldaSetLanguage), so normalize to the current names for display and saving
+    private val renamedLanguageCodes = mapOf("redux" to "en-redux", "retrans-kal" to "en-kal")
+
+    private fun normalizeLanguageCode(code: String): String = renamedLanguageCodes[code] ?: code
+
     // Data class for MSU settings
     private data class MsuSettings(
         val enableMsu: Boolean,
@@ -998,7 +1004,7 @@ class MainActivity : SDLActivity() {
             val externalDir = getExternalFilesDir(null)?.absolutePath ?: ""
             val languages = nativeGetAvailableLanguages(externalDir) ?: return@Thread
             Log.d(TAG, "setupPauseMenu: availableLanguages = ${languages.joinToString()}")
-            runOnUiThread { availableLanguages = languages.toList() }
+            runOnUiThread { availableLanguages = languages.map { normalizeLanguageCode(it) }.distinct() }
         }.start()
     }
 
@@ -1424,7 +1430,7 @@ class MainActivity : SDLActivity() {
         if (languages.size > 1) {
             // US first, then alphabetically by display name
             val sorted = languages.sortedWith(compareBy({ it != "us" }, { getLanguageDisplayName(it) }))
-            var current = sorted.indexOf(readConfig { readLanguageSetting() }).coerceAtLeast(0)
+            var current = sorted.indexOf(normalizeLanguageCode(readConfig { readLanguageSetting() })).coerceAtLeast(0)
             items += MenuItem.Header("Language")
             items +=
                 MenuItem.Choice(
