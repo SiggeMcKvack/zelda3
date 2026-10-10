@@ -1441,6 +1441,43 @@ cleanup_error:
   return NULL;
 }
 
+// Player names are stored as US character codes (see kNamePlayer_Tab3 and
+// Text_FilterPlayerNameCharacters in the game). These are the codes a name can
+// contain: A-Z, a-z except l, 0-9, ! ? - . , ( ) and space.
+static bool IsNameCharCode(int c) {
+  return (c <= 0x42 && c != 0x25) || c == 0x45 || c == 0x46 || c == 0x59;
+}
+
+// Builds the table the game uses to draw the player name in this language:
+// US code -> the language's code for the same character, or 0xFF if the
+// language font lacks it (the game then draws the US glyph). Returns NULL when
+// every name character already has the same code, so no table is stored.
+static uint8_t *BuildNameCharMap(const LanguageConfig *config, size_t *out_len) {
+  enum { kNameMapSize = 0x80 };
+  const LanguageConfig *us = TextDecode_GetLanguageConfig("us");
+  uint8_t *map = malloc(kNameMapSize);
+  bool differs = false;
+  for (int c = 0; c < kNameMapSize; c++) {
+    map[c] = c;
+    if (!IsNameCharCode(c) || (c < (int)config->alphabet_size && !strcmp(config->alphabet[c], us->alphabet[c])))
+      continue;
+    differs = true;
+    map[c] = 0xff;
+    for (size_t k = 0; k < config->alphabet_size && k < config->COMMAND_START; k++) {
+      if (!strcmp(config->alphabet[k], us->alphabet[c])) {
+        map[c] = k;
+        break;
+      }
+    }
+  }
+  if (!differs) {
+    free(map);
+    return NULL;
+  }
+  *out_len = kNameMapSize;
+  return map;
+}
+
 // Pack multiple byte arrays with offset table (matching Python's pack_arrays exactly)
 // Format: [offsets] + [data arrays] + [trailer]
 // Uses uint16 if total < 65536 and count <= 8192, otherwise uint32
@@ -1813,12 +1850,15 @@ bool ExtractDialogueAssets(AssetBuilder *builder, Rom *rom, const char *language
       return false;
     }
 
-    // Pack font (inner: font_data + font_width)
-    uint8_t *inner_font_arrays[] = {font_data, font_width};
-    size_t inner_font_lens[] = {256 * 16, font_width_count};
-    all_fonts[i] = PackArrays(inner_font_arrays, inner_font_lens, 2, &all_font_lens[i]);
+    // Pack font (inner: font_data + font_width [+ player name map])
+    size_t name_map_len = 0;
+    uint8_t *name_map = BuildNameCharMap(config, &name_map_len);
+    uint8_t *inner_font_arrays[] = {font_data, font_width, name_map};
+    size_t inner_font_lens[] = {256 * 16, font_width_count, name_map_len};
+    all_fonts[i] = PackArrays(inner_font_arrays, inner_font_lens, name_map ? 3 : 2, &all_font_lens[i]);
     free(font_data);
     free(font_width);
+    free(name_map);
 
     if (!all_fonts[i]) {
       LogError("Failed to pack font for %s", lang);

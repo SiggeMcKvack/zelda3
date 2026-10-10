@@ -4,6 +4,14 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## October 2026
 
+### Fixed: Player Name in Translated Dialogue
+
+The player name is stored with US character codes, and dialogue showed those codes with the translation's font. Where a translation puts a different letter at the same position, the name came out wrong, e.g. `O` as `Ö` in Swedish.
+
+- The asset file now has a small table per affected language that maps each name character to the translation's own glyph. If the translation's font has no such glyph, that character is drawn with the US font.
+- Affected: Swedish (`O`, `-`), Spanish (`-`, `w`, `X`), Galician (`j`, `w`, `(`, `)`), Catalan (`I`), Irish (`X`) and Portuguese CBT (`(`, `)`). Other languages are unchanged.
+- **Action required:** re-create `zelda3_assets.dat` to get the fix for these languages.
+
 ### Android: Controller-Friendly Pause Menu
 
 The Android side drawer and its settings dialogs have been replaced by a full-screen pause menu, laid out like a game console's, that works well on a TV with a gamepad.

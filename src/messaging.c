@@ -2258,7 +2258,13 @@ uint32 Text_DecodeCmd(uint8 a, const uint8 *src) {
 }
 
 // Perform initial parsing of the string, expanding words, processing some commands, etc.
+// Player name characters the current language's font lacks are drawn with the
+// US glyph. Indexed by position in messaging_text_buffer; kept outside g_ram so
+// the RAM contents stay as before.
+static uint8 s_name_glyph_from_us[0x800];
+
 void Text_LoadCharacterBuffer() {  // 8ec4e2
+  memset(s_name_glyph_from_us, 0, sizeof(s_name_glyph_from_us));
   MemBlk dictionary = FindIndexInMemblk(g_zenv.dialogue_blk, 0);
   MemBlk dialogue = FindIndexInMemblk(g_zenv.dialogue_blk, 1);
   MemBlk text_str = FindIndexInMemblk(dialogue, dialogue_message_index);
@@ -2316,6 +2322,16 @@ uint8 *Text_WritePlayerName(uint8 *p) {  // 8ec5b3
   int i = 6;
   while (i && p[i - 1] == 0x59)
     i--;
+  // Names use US character codes; translate them to this language's font.
+  MemBlk name_map = FindIndexInMemblk(g_zenv.dialogue_font_blk, 2);
+  for (int j = 0; j < i && name_map.size; j++) {
+    uint8 c = p[j] < name_map.size ? name_map.ptr[p[j]] : p[j];
+    size_t pos = p + j - messaging_text_buffer;
+    if (c == 0xff && pos < sizeof(s_name_glyph_from_us))
+      s_name_glyph_from_us[pos] = 1;
+    else if (c != 0xff)
+      p[j] = c;
+  }
   return p + i;
 }
 
@@ -2516,8 +2532,11 @@ void VWF_RenderSingle(int c) {  // 8ecab8
     vwf_flag_next_line = 0;
   }
   
-  const uint8 *kFontData = FindIndexInMemblk(g_zenv.dialogue_font_blk, 0).ptr;
-  uint8 width = FindIndexInMemblk(g_zenv.dialogue_font_blk, 1).ptr[c];
+  MemBlk font_blk = g_zenv.dialogue_font_blk;
+  if (dialogue_msg_read_pos < sizeof(s_name_glyph_from_us) && s_name_glyph_from_us[dialogue_msg_read_pos])
+    font_blk = kDialogueFont(0);  // US font
+  const uint8 *kFontData = FindIndexInMemblk(font_blk, 0).ptr;
+  uint8 width = FindIndexInMemblk(font_blk, 1).ptr[c];
   assert(width <= 8);
 
   int i = vwf_var1++;
