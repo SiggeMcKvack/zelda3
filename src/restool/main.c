@@ -1256,24 +1256,26 @@ static int EncodeCommand_Generic(const char *cmd, int param, uint8_t *out, const
 // Compress a single dialogue string using greedy dictionary matching (generic version)
 // Returns compressed bytearray (caller must free), or NULL on error
 static uint8_t *CompressString_Generic(const char *str, const LanguageConfig *config, size_t *out_len) {
-  // Build reverse lookup: first_char -> list of (dict_entry, dict_index)
-  struct DictEntry {
-    const char *str;
-    int index;
-    struct DictEntry *next;
-  };
-
-  struct DictEntry *reverse[256] = {0};  // Hash by first character
-
+  // Match Python's lookup: entries are tried in dictionary order and the first
+  // match wins (not the longest). A duplicated string keeps the position of its
+  // first occurrence but encodes as its last index.
+  int dict_index[256];
+  bool dict_first[256];
+  if (config->dictionary_size > 256) {
+    LogError("Dictionary too large: %zu entries", config->dictionary_size);
+    *out_len = 0;
+    return NULL;
+  }
   for (size_t i = 0; i < config->dictionary_size; i++) {
-    const char *dict_str = config->dictionary[i];
-    unsigned char first_char = dict_str[0];
-
-    struct DictEntry *entry = malloc(sizeof(struct DictEntry));
-    entry->str = dict_str;
-    entry->index = i;
-    entry->next = reverse[first_char];
-    reverse[first_char] = entry;
+    dict_index[i] = i;
+    dict_first[i] = true;
+    for (size_t j = 0; j < i; j++) {
+      if (dict_first[j] && strcmp(config->dictionary[j], config->dictionary[i]) == 0) {
+        dict_index[j] = i;
+        dict_first[i] = false;
+        break;
+      }
+    }
   }
 
   // Compress string using greedy matching
@@ -1288,26 +1290,14 @@ static uint8_t *CompressString_Generic(const char *str, const LanguageConfig *co
     const char *remaining = &str[i];
     int matched = 0;
 
-    // Try dictionary match first (greedy: longest match wins)
-    unsigned char first_char = remaining[0];
-    if (reverse[first_char]) {
-      struct DictEntry *entry = reverse[first_char];
-      size_t best_len = 0;
-      int best_index = -1;
-
-      while (entry) {
-        size_t dict_len = strlen(entry->str);
-        if (strncmp(remaining, entry->str, dict_len) == 0 && dict_len > best_len) {
-          best_len = dict_len;
-          best_index = entry->index;
-        }
-        entry = entry->next;
-      }
-
-      if (best_index >= 0) {
-        result[result_len++] = best_index + config->DICT_BASE_ENC;
-        i += best_len;
+    // Try dictionary match first (first match in dictionary order wins)
+    for (size_t k = 0; k < config->dictionary_size; k++) {
+      size_t dict_len = strlen(config->dictionary[k]);
+      if (dict_first[k] && dict_len > 0 && strncmp(remaining, config->dictionary[k], dict_len) == 0) {
+        result[result_len++] = dict_index[k] + config->DICT_BASE_ENC;
+        i += dict_len;
         matched = 1;
+        break;
       }
     }
 
@@ -1396,29 +1386,11 @@ static uint8_t *CompressString_Generic(const char *str, const LanguageConfig *co
     }
   }
 
-  // Cleanup reverse lookup and return success
-  for (int j = 0; j < 256; j++) {
-    struct DictEntry *entry = reverse[j];
-    while (entry) {
-      struct DictEntry *next = entry->next;
-      free(entry);
-      entry = next;
-    }
-  }
-
   *out_len = result_len;
   return result;
 
 cleanup_error:
   free(result);
-  for (int j = 0; j < 256; j++) {
-    struct DictEntry *entry = reverse[j];
-    while (entry) {
-      struct DictEntry *next = entry->next;
-      free(entry);
-      entry = next;
-    }
-  }
   *out_len = 0;
   return NULL;
 }

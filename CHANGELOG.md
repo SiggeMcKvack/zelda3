@@ -59,9 +59,10 @@ Every overworld hole (Pyramid, Hyrule Castle secret passage, Kakariko well, Lost
 A full asset-by-asset diff against the old Python pipeline found more differences:
 
 - `kStartingPoint_entrance` was wrong for most spawn points (used when respawning after death or game over). 16-bit values were read into an 8-bit buffer, which also overflowed the heap buffer.
+- Translated dialogue could compress differently (seen with Swedish). The C encoder picked the longest dictionary match; Python picks the first match in dictionary order.
 - Chests, pits, holes, whirlpools, dungeon secrets, room headers, special exits, overworld palettes and overworld sprite lists were in a different order or had extra data. None of these changed gameplay, but they are now byte-identical to the Python output.
 
-The only remaining differences are the sound banks. The C restool copies the ROM's upload chunks, while Python re-serialized only the song data. Every byte the game uses is the same. Checked with the US and Dutch ROMs.
+The only remaining differences are the sound banks. The C restool copies the ROM's upload chunks, while Python re-serialized only the song data. Every byte the game uses is the same. Checked with the US, Dutch and Swedish ROMs.
 
 **Action required:** re-extract `zelda3_assets.dat` (`zelda3-restool --extract-from-rom zelda3.sfc --compile`, or rebuild assets in the launcher). Save files are not affected.
 
