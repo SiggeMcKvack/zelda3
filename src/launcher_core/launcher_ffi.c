@@ -168,6 +168,7 @@ static cJSON *config_to_json(const Config *c) {
     cJSON_AddBoolToObject(root, "extend_y", c->extend_y);
     cJSON_AddBoolToObject(root, "unchanged_sprites", c->unchanged_sprites);
     cJSON_AddBoolToObject(root, "no_visual_fixes", c->no_visual_fixes);
+    cJSON_AddBoolToObject(root, "no_camera_clamp", c->no_camera_clamp);
     cJSON_AddBoolToObject(root, "no_sprite_limits", c->no_sprite_limits);
     cJSON_AddBoolToObject(root, "display_perf_title", c->display_perf_title);
     cJSON_AddNumberToObject(root, "enable_msu", c->enable_msu);
@@ -220,6 +221,7 @@ static const char *json_to_config(const cJSON *root, Config *c) {
     c->extend_y = get_bool(root, "extend_y", false);
     c->unchanged_sprites = get_bool(root, "unchanged_sprites", false);
     c->no_visual_fixes = get_bool(root, "no_visual_fixes", false);
+    c->no_camera_clamp = get_bool(root, "no_camera_clamp", false);
     c->no_sprite_limits = get_bool(root, "no_sprite_limits", false);
     c->display_perf_title = get_bool(root, "display_perf_title", false);
     c->enable_msu = (uint8)get_int(root, "enable_msu", 0, 255, &bad);

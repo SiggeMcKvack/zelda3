@@ -7087,13 +7087,13 @@ int DashTremor_TwiddleOffset(int k) {  // 8ffafe
   if (player_is_indoors)
     return y;
   if (j == 2) {
-    uint16 start = ow_scroll_vars0.ystart + 1;
-    uint16 end = ow_scroll_vars0.yend - 1;
+    uint16 start = ow_scroll_vars0.ystart + Overworld_WidescreenBoundAdjust(0) + 1;
+    uint16 end = ow_scroll_vars0.yend + Overworld_WidescreenBoundAdjust(1) - 1;
     uint16 a = y + BG2VOFS_copy2;
     return (a <= start || a >= end) ? 0 : y;
   } else {
-    uint16 start = ow_scroll_vars0.xstart + 1;
-    uint16 end = ow_scroll_vars0.xend - 1;
+    uint16 start = ow_scroll_vars0.xstart + Overworld_WidescreenBoundAdjust(2) + 1;
+    uint16 end = ow_scroll_vars0.xend + Overworld_WidescreenBoundAdjust(3) - 1;
     uint16 a = y + BG2HOFS_copy2;
     return (a <= start || a >= end) ? 0 : y;
   }

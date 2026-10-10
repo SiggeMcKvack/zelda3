@@ -47,6 +47,8 @@ const char* kDefaultConfigIni =
     "#   - extend_y: Display 240 lines instead of 224 (add before aspect ratio)\n"
     "#   - unchanged_sprites: Preserve original sprite spawn/die behavior for replay compatibility\n"
     "#   - no_visual_fixes: Disable graphics glitch fixes (affects memory compare but not gameplay)\n"
+    "#   - no_camera_clamp: Let the overworld camera reach area edges, showing black bars there\n"
+    "#     (by default it stops early so the wider view stays inside the area; affects replays)\n"
     "#\n"
     "# Note: Only integer ratios supported. Decimals like 2.35:1 won't work (use 235:100 instead).\n"
     "# Note: Ratios wider than ~18:9 will render at max width with black bars on sides.\n"

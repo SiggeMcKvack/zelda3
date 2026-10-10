@@ -4,6 +4,15 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## October 2026
 
+### Widescreen Camera Stops Before Area Edges
+
+With an extended aspect ratio, the overworld camera used the 4:3 bounds. At an area edge, the extra width showed black bars (up to 96px on the side, plus 16px at the bottom with `extend_y`). Now the camera stops early enough that the wider view stays inside the area, including after area transitions, dungeon exits and flute travel.
+
+- On by default whenever `ExtendedAspectRatio` is set. Add `no_camera_clamp` to keep the old camera.
+- Moving the camera changes sprite activation, so it is a separate feature flag (`kFeatures0_WidescreenCamera`) and stays off for replays recorded without it.
+- Horizontal area transitions scroll farther, so they take a bit longer (up to 24 frames at 16:9).
+- Dungeons are unchanged for now.
+
 ### Desktop Launcher Rewritten in Tauri
 
 **Breaking change:** The GTK3 launcher has been replaced by a [Tauri 2](https://tauri.app) launcher (`launcher-tauri/`) on macOS, Linux and Windows. GTK is no longer a build or runtime dependency of the game.

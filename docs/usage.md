@@ -283,6 +283,7 @@ DisableFrameDelay = 0
 #   extend_y: Display 240 lines instead of 224
 #   unchanged_sprites: Preserve sprite spawn/die for replays
 #   no_visual_fixes: Disable graphics glitch fixes
+#   no_camera_clamp: Let the overworld camera reach area edges (black bars)
 ExtendedAspectRatio = extend_y, 16:10
 ```
 

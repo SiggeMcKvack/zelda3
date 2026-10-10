@@ -506,7 +506,7 @@ static bool HandleGeneralConfig(const char *key, char *value) {
   } else if (StringEqualsNoCase(key, "ExtendedAspectRatio")) {
     const char* s;
     int h = kSnesBaseHeight;
-    bool nospr = false, novis = false;
+    bool nospr = false, novis = false, nocam = false;
     // todo: make it not depend on the order
     while ((s = NextDelim(&value, ',')) != NULL) {
       if (strcmp(s, "extend_y") == 0)
@@ -523,6 +523,8 @@ static bool HandleGeneralConfig(const char *key, char *value) {
         nospr = true;
       else if (strcmp(s, "no_visual_fixes") == 0)
         novis = true;
+      else if (strcmp(s, "no_camera_clamp") == 0)
+        nocam = true;
       else {
         // Try to parse as generic W:H ratio (e.g., "21:9", "32:9")
         int w, h_ratio;
@@ -538,6 +540,8 @@ static bool HandleGeneralConfig(const char *key, char *value) {
       g_config.features0 |= kFeatures0_ExtendScreen64;
     if (g_config.extended_aspect_ratio && !novis)
       g_config.features0 |= kFeatures0_WidescreenVisualFixes;
+    if ((g_config.extended_aspect_ratio || g_config.extend_y) && !nocam)
+      g_config.features0 |= kFeatures0_WidescreenCamera;
     return true;
   } else if (StringEqualsNoCase(key, "DisplayPerfInTitle")) {
     return ParseBool(value, &g_config.display_perf_title);

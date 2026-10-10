@@ -174,6 +174,7 @@ bool ConfigReader_Read(const char *path, Config *config) {
                 config->extend_y = strstr(value, "extend_y") != NULL;
                 config->unchanged_sprites = strstr(value, "unchanged_sprites") != NULL;
                 config->no_visual_fixes = strstr(value, "no_visual_fixes") != NULL;
+                config->no_camera_clamp = strstr(value, "no_camera_clamp") != NULL;
             }
             else if (str_ieq(key, "Language")) config->language = parse_string(value);
         }

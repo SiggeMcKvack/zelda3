@@ -52,6 +52,10 @@ enum {
   kFeatures0_Pokemode = 131072,
 
   kFeatures0_PrincessZeldaHelps = 262144,
+
+  // Widescreen: keep the overworld camera far enough inside the area that the
+  // extended view never shows outside it. Moves the camera, so affects gameplay RAM.
+  kFeatures0_WidescreenCamera = 524288,
 };
 
 #define enhanced_features0 (*(uint32*)(g_ram+0x64c))

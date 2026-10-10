@@ -11,6 +11,7 @@
 #include "player_oam.h"
 #include "snes/snes_regs.h"
 #include "assets.h"
+#include "config.h"
 
 const uint16 kOverworld_OffsetBaseX[64] = {
   0,     0, 0x400, 0x600, 0x600, 0xa00, 0xa00, 0xe00,
@@ -947,7 +948,11 @@ void Overworld_StartScrollTransition() {  // 82ac27
 }
 
 void Overworld_EaseOffScrollTransition() {  // 82ac3a
-  if (kOverworldMapIsSmall[BYTE(overworld_screen_index)]) {
+  // Small areas finish loading the whole area here. The widescreen camera already
+  // streamed some of these stripes during its longer scroll, so skip that many.
+  uint8 dir = BYTE(overworld_screen_trans_dir_bits);
+  int skip = (dir & 3) ? Overworld_WidescreenMarginX() >> 4 : (dir == 8) ? Overworld_WidescreenMarginY() >> 4 : 0;
+  if (kOverworldMapIsSmall[BYTE(overworld_screen_index)] && subsubmodule_index >= skip) {
     BYTE(overworld_screen_trans_dir_bits2) = BYTE(overworld_screen_trans_dir_bits);
     OverworldTransitionScrollAndLoadMap();
     BYTE(overworld_screen_trans_dir_bits2) = 0;
@@ -1630,12 +1635,42 @@ void Overworld_OperateCameraScroll() {  // 82bb90
   }
 }
 
+int Overworld_WidescreenMarginX() {
+  if (!(enhanced_features0 & kFeatures0_WidescreenCamera))
+    return 0;
+  // Multiple of 16 so the camera stays aligned to map16 columns. Max 96, which
+  // the stripe preloading in CreateInitialOWScreenView_* relies on.
+  return (IntMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight) + 15) & ~15;
+}
+
+int Overworld_WidescreenMarginY() {
+  return (enhanced_features0 & kFeatures0_WidescreenCamera) && g_config.extend_y ? 16 : 0;
+}
+
+// Adjustment of ow_scroll_vars0 field i (ystart, yend, xstart, xend) for the widescreen camera
+int Overworld_WidescreenBoundAdjust(int i) {
+  switch (i) {
+  case 1: return -Overworld_WidescreenMarginY();
+  case 2: return Overworld_WidescreenMarginX();
+  case 3: return -Overworld_WidescreenMarginX();
+  default: return 0;
+  }
+}
+
 int OverworldCameraBoundaryCheck(int xa, int ya, int vd, int r8) {  // 82bd62
   ya >>= 1, r8 >>= 1;
 
   uint16 *xp = (xa ? &BG2VOFS_copy2 : &BG2HOFS_copy2);
   uint16 *yp = &(&ow_scroll_vars0.ystart)[ya];
-  if (*xp == *yp) {
+  bool at_bound;
+  if (enhanced_features0 & kFeatures0_WidescreenCamera) {
+    // Compare by direction, the camera may start outside the narrowed bounds
+    int16 d = *xp - (*yp + Overworld_WidescreenBoundAdjust(ya));
+    at_bound = (vd < 0) ? d <= 0 : d >= 0;
+  } else {
+    at_bound = (*xp == *yp);
+  }
+  if (at_bound) {
     (&overworld_unk1)[ya] = 0;
     (&overworld_unk1)[ya ^ 1] = 0;
     return 0;
@@ -1658,19 +1693,32 @@ int OverworldScrollTransition() {  // 82c001
   transition_counter++;
   int y = overworld_screen_transition;
   int d = kOverworld_Func6B_Tab1[y], rv;
+  uint16 target = (&up_down_scroll_target)[y];
+  // Widescreen camera: the scroll starts and ends inside the narrowed bounds, so it is
+  // longer. Link walks in during the same final frames as usual.
+  int adj = 0, extra_frames = 0;
+  if (enhanced_features0 & kFeatures0_WidescreenCamera) {
+    int mx = Overworld_WidescreenMarginX(), my = Overworld_WidescreenMarginY();
+    adj = (y == 0) ? -my : (y == 1) ? 0 : (y == 2) ? -mx : mx;
+    extra_frames = (y < 2 ? my : mx * 2) >> 3;
+    target += adj;
+    int16 rem = target - (y < 2 ? BG2VOFS_copy2 : BG2HOFS_copy2);
+    if (d > 0 ? rem < d : rem > d)
+      d = rem;  // Never overshoot, even if the camera started misaligned
+  }
   if (y < 2) {
     byte_7E069E[0] = d;
     rv = (BG2VOFS_copy2 += d);
     if (BYTE(overworld_screen_index) != 0x1b && BYTE(overworld_screen_index) != 0x5b)
       BG1VOFS_copy2 = BG2VOFS_copy2;
-    if (transition_counter >= kOverworld_Func6B_Tab2[y])
+    if (transition_counter >= kOverworld_Func6B_Tab2[y] + extra_frames)
       link_y_coord += d;
-    if (rv != (&up_down_scroll_target)[y])
+    if (rv != target)
       return rv;
     if (y == 0)
       BG2VOFS_copy2 -= 2;
     link_y_coord &= ~7;
-    camera_y_coord_scroll_hi = link_y_coord + kOverworld_Func6B_Tab3[y] + 11;
+    camera_y_coord_scroll_hi = link_y_coord + kOverworld_Func6B_Tab3[y] + 11 + adj;
     camera_y_coord_scroll_low = camera_y_coord_scroll_hi + 2;
     overworld_unk1 = overworld_unk1_neg = 0;
   } else {
@@ -1678,12 +1726,12 @@ int OverworldScrollTransition() {  // 82c001
     rv = (BG2HOFS_copy2 += d);
     if (BYTE(overworld_screen_index) != 0x1b && BYTE(overworld_screen_index) != 0x5b)
       BG1HOFS_copy2 = BG2HOFS_copy2;
-    if (transition_counter >= kOverworld_Func6B_Tab2[y])
+    if (transition_counter >= kOverworld_Func6B_Tab2[y] + extra_frames)
       link_x_coord += d;
-    if (rv != (&up_down_scroll_target)[y])
+    if (rv != target)
       return rv;
     link_x_coord &= ~7;
-    camera_x_coord_scroll_hi = link_x_coord + kOverworld_Func6B_Tab3[y] + 11;
+    camera_x_coord_scroll_hi = link_x_coord + kOverworld_Func6B_Tab3[y] + 11 + adj;
     camera_x_coord_scroll_low = camera_x_coord_scroll_hi + 2;
     overworld_unk3 = overworld_unk3_neg = 0;
   }
@@ -1824,6 +1872,42 @@ void Overworld_LoadNewScreenProperties() {  // 82e58b
   link_direction_mask_a = link_direction_mask_b = 0xf;
   BYTE(link_z_coord) = 0xff;
   link_actual_vel_z = 0xff;
+  Overworld_WidescreenSnapCamera();
+}
+
+static void Overworld_WidescreenSnapAxis(bool vertical) {
+  uint16 *cam = vertical ? &BG2VOFS_copy2 : &BG2HOFS_copy2;
+  int i = vertical ? 0 : 2;
+  uint16 lo = (&ow_scroll_vars0.ystart)[i] + Overworld_WidescreenBoundAdjust(i);
+  uint16 hi = (&ow_scroll_vars0.ystart)[i + 1] + Overworld_WidescreenBoundAdjust(i + 1);
+  // Scroll one pixel at a time like Link walking, so the thresholds and stream state follow
+  for (int n = 0; n < 0x400; n++) {
+    int vd = (int16)(*cam - lo) < 0 ? 1 : (int16)(*cam - hi) > 0 ? -1 : 0;
+    if (vd == 0)
+      break;
+    OverworldCameraBoundaryCheck(vertical ? 6 : 0, (i + (vd > 0)) * 2, vd, vertical ? 0 : 4);
+    switch (BYTE(overworld_screen_trans_dir_bits2)) {
+    case 1: CheckForNewlyLoadedMapAreas_East(NULL); break;
+    case 2: CheckForNewlyLoadedMapAreas_West(NULL); break;
+    case 4: CheckForNewlyLoadedMapAreas_South(NULL); break;
+    case 8: CheckForNewlyLoadedMapAreas_North(NULL); break;
+    }
+    BYTE(overworld_screen_trans_dir_bits2) = 0;
+  }
+}
+
+// Widescreen camera: positions loaded from tables (exits, flute, ...) may be outside the
+// narrowed bounds. Move the camera inside before the screen is built.
+void Overworld_WidescreenSnapCamera() {
+  if (!(enhanced_features0 & kFeatures0_WidescreenCamera))
+    return;
+  uint16 x = BG2HOFS_copy2, y = BG2VOFS_copy2;
+  Overworld_WidescreenSnapAxis(false);
+  Overworld_WidescreenSnapAxis(true);
+  BG2HOFS_copy = BG2HOFS_copy2;
+  BG2VOFS_copy = BG2VOFS_copy2;
+  BG1HOFS_copy = BG1HOFS_copy2 += BG2HOFS_copy2 - x;
+  BG1VOFS_copy = BG1VOFS_copy2 += BG2VOFS_copy2 - y;
 }
 
 void LoadCachedEntranceProperties() {  // 82e5d4
@@ -1974,6 +2058,7 @@ void LoadOverworldFromSpecialOverworld() {  // 82e9bc
   Overworld_LoadGFXAndScreenSize();
   BYTE(overworld_right_bottom_bound_for_scroll) = 228;
   overworld_area_is_big &= 0xff;
+  Overworld_WidescreenSnapCamera();
 }
 
 void FluteMenu_LoadTransport() {  // 82ec39
@@ -2167,35 +2252,43 @@ void CreateInitialOWScreenView_Big_North() {  // 82f06b
   TriggerAndFinishMapLoadStripe_Y(7);
 }
 
+// Widescreen camera: the scroll transition starts with the camera inside the old area's
+// narrowed bounds, so the regular preload of 8 stripes would overwrite tilemap that is still
+// visible. Preload k fewer and let the longer transition stream the rest, which also keeps
+// map16_load_src_off in step with where the camera ends up.
 void CreateInitialOWScreenView_Big_South() {  // 82f087
+  int k = Overworld_WidescreenMarginY() >> 4;
   uint16 pos = map16_load_src_off;
   while (pos >= 0x80)
     pos -= 0x80;
-  map16_load_src_off = pos + 0x780;
-  map16_load_var2 = 7;
-  TriggerAndFinishMapLoadStripe_Y(8);
-  map16_load_var2 = (map16_load_var2 + 9) & 0x1f;
-  map16_load_src_off -= 0xB80;
+  map16_load_src_off = pos + 0x780 - k * 0x80;
+  map16_load_var2 = 7 - k;
+  TriggerAndFinishMapLoadStripe_Y(8 - k);
+  map16_load_var2 = (map16_load_var2 + 9 - k) & 0x1f;
+  map16_load_src_off -= 0xB80 + k * 0x80;
 }
 
 void CreateInitialOWScreenView_Big_West() {  // 82f0c0
   map16_load_src_off += 14;
   map16_load_dst_off = 31;
-  TriggerAndFinishMapLoadStripe_X(7);
+  TriggerAndFinishMapLoadStripe_X(7 - (Overworld_WidescreenMarginX() >> 4));
 }
 
 void CreateInitialOWScreenView_Big_East() {  // 82f0dc
-  map16_load_src_off = map16_load_src_off - 0x60 + 0x1e;
-  map16_load_dst_off = 7;
-  TriggerAndFinishMapLoadStripe_X(8);
-  map16_load_dst_off = (map16_load_dst_off + 9) & 0x1f;
-  map16_load_src_off -= 0x2e;
+  int k = Overworld_WidescreenMarginX() >> 4;
+  map16_load_src_off = map16_load_src_off - 0x60 + 0x1e - k * 2;
+  map16_load_dst_off = 7 - k;
+  TriggerAndFinishMapLoadStripe_X(8 - k);
+  map16_load_dst_off = (map16_load_dst_off + 9 - k) & 0x1f;
+  map16_load_src_off -= 0x2e + k * 2;
 }
 
 void CreateInitialOWScreenView_Small_North() {  // 82f10f
-  orange_blue_barrier_state = map16_load_src_off - 0x700;
+  // Widescreen camera ends up one margin above the bottom edge
+  int k = Overworld_WidescreenMarginY() >> 4;
+  orange_blue_barrier_state = map16_load_src_off - 0x700 - k * 0x80;
   word_7EC174 = map16_load_dst_off;
-  word_7EC176 = 10;
+  word_7EC176 = 10 - k;
   map16_load_src_off = 0x1390;
   map16_load_dst_off = 0;
   map16_load_var2 = 31;
@@ -2206,34 +2299,39 @@ void CreateInitialOWScreenView_Small_South() {  // 82f141
   orange_blue_barrier_state = BYTE(map16_load_src_off);
   word_7EC174 = map16_load_dst_off;
   word_7EC176 = 24;
-  map16_load_src_off = 0x790;
+  int k = Overworld_WidescreenMarginY() >> 4;
+  map16_load_src_off = 0x790 - k * 0x80;
   map16_load_dst_off = 0;
-  map16_load_var2 = 7;
-  TriggerAndFinishMapLoadStripe_Y(8);
-  map16_load_var2 = (map16_load_var2 + 9) & 0x1f;
-  map16_load_src_off -= 0xB80;
+  map16_load_var2 = 7 - k;
+  TriggerAndFinishMapLoadStripe_Y(8 - k);
+  map16_load_var2 = (map16_load_var2 + 9 - k) & 0x1f;
+  map16_load_src_off -= 0xB80 + k * 0x80;
 }
 
 void CreateInitialOWScreenView_Small_West() {  // 82f185
-  orange_blue_barrier_state = map16_load_src_off - 0x20;
-  word_7EC174 = 8;
+  // Widescreen camera ends up one margin left of the right edge
+  int k = Overworld_WidescreenMarginX() >> 4;
+  orange_blue_barrier_state = map16_load_src_off - 0x20 - k * 2;
+  word_7EC174 = (8 - k) & 0x1f;
   word_7EC176 = map16_load_var2;
   map16_load_src_off = 0x44e;
   map16_load_var2 = 0;
   map16_load_dst_off = 31;
-  TriggerAndFinishMapLoadStripe_X(7);
+  TriggerAndFinishMapLoadStripe_X(7 - k);
 }
 
 void CreateInitialOWScreenView_Small_East() {  // 82f1b7
-  orange_blue_barrier_state = map16_load_src_off - 0x60;
-  word_7EC174 = 0x18;
+  // Widescreen camera ends up one margin right of the left edge
+  int k = Overworld_WidescreenMarginX() >> 4;
+  orange_blue_barrier_state = map16_load_src_off - 0x60 + k * 2;
+  word_7EC174 = 0x18 + k;
   word_7EC176 = map16_load_var2;
-  map16_load_src_off = 0x41e;
+  map16_load_src_off = 0x41e - k * 2;
   map16_load_var2 = 0;
-  map16_load_dst_off = 7;
-  TriggerAndFinishMapLoadStripe_X(8);
-  map16_load_dst_off = (map16_load_dst_off + 9) & 0x1f;
-  map16_load_src_off -= 0x2e;
+  map16_load_dst_off = 7 - k;
+  TriggerAndFinishMapLoadStripe_X(8 - k);
+  map16_load_dst_off = (map16_load_dst_off + 9 - k) & 0x1f;
+  map16_load_src_off -= 0x2e + k * 2;
 }
 
 void OverworldTransitionScrollAndLoadMap() {  // 82f20e
@@ -2323,10 +2421,11 @@ void OverworldHandleMapScroll() {  // 82f273
   overworld_screen_transition = overworld_screen_trans_dir_bits2;
 }
 
+// dst == NULL only advances the stream pointers without building the stripe
 uint16 *CheckForNewlyLoadedMapAreas_North(uint16 *dst) {  // 82f2dd
   if (sign16(map16_load_src_off - 0x80))
     return dst;
-  if (!kOverworldMapIsSmall[overworld_screen_index]) {
+  if (dst && !kOverworldMapIsSmall[overworld_screen_index]) {
     *dst++ = 0x80;
     dst = BufferAndBuildMap16Stripes_Y(dst);
   }
@@ -2338,7 +2437,7 @@ uint16 *CheckForNewlyLoadedMapAreas_North(uint16 *dst) {  // 82f2dd
 uint16 *CheckForNewlyLoadedMapAreas_South(uint16 *dst) {  // 82f311
   if (map16_load_src_off >= 0x1800)
     return dst;
-  if (!kOverworldMapIsSmall[overworld_screen_index]) {
+  if (dst && !kOverworldMapIsSmall[overworld_screen_index]) {
     *dst++ = 0x80;
     dst = BufferAndBuildMap16Stripes_Y(dst);
   }
@@ -2353,7 +2452,7 @@ uint16 *CheckForNewlyLoadedMapAreas_West(uint16 *dst) {  // 82f345
     pos -= 0x80;
   if (pos == 0)
     return dst;
-  if (!kOverworldMapIsSmall[overworld_screen_index]) {
+  if (dst && !kOverworldMapIsSmall[overworld_screen_index]) {
     *dst++ = 0x8040;
     dst = BufferAndBuildMap16Stripes_X(dst);
   }
@@ -2368,7 +2467,7 @@ uint16 *CheckForNewlyLoadedMapAreas_East(uint16 *dst) {  // 82f37f
     pos -= 0x80;
   if (pos >= 0x60)
     return dst;
-  if (!kOverworldMapIsSmall[overworld_screen_index]) {
+  if (dst && !kOverworldMapIsSmall[overworld_screen_index]) {
     *dst++ = 0x8040;
     dst = BufferAndBuildMap16Stripes_X(dst);
   }

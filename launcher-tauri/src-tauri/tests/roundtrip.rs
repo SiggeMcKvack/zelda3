@@ -81,12 +81,13 @@ fn msu_modes_survive_save_and_reload() {
 fn aspect_ratio_replay_flags_survive_save_and_reload() {
     let v = roundtrip_edited("aspect", |src| {
         let line = src.lines().find(|l| l.starts_with("ExtendedAspectRatio")).unwrap();
-        src.replace(line, "ExtendedAspectRatio = extend_y, 16:9, unchanged_sprites, no_visual_fixes")
+        src.replace(line, "ExtendedAspectRatio = extend_y, 16:9, unchanged_sprites, no_visual_fixes, no_camera_clamp")
     });
     assert_eq!(v["extended_aspect_ratio"], 1);
     assert_eq!(v["extend_y"], true);
     assert_eq!(v["unchanged_sprites"], true);
     assert_eq!(v["no_visual_fixes"], true);
+    assert_eq!(v["no_camera_clamp"], true);
 }
 
 #[test]

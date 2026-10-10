@@ -1095,6 +1095,21 @@ continue_after_set:
     }
   }
 
+  // The widescreen camera lets Link get further outside the 4:3 area than the
+  // original 9th x bit logic handles, so derive it from his real screen position.
+  if (enhanced_features0 & kFeatures0_WidescreenCamera) {
+    int link_sx = (int16)(link_x_coord - BG2HOFS_copy2) + 8;
+    int base = sort_sprites_offset_into_oam_buffer >> 2;
+    for (int i = 0; i < 12; i++) {
+      int x = oam_buf[base + i].x;
+      if (x - link_sx > 128)
+        x -= 256;
+      else if (link_sx - x > 128)
+        x += 256;
+      bytewise_extended_oam[base + i] = (bytewise_extended_oam[base + i] & ~1) | ((x & 0x100) != 0);
+    }
+  }
+
   uint16 t;
   bool hide_shadow = true;
   if ((is_standing_in_doorway && ((t = link_x_coord - BG2HOFS_copy2) < 4 || t >= 252 || (t = link_y_coord - BG2VOFS_copy2) < 4 || t >= 224)) ||

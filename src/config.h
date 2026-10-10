@@ -66,6 +66,7 @@ typedef struct Config {
   bool extend_y;
   bool unchanged_sprites;  // ExtendedAspectRatio flag (for launcher round-trip)
   bool no_visual_fixes;    // ExtendedAspectRatio flag (for launcher round-trip)
+  bool no_camera_clamp;    // ExtendedAspectRatio flag (for launcher round-trip)
   bool no_sprite_limits;
   bool display_perf_title;
   uint8 enable_msu;

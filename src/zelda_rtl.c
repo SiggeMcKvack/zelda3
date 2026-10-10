@@ -161,6 +161,9 @@ static void ConfigurePpuSideSpace() {
       extra_left = BG2HOFS_copy2 - ow_scroll_vars0.xstart;
       extra_right = ow_scroll_vars0.xend - BG2HOFS_copy2;
       extra_bottom = ow_scroll_vars0.yend - BG2VOFS_copy2;
+      // The widescreen camera streams the new area in step with the full view during transitions
+      if ((enhanced_features0 & kFeatures0_WidescreenCamera) && BYTE(overworld_screen_trans_dir_bits))
+        extra_left = extra_right = kPpuExtraLeftRight, extra_bottom = 16;
     }
   } else if (mod == 7) {
     // indoors, except when the light cone is in use

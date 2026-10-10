@@ -97,6 +97,7 @@ static bool WriteGeneralSection(FILE *f, const Config *config) {
   if (!WriteLine(f, "#   - extend_y: Display 240 lines instead of 224 (add before aspect ratio)\n")) return false;
   if (!WriteLine(f, "#   - unchanged_sprites: Preserve original sprite spawn/die behavior for replay compatibility\n")) return false;
   if (!WriteLine(f, "#   - no_visual_fixes: Disable graphics glitch fixes (affects memory compare but not gameplay)\n")) return false;
+  if (!WriteLine(f, "#   - no_camera_clamp: Let the overworld camera reach area edges, showing black bars there\n")) return false;
   if (!WriteLine(f, "#\n")) return false;
   if (!WriteLine(f, "# Examples:\n")) return false;
   if (!WriteLine(f, "#   ExtendedAspectRatio = 16:9\n")) return false;
@@ -125,6 +126,7 @@ static bool WriteGeneralSection(FILE *f, const Config *config) {
   }
   if (config->unchanged_sprites && !WriteLine(f, ", unchanged_sprites")) return false;
   if (config->no_visual_fixes && !WriteLine(f, ", no_visual_fixes")) return false;
+  if (config->no_camera_clamp && !WriteLine(f, ", no_camera_clamp")) return false;
   if (!WriteLine(f, "\n\n")) return false;
 
   if (!WriteLine(f, "# ------------------------------------------------------------------------------\n")) return false;
