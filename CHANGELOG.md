@@ -72,6 +72,7 @@ Every overworld hole (Pyramid, Hyrule Castle secret passage, Kakariko well, Lost
 - New language `en-gn`, English (Gender Neutral), from `ALTTP_GenderNeutral.vcdiff` applied to the headerless US ROM.
 - New language `pt-cbt`, Portuguese (Brazil) by CBT, from `Legend of Zelda, The - A Link to the Past (USA) (Pt) (v1.1) (CBT).sfc`. It uses the US text engine and dictionary; the accented letters replace unused symbol glyphs, so it has its own alphabet and takes its font from the CBT ROM.
 - New language `it`, Italian v1.1, from `The Legend of Zelda - A Link to the Past (U) [ITA v1.1].ips`. The patch is made for a ROM with a 512-byte header; applied to a headerless ROM it shifts everything by 512 bytes and breaks the text, so only the correctly patched ROM is recognized (the launcher's IPS support handles this). It uses the US text engine, dictionary and font; its alphabet adds 0x5F-0x61, where 0x61 (`[!]`) is a "!" in an 8 pixel wide cell used for most exclamations.
+- `--extract-dialogue` writes `font_<lang>.bin` and `fontwidth_<lang>.bin` to `assets/` like the dialogue file, or to `--output`. Compiling looked for them in the current directory, so extracting with `--output assets` left the font unused. Fonts from older versions in the current directory are still found.
 - Language codes renamed so all English variants start with `en-`: `redux` is now `en-redux`, `retrans-kal` is now `en-kal`. The game accepts either name in `zelda3.ini`, so old configs and old asset files keep working.
 
 ### Launcher: Translation .ips Patches

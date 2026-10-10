@@ -855,10 +855,6 @@ static bool ExtractDialogueFontFromROM(Rom *rom, const char *lang,
 // Returns: font_data (4096 bytes), font_width (width_count bytes)
 static bool ExtractDialogueFontFromBin(const char *lang, uint8_t **out_font_data,
                                        uint8_t **out_font_width, size_t *out_width_count) {
-  // Get dialogue directory (where extracted files are stored)
-  const char *dir = Restool_GetDialogueDir();
-  if (!dir) dir = ".";
-
   // Replace '-' with '_' in language code for filename
   char lang_clean[16];
   strncpy(lang_clean, lang, sizeof(lang_clean) - 1);
@@ -867,13 +863,20 @@ static bool ExtractDialogueFontFromBin(const char *lang, uint8_t **out_font_data
     if (*p == '-') *p = '_';
   }
 
-  // Build filenames
+  // Look next to the dialogue files (assets/ by default, like the dialogue);
+  // older restool versions wrote the font to the current directory instead
+  const char *dirs[] = { Restool_GetDialogueDir(), NULL };
+  if (!dirs[0]) {
+    dirs[0] = "assets";
+    dirs[1] = ".";
+  }
   char font_path[512], width_path[512];
-  snprintf(font_path, sizeof(font_path), "%s/font_%s.bin", dir, lang_clean);
-  snprintf(width_path, sizeof(width_path), "%s/fontwidth_%s.bin", dir, lang_clean);
-
-  // Try to load font data
-  FILE *f = fopen(font_path, "rb");
+  FILE *f = NULL;
+  for (int i = 0; i < 2 && dirs[i] && !f; i++) {
+    snprintf(font_path, sizeof(font_path), "%s/font_%s.bin", dirs[i], lang_clean);
+    snprintf(width_path, sizeof(width_path), "%s/fontwidth_%s.bin", dirs[i], lang_clean);
+    f = fopen(font_path, "rb");
+  }
   if (!f) {
     return false;  // File doesn't exist - not an error, just not available
   }
@@ -3898,7 +3901,7 @@ bool ExtractFontFromRom(Rom *rom, const char *lang_code, const char *output_dir)
 
   // Build output filenames
   char font_filename[512], width_filename[512];
-  const char *dir = output_dir && output_dir[0] ? output_dir : ".";
+  const char *dir = output_dir && output_dir[0] ? output_dir : "assets";  // next to the dialogue
 
   // Replace '-' with '_' in language code for filename
   char lang_clean[16];
