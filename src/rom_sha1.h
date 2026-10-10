@@ -20,6 +20,10 @@
 #define ROM_SHA1_REDUX3 "0db9eb8af889bb07b8172b5b034ffc971540ada0"
 #define ROM_SHA1_REDUX4 "92db633bc1fad0d865794eb437ebc81ec076fdc7"
 #define ROM_SHA1_REDUX5 "d9786698ea43e5688aeeaaec92502a4bf16c3eb5"
+#define ROM_SHA1_REDUX6 "93f6cd779202fccef016d19c5d74c10836048540"  // Retranslation Redux.ips (v10.2.3) on US ROM
+#define ROM_SHA1_REDUX7 "d2a38d30ad79b95dc5cc3b7ef0657ed1b966ec98"  // Retranslation v10.2.4
+#define ROM_SHA1_REDUX8 "931522a8e4bba3136604f3918f48c852064a4a89"  // Retranslation Only 1.01
+#define ROM_SHA1_REDUX9 "bfe65a258ab37739bbfd395c53ce5841a0fac783"  // Translation Quest v1.01
 #define ROM_SHA1_NL     "fa8adfdba2697c9a54d583a1284a22ac764c7637"
 #define ROM_SHA1_SV     "43cd3438469b2c3fe879ea2f410b3ef3cb3f1ca4"  // patched with a 512-byte header
 #define ROM_SHA1_SV_NOHDR "d45f706334fd346a08538c8933d63b4da665525a"  // same, headerless

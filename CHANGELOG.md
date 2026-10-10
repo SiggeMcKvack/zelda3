@@ -57,7 +57,9 @@ Every overworld hole (Pyramid, Hyrule Castle secret passage, Kakariko well, Lost
 
 ### Launcher: Translation .ips Patches
 
-The launcher's language list now accepts `.ips` translation patches as well as translated ROMs. The patch is applied to the base US ROM in memory. Patches made for a headered ROM (512-byte copier header) or a headerless ROM both work; the result must be a known translated ROM. Tested with the Dutch and Swedish patches.
+The launcher's language list now accepts `.ips` translation patches as well as translated ROMs. The patch is applied to the base US ROM in memory. Patches made for a headered ROM (512-byte copier header) or a headerless ROM both work; the result must be a known translated ROM. Tested with the Dutch and Swedish patches, and with the English Retranslation patches (`Zelda 3 - Retranslation Only 1,0.ips`, `Retranslation Redux.ips`).
+
+- More English Retranslation ROMs are recognized as `redux`: Retranslation Redux v10.2.3 (patched from `Retranslation Redux.ips`), Retranslation Redux v10.2.4, Retranslation 1.01 and Translation Quest v1.01. They share the same translation and differ in a few strings.
 
 - The Swedish ROM is also recognized when patched onto the headerless US ROM.
 - `restool_lib`: new `Restool_IdentifyRomEx()` / `Restool_ExtractDialogueEx()` take the base ROM for patches. The existing functions are unchanged.

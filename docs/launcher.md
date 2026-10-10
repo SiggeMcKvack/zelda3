@@ -93,7 +93,7 @@ Manages the asset file and the game language:
 - **Language** - The dialogue language to use, from the languages in the asset file.
 - **Create Asset File from ROM:**
   1. **Base US ROM** - Browse to your US `zelda3.sfc`. The launcher identifies the ROM and shows e.g. "Recognized: ..." or "Not a recognized ALttP ROM."
-  2. **Language ROMs or .ips patches (optional)** - Add translated ROMs (German, French, ...) to include their dialogue. Each one is tagged with its detected language and can be removed again. Instead of a translated ROM you can add its `.ips` translation patch (select the base US ROM first). The patch is applied to the US ROM in memory, whether it was made for a ROM with or without a 512-byte header, and is accepted only if the result is a known translated ROM. This works for the Dutch and Swedish patches.
+  2. **Language ROMs or .ips patches (optional)** - Add translated ROMs (German, French, ...) to include their dialogue. Each one is tagged with its detected language and can be removed again. Instead of a translated ROM you can add its `.ips` translation patch (select the base US ROM first). The patch is applied to the US ROM in memory, whether it was made for a ROM with or without a 512-byte header, and is accepted only if the result is a known translated ROM. This works for the Dutch, Swedish and English Retranslation patches.
   3. **Create Asset File** - Builds `zelda3_assets.dat` in the data directory and refreshes the language list. The button is disabled while the build runs.
 
 ### Graphics
