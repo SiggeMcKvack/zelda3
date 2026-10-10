@@ -1,4 +1,4 @@
-package com.dishii.zelda3.util
+package com.siggemckvack.zelda3.util
 
 import android.content.ContentResolver
 import android.content.Context

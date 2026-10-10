@@ -51,7 +51,7 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.dishii.zelda3.R;
+import com.siggemckvack.zelda3.R;
 
 import java.util.Hashtable;
 import java.util.Locale;

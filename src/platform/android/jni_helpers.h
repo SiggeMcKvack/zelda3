@@ -18,7 +18,7 @@ JNIEnv* JniHelper_GetEnv(void);
 
 // ============================================================================
 // Generic Static Method Callers
-// All target MainActivity class (com/dishii/zelda3/MainActivity)
+// All target MainActivity class (com/siggemckvack/zelda3/MainActivity)
 // ============================================================================
 
 // Call static int method(String) - returns -1 on failure

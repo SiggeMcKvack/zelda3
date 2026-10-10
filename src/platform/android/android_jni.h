@@ -100,17 +100,17 @@ int Android_DeleteSaveFile(const char *filename);
 
 // Note: The actual JNI function declarations are in android_jni.c
 // They are:
-// - Java_com_dishii_zelda3_MainActivity_nativeSaveState(JNIEnv* env, jobject obj, jint slot)
-// - Java_com_dishii_zelda3_MainActivity_nativeLoadState(JNIEnv* env, jobject obj, jint slot)
-// - Java_com_dishii_zelda3_MainActivity_nativeGetScreenshotRGBA(JNIEnv* env, jobject obj)
-// - Java_com_dishii_zelda3_MainActivity_nativeTogglePause(JNIEnv* env, jobject obj)
-// - Java_com_dishii_zelda3_MainActivity_nativeIsPaused(JNIEnv* env, jobject obj)
-// - Java_com_dishii_zelda3_MainActivity_nativeBindGamepadButton(JNIEnv* env, jobject obj, jstring buttonName, jobjectArray modifierNames, jint commandId)
-// - Java_com_dishii_zelda3_MainActivity_nativeUnbindGamepadButton(JNIEnv* env, jobject obj, jstring buttonName, jobjectArray modifierNames)
-// - Java_com_dishii_zelda3_MainActivity_nativeClearGamepadBindings(JNIEnv* env, jobject obj)
-// - Java_com_dishii_zelda3_MainActivity_nativeGetGamepadBindings(JNIEnv* env, jobject obj)
-// - Java_com_dishii_zelda3_MainActivity_nativeApplyDefaultGamepadBindings(JNIEnv* env, jobject obj)
-// - Java_com_dishii_zelda3_MainActivity_nativeGetButtonForCommand(JNIEnv* env, jobject obj, jint cmdId)
+// - Java_com_siggemckvack_zelda3_MainActivity_nativeSaveState(JNIEnv* env, jobject obj, jint slot)
+// - Java_com_siggemckvack_zelda3_MainActivity_nativeLoadState(JNIEnv* env, jobject obj, jint slot)
+// - Java_com_siggemckvack_zelda3_MainActivity_nativeGetScreenshotRGBA(JNIEnv* env, jobject obj)
+// - Java_com_siggemckvack_zelda3_MainActivity_nativeTogglePause(JNIEnv* env, jobject obj)
+// - Java_com_siggemckvack_zelda3_MainActivity_nativeIsPaused(JNIEnv* env, jobject obj)
+// - Java_com_siggemckvack_zelda3_MainActivity_nativeBindGamepadButton(JNIEnv* env, jobject obj, jstring buttonName, jobjectArray modifierNames, jint commandId)
+// - Java_com_siggemckvack_zelda3_MainActivity_nativeUnbindGamepadButton(JNIEnv* env, jobject obj, jstring buttonName, jobjectArray modifierNames)
+// - Java_com_siggemckvack_zelda3_MainActivity_nativeClearGamepadBindings(JNIEnv* env, jobject obj)
+// - Java_com_siggemckvack_zelda3_MainActivity_nativeGetGamepadBindings(JNIEnv* env, jobject obj)
+// - Java_com_siggemckvack_zelda3_MainActivity_nativeApplyDefaultGamepadBindings(JNIEnv* env, jobject obj)
+// - Java_com_siggemckvack_zelda3_MainActivity_nativeGetButtonForCommand(JNIEnv* env, jobject obj, jint cmdId)
 
 #endif // __ANDROID__
 

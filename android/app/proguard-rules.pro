@@ -12,8 +12,8 @@
 -keepclassmembers class org.libsdl.app.** { *; }
 
 # Keep MainActivity and AssetCopyUtil
--keep class com.dishii.zelda3.MainActivity { *; }
--keep class com.dishii.zelda3.AssetCopyUtil { *; }
+-keep class com.siggemckvack.zelda3.MainActivity { *; }
+-keep class com.siggemckvack.zelda3.AssetCopyUtil { *; }
 
 # Keep native methods
 -keepclasseswithmembernames class * {

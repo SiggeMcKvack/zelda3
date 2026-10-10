@@ -1,4 +1,4 @@
-package com.dishii.zelda3
+package com.siggemckvack.zelda3
 
 import android.content.Context
 import android.content.res.AssetManager

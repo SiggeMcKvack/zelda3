@@ -76,7 +76,7 @@ cmake --build . -j$(nproc)
 ./zelda3-restool --extract-from-rom ../zelda3.sfc --compile
 
 # Transfer to Android device
-adb push ../zelda3_assets.dat /sdcard/Android/data/com.dishii.zelda3/files/
+adb push ../zelda3_assets.dat /sdcard/Android/data/com.siggemckvack.zelda3/files/
 ```
 
 
@@ -168,16 +168,16 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 
 The game requires `zelda3_assets.dat` in app-specific storage.
 
-**Package name:** `com.dishii.zelda3`
+**Package name:** `com.siggemckvack.zelda3`
 
 ### Method 1: ADB Push (for developers)
 
 ```bash
 # Copy to app-specific storage
-adb push zelda3_assets.dat /sdcard/Android/data/com.dishii.zelda3/files/
+adb push zelda3_assets.dat /sdcard/Android/data/com.siggemckvack.zelda3/files/
 
 # Verify
-adb shell ls -lh /sdcard/Android/data/com.dishii.zelda3/files/zelda3_assets.dat
+adb shell ls -lh /sdcard/Android/data/com.siggemckvack.zelda3/files/zelda3_assets.dat
 ```
 
 ### Method 2: In-App File Picker (recommended for users)
@@ -209,7 +209,7 @@ adb shell ls -lh /sdcard/Android/data/com.dishii.zelda3/files/zelda3_assets.dat
 
 **Android uses a split storage structure:**
 
-**App-Specific Storage** (`/sdcard/Android/data/com.dishii.zelda3/files/`):
+**App-Specific Storage** (`/sdcard/Android/data/com.siggemckvack.zelda3/files/`):
 - `zelda3_assets.dat` - Game assets (required)
 - `zelda3.ini` - Configuration file (auto-generated)
 - `saves/ref/` - Reference save files (shipped with app)
@@ -332,10 +332,10 @@ The `zelda3_assets.dat` file goes to app-specific storage.
 **Method 1: ADB Push (for developers)**
 
 ```bash
-adb push zelda3_assets.dat /sdcard/Android/data/com.dishii.zelda3/files/
+adb push zelda3_assets.dat /sdcard/Android/data/com.siggemckvack.zelda3/files/
 
 # Verify
-adb shell ls -lh /sdcard/Android/data/com.dishii.zelda3/files/zelda3_assets.dat
+adb shell ls -lh /sdcard/Android/data/com.siggemckvack.zelda3/files/zelda3_assets.dat
 ```
 
 **Method 2: Select File (recommended for users)**
@@ -379,12 +379,12 @@ Copy save files directly to/from the `saves/` subfolder in your Zelda3 folder.
 
 ```bash
 # Pull config from device
-adb pull /sdcard/Android/data/com.dishii.zelda3/files/zelda3.ini
+adb pull /sdcard/Android/data/com.siggemckvack.zelda3/files/zelda3.ini
 
 # Edit locally with text editor
 
 # Push back to device
-adb push zelda3.ini /sdcard/Android/data/com.dishii.zelda3/files/
+adb push zelda3.ini /sdcard/Android/data/com.siggemckvack.zelda3/files/
 ```
 
 **⚠️ Note:** In-app Settings UI will override manual changes on next save. Use Settings UI whenever possible.
@@ -396,7 +396,7 @@ adb push zelda3.ini /sdcard/Android/data/com.dishii.zelda3/files/
 | Feature | Desktop | Android |
 |---------|---------|---------|
 | Configuration | Edit `zelda3.ini` manually | In-app Settings UI |
-| Assets location | Same as executable | `/sdcard/Android/data/com.dishii.zelda3/files/` |
+| Assets location | Same as executable | `/sdcard/Android/data/com.siggemckvack.zelda3/files/` |
 | Saves location | Same as executable | User-selected folder + `/saves/` |
 | MSU location | `msu/` subfolder | User-selected folder + `/MSU/` |
 | Renderer default | SDL | OpenGL ES |

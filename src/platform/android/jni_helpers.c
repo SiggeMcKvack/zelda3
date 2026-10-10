@@ -10,7 +10,7 @@
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
 // MainActivity class name
-#define MAIN_ACTIVITY_CLASS "com/dishii/zelda3/MainActivity"
+#define MAIN_ACTIVITY_CLASS "com/siggemckvack/zelda3/MainActivity"
 
 // ============================================================================
 // Shared Gamepad Button Names

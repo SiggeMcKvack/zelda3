@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package com.dishii.zelda3.overlay
+package com.siggemckvack.zelda3.overlay
 
 import android.app.Activity
 import android.content.Context
@@ -27,11 +27,11 @@ import android.view.View
 import android.view.View.OnTouchListener
 import androidx.core.content.ContextCompat
 import androidx.window.layout.WindowMetricsCalculator
-import com.dishii.zelda3.MainActivity
-import com.dishii.zelda3.R
-import com.dishii.zelda3.overlay.model.OverlayControl
-import com.dishii.zelda3.overlay.model.OverlayControlData
-import com.dishii.zelda3.overlay.model.OverlayLayout
+import com.siggemckvack.zelda3.MainActivity
+import com.siggemckvack.zelda3.R
+import com.siggemckvack.zelda3.overlay.model.OverlayControl
+import com.siggemckvack.zelda3.overlay.model.OverlayControlData
+import com.siggemckvack.zelda3.overlay.model.OverlayLayout
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.max

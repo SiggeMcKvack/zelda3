@@ -29,7 +29,7 @@
 
     </FrameLayout>
 
-    <com.dishii.zelda3.ui.menu.PauseMenuView
+    <com.siggemckvack.zelda3.ui.menu.PauseMenuView
         android:id="@+id/pause_menu"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />

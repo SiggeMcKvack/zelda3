@@ -17,7 +17,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Toast;
 
-import com.dishii.zelda3.R;
+import com.siggemckvack.zelda3.R;
 
 
 public class SDLControllerManager

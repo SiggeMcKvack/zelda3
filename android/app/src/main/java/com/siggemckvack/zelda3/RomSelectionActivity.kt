@@ -1,4 +1,4 @@
-package com.dishii.zelda3
+package com.siggemckvack.zelda3
 
 import android.content.Intent
 import android.net.Uri
@@ -16,7 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.dishii.zelda3.util.showToast
+import com.siggemckvack.zelda3.util.showToast
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers

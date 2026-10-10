@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2023 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-package com.dishii.zelda3.overlay
+package com.siggemckvack.zelda3.overlay
 
 import android.content.res.Resources
 import android.graphics.Bitmap
@@ -9,8 +9,8 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.view.MotionEvent
-import com.dishii.zelda3.overlay.model.OverlayControl
-import com.dishii.zelda3.overlay.model.OverlayControlData
+import com.siggemckvack.zelda3.overlay.model.OverlayControl
+import com.siggemckvack.zelda3.overlay.model.OverlayControlData
 
 /**
  * Custom [BitmapDrawable] that is capable

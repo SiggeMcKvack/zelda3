@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package com.dishii.zelda3.overlay
+package com.siggemckvack.zelda3.overlay
 
 import android.content.res.Resources
 import android.graphics.Bitmap

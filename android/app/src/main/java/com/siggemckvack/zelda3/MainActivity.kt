@@ -1,4 +1,4 @@
-package com.dishii.zelda3
+package com.siggemckvack.zelda3
 
 import android.content.Intent
 import android.content.SharedPreferences
@@ -18,15 +18,15 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.documentfile.provider.DocumentFile
-import com.dishii.zelda3.overlay.InputOverlay
-import com.dishii.zelda3.overlay.model.OverlayLayout
-import com.dishii.zelda3.ui.menu.MenuItem
-import com.dishii.zelda3.ui.menu.MenuTab
-import com.dishii.zelda3.ui.menu.PauseMenuView
-import com.dishii.zelda3.ui.menu.SaveSlot
-import com.dishii.zelda3.util.ConfigManager
-import com.dishii.zelda3.util.showToast
-import com.dishii.zelda3.util.stylePositiveAsDestructive
+import com.siggemckvack.zelda3.overlay.InputOverlay
+import com.siggemckvack.zelda3.overlay.model.OverlayLayout
+import com.siggemckvack.zelda3.ui.menu.MenuItem
+import com.siggemckvack.zelda3.ui.menu.MenuTab
+import com.siggemckvack.zelda3.ui.menu.PauseMenuView
+import com.siggemckvack.zelda3.ui.menu.SaveSlot
+import com.siggemckvack.zelda3.util.ConfigManager
+import com.siggemckvack.zelda3.util.showToast
+import com.siggemckvack.zelda3.util.stylePositiveAsDestructive
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers

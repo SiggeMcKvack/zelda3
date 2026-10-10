@@ -1,4 +1,4 @@
-package com.dishii.zelda3.ui.menu
+package com.siggemckvack.zelda3.ui.menu
 
 import android.content.Context
 import android.graphics.Typeface
@@ -20,7 +20,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.dishii.zelda3.R
+import com.siggemckvack.zelda3.R
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

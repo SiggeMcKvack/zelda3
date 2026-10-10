@@ -27,7 +27,7 @@ void ZeldaApuUnlock(void);
 void SaveLoadSlot(int cmd, int which);
 
 // JNI function to reload audio config without restarting the app
-JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeReloadAudioConfig(
+JNIEXPORT void JNICALL Java_com_siggemckvack_zelda3_MainActivity_nativeReloadAudioConfig(
     JNIEnv* env, jobject obj, jint enable_msu, jint msu_vol, jint disable_low_health_beep) {
 
     LOGD("nativeReloadAudioConfig called with: enable_msu=%d, msu_volume=%d, disable_beep=%d",
@@ -102,7 +102,7 @@ void* Android_LoadAsset(const char *asset_path, int *out_size) {
  *
  * @param slot Save slot number (0-9, where 0 = Quick Save)
  */
-JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeSaveState(
+JNIEXPORT void JNICALL Java_com_siggemckvack_zelda3_MainActivity_nativeSaveState(
     JNIEnv* env, jobject obj, jint slot) {
     LOGD("nativeSaveState: slot=%d", slot);
     SaveLoadSlot(0, (int)slot);  // 0 = kSaveLoad_Save
@@ -114,7 +114,7 @@ JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeSaveState(
  *
  * @param slot Save slot number (0-9, where 0 = Quick Save)
  */
-JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeLoadState(
+JNIEXPORT void JNICALL Java_com_siggemckvack_zelda3_MainActivity_nativeLoadState(
     JNIEnv* env, jobject obj, jint slot) {
     LOGD("nativeLoadState: slot=%d", slot);
     SaveLoadSlot(1, (int)slot);  // 1 = kSaveLoad_Load
@@ -126,7 +126,7 @@ JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeLoadState(
  *
  * @return byte array containing RGBA data, or null if not available
  */
-JNIEXPORT jbyteArray JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetScreenshotRGBA(
+JNIEXPORT jbyteArray JNICALL Java_com_siggemckvack_zelda3_MainActivity_nativeGetScreenshotRGBA(
     JNIEnv* env, jobject obj) {
 
     uint8_t *buffer = NULL;
@@ -189,7 +189,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetScreen
  * Toggles the game pause state.
  * Called from MainActivity when user selects "Pause" from nav drawer.
  */
-JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeTogglePause(
+JNIEXPORT void JNICALL Java_com_siggemckvack_zelda3_MainActivity_nativeTogglePause(
     JNIEnv* env, jobject obj) {
     extern uint8 g_paused;
     g_paused = !g_paused;
@@ -202,7 +202,7 @@ JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeTogglePause(
  *
  * @return true if game is paused, false otherwise
  */
-JNIEXPORT jboolean JNICALL Java_com_dishii_zelda3_MainActivity_nativeIsPaused(
+JNIEXPORT jboolean JNICALL Java_com_siggemckvack_zelda3_MainActivity_nativeIsPaused(
     JNIEnv* env, jobject obj) {
     extern uint8 g_paused;
     return (jboolean)g_paused;
@@ -217,7 +217,7 @@ JNIEXPORT jboolean JNICALL Java_com_dishii_zelda3_MainActivity_nativeIsPaused(
  * @param commandId Command ID (e.g., 1 for Up, 2 for Down, etc.)
  * @return true if binding succeeded, false otherwise
  */
-JNIEXPORT jboolean JNICALL Java_com_dishii_zelda3_MainActivity_nativeBindGamepadButton(
+JNIEXPORT jboolean JNICALL Java_com_siggemckvack_zelda3_MainActivity_nativeBindGamepadButton(
     JNIEnv* env, jobject obj, jstring buttonName, jobjectArray modifierNames, jint commandId) {
 
     // Convert button name to C string
@@ -277,7 +277,7 @@ JNIEXPORT jboolean JNICALL Java_com_dishii_zelda3_MainActivity_nativeBindGamepad
  * @param modifierNames Array of modifier button names, can be null
  * @return true if unbinding succeeded, false otherwise
  */
-JNIEXPORT jboolean JNICALL Java_com_dishii_zelda3_MainActivity_nativeUnbindGamepadButton(
+JNIEXPORT jboolean JNICALL Java_com_siggemckvack_zelda3_MainActivity_nativeUnbindGamepadButton(
     JNIEnv* env, jobject obj, jstring buttonName, jobjectArray modifierNames) {
 
     // TODO: Implement unbind logic (requires modifying config.c to add GamepadMap_Remove)
@@ -289,7 +289,7 @@ JNIEXPORT jboolean JNICALL Java_com_dishii_zelda3_MainActivity_nativeUnbindGamep
  * Clears all gamepad bindings.
  * Called from MainActivity's controller settings dialog.
  */
-JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeClearGamepadBindings(
+JNIEXPORT void JNICALL Java_com_siggemckvack_zelda3_MainActivity_nativeClearGamepadBindings(
     JNIEnv* env, jobject obj) {
     GamepadMap_Clear();
     LOGD("nativeClearGamepadBindings: Cleared all gamepad bindings");
@@ -301,7 +301,7 @@ JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeClearGamepadBin
  *
  * @return JSON string with format: [{"commandName":"Up","binding":"DpadUp"},...]
  */
-JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetGamepadBindings(
+JNIEXPORT jstring JNICALL Java_com_siggemckvack_zelda3_MainActivity_nativeGetGamepadBindings(
     JNIEnv* env, jobject obj) {
 
     // Command IDs to check for bindings
@@ -389,7 +389,7 @@ JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetGamepadBi
  * - 12 standard SNES controls (DpadUp/Down/Left/Right, Back/Start, B/A/Y/X, L1/R1)
  * - 1 Turbo binding (L3 → Turbo)
  */
-JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeApplyDefaultGamepadBindings(
+JNIEXPORT void JNICALL Java_com_siggemckvack_zelda3_MainActivity_nativeApplyDefaultGamepadBindings(
     JNIEnv* env, jobject obj) {
 
     // Apply 12 standard controls
@@ -411,7 +411,7 @@ JNIEXPORT void JNICALL Java_com_dishii_zelda3_MainActivity_nativeApplyDefaultGam
  * @param cmdId The command ID (e.g., kKeys_Controls+0 for Up)
  * @return Button name string or null
  */
-JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetButtonForCommand(
+JNIEXPORT jstring JNICALL Java_com_siggemckvack_zelda3_MainActivity_nativeGetButtonForCommand(
     JNIEnv* env, jobject obj, jint cmdId) {
 
     uint32 modifiers = 0;
@@ -473,7 +473,7 @@ void Android_UpdateRendererConfig(const char *renderer) {
  * @param baseRomPath US ROM the patch is applied to (null for ROM files)
  * @return JSON string: {"lang_code":"us","lang_name":"USA","valid":true} or null on error
  */
-JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeIdentifyRom(
+JNIEXPORT jstring JNICALL Java_com_siggemckvack_zelda3_RomSelectionActivity_nativeIdentifyRom(
     JNIEnv* env, jobject obj, jstring jromPath, jstring jbaseRomPath) {
 
     const char *rom_path = (*env)->GetStringUTFChars(env, jromPath, NULL);
@@ -515,7 +515,7 @@ JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeIden
  * @param outputDir Directory to write dialogue_{lang}.txt
  * @return RESTOOL_OK (0) on success, error code on failure
  */
-JNIEXPORT jint JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeExtractDialogue(
+JNIEXPORT jint JNICALL Java_com_siggemckvack_zelda3_RomSelectionActivity_nativeExtractDialogue(
     JNIEnv* env, jobject obj, jstring jromPath, jstring jbaseRomPath, jstring joutputDir) {
 
     const char *rom_path = (*env)->GetStringUTFChars(env, jromPath, NULL);
@@ -551,7 +551,7 @@ JNIEXPORT jint JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeExtract
  * @param dialogueDir Directory containing dialogue_{lang}.txt files (or null)
  * @return RESTOOL_OK (0) on success, error code on failure
  */
-JNIEXPORT jint JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeCompileAssets(
+JNIEXPORT jint JNICALL Java_com_siggemckvack_zelda3_RomSelectionActivity_nativeCompileAssets(
     JNIEnv* env, jobject obj,
     jstring jusRomPath, jstring joutputPath, jstring jlanguages, jstring jdialogueDir) {
 
@@ -599,7 +599,7 @@ JNIEXPORT jint JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeCompile
  * @param path Directory containing zelda3_assets.dat
  * @return Array of language codes (e.g., ["us", "de", "fr"]) or null if error/single language
  */
-JNIEXPORT jobjectArray JNICALL Java_com_dishii_zelda3_MainActivity_nativeGetAvailableLanguages(
+JNIEXPORT jobjectArray JNICALL Java_com_siggemckvack_zelda3_MainActivity_nativeGetAvailableLanguages(
     JNIEnv* env, jobject obj, jstring jpath) {
 
     const char *path = (*env)->GetStringUTFChars(env, jpath, NULL);

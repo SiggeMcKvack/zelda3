@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2025 Eden Emulator Project
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-package com.dishii.zelda3.overlay
+package com.siggemckvack.zelda3.overlay
 
 import android.app.Dialog
 import android.content.Context
@@ -9,8 +9,8 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.WindowManager
 import android.widget.TextView
-import com.dishii.zelda3.R
-import com.dishii.zelda3.overlay.model.OverlayControlData
+import com.siggemckvack.zelda3.R
+import com.siggemckvack.zelda3.overlay.model.OverlayControlData
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
 
