@@ -238,7 +238,9 @@ void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
     SimpleHdma_DoLine(&hdma_chans[1]);
   }
 
-  if (g_zenv.ppu->extraLeftRight != 0) {
+  // Only rooms have filler sides. Outdoors, an area edge over animated water is a single
+  // color on some frames only, so the fill would flicker.
+  if (g_zenv.ppu->extraLeftRight != 0 && player_is_indoors) {
     int lo, hi;
     PpuFillUnusedSides(g_zenv.ppu, Dungeon_WidescreenTransitionWindow(&lo, &hi));
   }

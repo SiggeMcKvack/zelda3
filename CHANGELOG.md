@@ -18,6 +18,7 @@ With the widescreen camera, the room where Link receives the Triforce had its fl
 
 With an extended aspect ratio, rooms locked to 256px, such as most houses, had black bars on both sides. Now a side whose outermost column is a single color, like the filler around a house, is filled with that color to the screen edge. Sides with mixed colors stay black.
 
+- Only rooms are filled. Outdoors, an area edge next to animated water was a single color on some frames only, so the side flickered between blue and black (seen in the "Your uncle recovers" credit scene).
 - Horizontal room transitions with the widescreen camera no longer flash a stale room on the far side, and the old room no longer pops out of the extra width when the scroll ends. The side keeps its filler color while walls scroll past.
 
 ### Fixed: Player Name in Translated Dialogue
