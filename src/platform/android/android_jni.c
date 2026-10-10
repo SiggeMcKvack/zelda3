@@ -469,24 +469,27 @@ void Android_UpdateRendererConfig(const char *renderer) {
  * Identifies a ROM file and returns language information as JSON.
  * Called from RomSelectionActivity when user selects a ROM file.
  *
- * @param romPath Path to the ROM file
+ * @param romPath Path to the ROM file or .ips translation patch
+ * @param baseRomPath US ROM the .ips patch is applied to (null for ROM files)
  * @return JSON string: {"lang_code":"us","lang_name":"USA","valid":true} or null on error
  */
 JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeIdentifyRom(
-    JNIEnv* env, jobject obj, jstring jromPath) {
+    JNIEnv* env, jobject obj, jstring jromPath, jstring jbaseRomPath) {
 
     const char *rom_path = (*env)->GetStringUTFChars(env, jromPath, NULL);
     if (!rom_path) {
         LOGD("nativeIdentifyRom: Failed to get ROM path string");
         return NULL;
     }
+    const char *base_rom_path = jbaseRomPath ? (*env)->GetStringUTFChars(env, jbaseRomPath, NULL) : NULL;
 
     LOGD("nativeIdentifyRom: Identifying ROM at: %s", rom_path);
 
     RestoolRomInfo info;
-    bool success = Restool_IdentifyRom(rom_path, &info);
+    bool success = Restool_IdentifyRomEx(rom_path, base_rom_path, &info);
 
     (*env)->ReleaseStringUTFChars(env, jromPath, rom_path);
+    if (base_rom_path) (*env)->ReleaseStringUTFChars(env, jbaseRomPath, base_rom_path);
 
     if (!success) {
         LOGD("nativeIdentifyRom: Failed to identify ROM");
@@ -507,12 +510,13 @@ JNIEXPORT jstring JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeIden
  * Extracts dialogue from a ROM file to a text file.
  * Called from RomSelectionActivity for each language ROM.
  *
- * @param romPath Path to the ROM file
+ * @param romPath Path to the ROM file or .ips translation patch
+ * @param baseRomPath US ROM the .ips patch is applied to (null for ROM files)
  * @param outputDir Directory to write dialogue_{lang}.txt
  * @return RESTOOL_OK (0) on success, error code on failure
  */
 JNIEXPORT jint JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeExtractDialogue(
-    JNIEnv* env, jobject obj, jstring jromPath, jstring joutputDir) {
+    JNIEnv* env, jobject obj, jstring jromPath, jstring jbaseRomPath, jstring joutputDir) {
 
     const char *rom_path = (*env)->GetStringUTFChars(env, jromPath, NULL);
     const char *output_dir = (*env)->GetStringUTFChars(env, joutputDir, NULL);
@@ -526,9 +530,11 @@ JNIEXPORT jint JNICALL Java_com_dishii_zelda3_RomSelectionActivity_nativeExtract
 
     LOGD("nativeExtractDialogue: rom=%s, output_dir=%s", rom_path, output_dir);
 
-    int result = Restool_ExtractDialogue(rom_path, output_dir);
+    const char *base_rom_path = jbaseRomPath ? (*env)->GetStringUTFChars(env, jbaseRomPath, NULL) : NULL;
+    int result = Restool_ExtractDialogueEx(rom_path, base_rom_path, output_dir);
 
     (*env)->ReleaseStringUTFChars(env, jromPath, rom_path);
+    if (base_rom_path) (*env)->ReleaseStringUTFChars(env, jbaseRomPath, base_rom_path);
     (*env)->ReleaseStringUTFChars(env, joutputDir, output_dir);
 
     LOGD("nativeExtractDialogue: result=%d", result);

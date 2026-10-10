@@ -59,10 +59,15 @@ class RomSelectionActivity : AppCompatActivity() {
     private lateinit var createBtn: Button
 
     // Native functions
-    private external fun nativeIdentifyRom(romPath: String): String?
+    // baseRomPath: US ROM that .ips patches are applied to (ignored for ROM files)
+    private external fun nativeIdentifyRom(
+        romPath: String,
+        baseRomPath: String?,
+    ): String?
 
     private external fun nativeExtractDialogue(
         romPath: String,
+        baseRomPath: String?,
         outputDir: String,
     ): Int
 
@@ -141,23 +146,41 @@ class RomSelectionActivity : AppCompatActivity() {
         langRomPicker.launch(Intent.createChooser(intent, "Select Language ROM(s)"))
     }
 
+    /**
+     * Copies a picked file to the cache as `<baseName>.sfc`, or `<baseName>.ips` if it
+     * is an IPS patch (restool tells patches by extension; the URI has no usable name).
+     */
+    private suspend fun copyToCache(
+        uri: Uri,
+        baseName: String,
+    ): File =
+        withContext(Dispatchers.IO) {
+            val tmp = File(cacheDir, "$baseName.tmp")
+            contentResolver.openInputStream(uri)?.use { input ->
+                tmp.outputStream().use { output -> input.copyTo(output) }
+            }
+            val header = ByteArray(5)
+            val isIps = tmp.inputStream().use { it.read(header) == 5 } && String(header, Charsets.US_ASCII) == "PATCH"
+            val dest = File(cacheDir, baseName + if (isIps) ".ips" else ".sfc")
+            dest.delete()
+            tmp.renameTo(dest)
+            dest
+        }
+
     private fun processBaseRom(uri: Uri) {
         lifecycleScope.launch {
-            val tempFile = File(cacheDir, "temp_base_rom.sfc")
+            // The previous base ROM file is overwritten, so it is no longer selected
+            baseRomInfo?.let { File(it.path).delete() }
+            baseRomInfo = null
+            updateUI()
+            var tempFile = File(cacheDir, "temp_base_rom.sfc")
             try {
-                // Copy to cache
-                withContext(Dispatchers.IO) {
-                    contentResolver.openInputStream(uri)?.use { input ->
-                        tempFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                }
+                tempFile = copyToCache(uri, "temp_base_rom")
 
                 // Identify ROM
                 val jsonStr =
                     withContext(Dispatchers.IO) {
-                        nativeIdentifyRom(tempFile.absolutePath)
+                        nativeIdentifyRom(tempFile.absolutePath, null)
                     }
 
                 if (jsonStr == null) {
@@ -201,21 +224,21 @@ class RomSelectionActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
-            val tempFile = File(cacheDir, "temp_lang_$uniqueId.sfc")
+            var tempFile = File(cacheDir, "temp_lang_$uniqueId.sfc")
             try {
-                // Copy to cache
-                withContext(Dispatchers.IO) {
-                    contentResolver.openInputStream(uri)?.use { input ->
-                        tempFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    }
+                tempFile = copyToCache(uri, "temp_lang_$uniqueId")
+
+                val baseRomPath = baseRomInfo?.path
+                if (tempFile.extension == "ips" && baseRomPath == null) {
+                    showToast("Select the base US ROM first; .ips patches are applied to it.", Toast.LENGTH_LONG)
+                    tempFile.delete()
+                    return@launch
                 }
 
-                // Identify ROM
+                // Identify ROM (or the ROM the patch produces from the base ROM)
                 val jsonStr =
                     withContext(Dispatchers.IO) {
-                        nativeIdentifyRom(tempFile.absolutePath)
+                        nativeIdentifyRom(tempFile.absolutePath, baseRomPath)
                     }
 
                 if (jsonStr == null) {
@@ -350,7 +373,7 @@ class RomSelectionActivity : AppCompatActivity() {
                 Log.i(TAG, "Extracting US dialogue...")
                 var result =
                     withContext(Dispatchers.IO) {
-                        nativeExtractDialogue(baseRom.path, dialogueDir.absolutePath)
+                        nativeExtractDialogue(baseRom.path, null, dialogueDir.absolutePath)
                     }
                 if (result != 0) {
                     throw Exception("Failed to extract US dialogue (error $result)")
@@ -364,7 +387,7 @@ class RomSelectionActivity : AppCompatActivity() {
                     Log.i(TAG, "Extracting ${langRom.langName} dialogue...")
                     result =
                         withContext(Dispatchers.IO) {
-                            nativeExtractDialogue(langRom.path, dialogueDir.absolutePath)
+                            nativeExtractDialogue(langRom.path, baseRom.path, dialogueDir.absolutePath)
                         }
                     if (result != 0) {
                         Log.w(TAG, "Failed to extract ${langRom.langName} dialogue")

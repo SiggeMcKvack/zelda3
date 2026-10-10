@@ -21,7 +21,7 @@
     <string name="base_rom_required">Base ROM (Required)</string>
     <string name="base_rom_description">Select the USA version of the ROM</string>
     <string name="language_roms_optional">Language ROMs (Optional)</string>
-    <string name="language_roms_description">Add ROMs for other languages to include their dialogue</string>
+    <string name="language_roms_description">Add translated ROMs or .ips translation patches to include their dialogue</string>
     <string name="no_rom_selected">No ROM selected</string>
     <string name="browse">Browse</string>
     <string name="add_roms">Add ROMs</string>
