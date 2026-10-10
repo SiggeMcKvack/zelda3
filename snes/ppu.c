@@ -468,6 +468,12 @@ static void PpuDrawBackground_2bpp(Ppu *ppu, uint y, bool sub, uint layer, PpuZb
 #undef DO_PIXEL_HFLIP
 }
 
+// Width of the first mosaic block starting at x. The grid is anchored at screen x=0, and x is negative in the widescreen area.
+static inline int PpuMosaicFirstWidth(Ppu *ppu, int x) {
+  int j = x % ppu->mosaicSize;
+  return ppu->mosaicSize - (j < 0 ? j + ppu->mosaicSize : j);
+}
+
 // Draw a whole line of a 4bpp background layer into bgBuffers, with mosaic applied
 static void PpuDrawBackground_4bpp_mosaic(Ppu *ppu, uint y, bool sub, uint layer, PpuZbufType zhi, PpuZbufType zlo) {
 #define GET_PIXEL() pixel = (bits) & 1 | (bits >> 7) & 2 | (bits >> 14) & 4 | (bits >> 21) & 8
@@ -500,7 +506,7 @@ static void PpuDrawBackground_4bpp_mosaic(Ppu *ppu, uint y, bool sub, uint layer
     const uint16 *tp = tps[x >> 8 & 1] + ((x >> 3) & 0x1f);
     const uint16 *tp_last = tps[x >> 8 & 1] + 31, *tp_next = tps[(x >> 8 & 1) ^ 1];
     x &= 7;
-    int w = ppu->mosaicSize - (sx - ppu->mosaicModulo[sx]);
+    int w = PpuMosaicFirstWidth(ppu, sx);
     do {
       w = IntMin(w, dstz_end - dstz);
       uint32 tile = *tp;
@@ -559,7 +565,7 @@ static void PpuDrawBackground_2bpp_mosaic(Ppu *ppu, int y, bool sub, uint layer,
     const uint16 *tp = tps[x >> 8 & 1] + ((x >> 3) & 0x1f);
     const uint16 *tp_last = tps[x >> 8 & 1] + 31, *tp_next = tps[(x >> 8 & 1) ^ 1];
     x &= 7;
-    int w = ppu->mosaicSize - (sx - ppu->mosaicModulo[sx]);
+    int w = PpuMosaicFirstWidth(ppu, sx);
     do {
       w = IntMin(w, dstz_end - dstz);
       uint32 tile = *tp;
@@ -654,7 +660,7 @@ static void PpuDrawBackground_mode7(Ppu *ppu, uint y, bool sub, PpuZbufType z) {
     uint32 outside_value = ppu->m7largeField ? 0x3ffff : 0xffffffff;
     bool char_fill = ppu->m7charFill;
     if (mosaic_enabled) {
-      int w = ppu->mosaicSize - (x - ppu->mosaicModulo[x]);
+      int w = PpuMosaicFirstWidth(ppu, x);
       do {
         w = IntMin(w, dstz_end - dstz);
         if ((uint32)(xpos | ypos) > outside_value) {
