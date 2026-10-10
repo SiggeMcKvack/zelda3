@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One row layout for every setting kind; PauseMenuView shows/hides the parts it needs. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginVertical="2dp"
+    android:background="@drawable/menu_row_bg"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:minHeight="56dp"
+    android:orientation="horizontal"
+    android:paddingHorizontal="20dp"
+    android:paddingVertical="8dp">
+
+    <TextView
+        android:id="@+id/row_label"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:duplicateParentState="true"
+        android:textColor="@color/menu_row_text"
+        android:textSize="19sp" />
+
+    <ImageView
+        android:id="@+id/row_restart"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_marginEnd="16dp"
+        android:contentDescription="Requires restart"
+        android:duplicateParentState="true"
+        android:src="@drawable/ic_restart"
+        android:tint="@color/menu_row_text_dim" />
+
+    <ProgressBar
+        android:id="@+id/row_bar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="120dp"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp"
+        android:duplicateParentState="true"
+        android:progressBackgroundTint="@color/menu_row_text_dim"
+        android:progressTint="@color/menu_row_text" />
+
+    <ImageView
+        android:id="@+id/row_prev"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:contentDescription="Previous"
+        android:duplicateParentState="true"
+        android:src="@drawable/ic_chevron_left"
+        android:tint="@color/menu_row_text" />
+
+    <TextView
+        android:id="@+id/row_value"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:duplicateParentState="true"
+        android:ellipsize="middle"
+        android:gravity="center"
+        android:maxWidth="320dp"
+        android:minWidth="64dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="2dp"
+        android:singleLine="true"
+        android:textColor="@color/menu_row_text"
+        android:textSize="17sp"
+        android:textStyle="bold" />
+
+    <ImageView
+        android:id="@+id/row_next"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:contentDescription="Next"
+        android:duplicateParentState="true"
+        android:src="@drawable/ic_chevron_right"
+        android:tint="@color/menu_row_text" />
+</LinearLayout>

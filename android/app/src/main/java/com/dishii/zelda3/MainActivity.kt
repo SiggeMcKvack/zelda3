@@ -2,48 +2,36 @@ package com.dishii.zelda3
 
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
-import android.os.CountDownTimer
 import android.os.Environment
-import android.os.Handler
-import android.os.Looper
-import android.os.ParcelFileDescriptor
 import android.util.Log
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
-import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ArrayAdapter
-import android.widget.AutoCompleteTextView
 import android.widget.Button
-import android.widget.ImageView
-import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import androidx.core.view.GravityCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.updatePadding
 import androidx.documentfile.provider.DocumentFile
-import androidx.drawerlayout.widget.DrawerLayout
-import androidx.lifecycle.lifecycleScope
 import com.dishii.zelda3.overlay.InputOverlay
 import com.dishii.zelda3.overlay.model.OverlayLayout
+import com.dishii.zelda3.ui.menu.MenuItem
+import com.dishii.zelda3.ui.menu.MenuTab
+import com.dishii.zelda3.ui.menu.PauseMenuView
+import com.dishii.zelda3.ui.menu.SaveSlot
 import com.dishii.zelda3.util.ConfigManager
 import com.dishii.zelda3.util.showToast
+import com.dishii.zelda3.util.stylePositiveAsDestructive
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.navigation.NavigationView
-import com.google.android.material.slider.Slider
-import com.google.android.material.switchmaterial.SwitchMaterial
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.libsdl.app.SDLActivity
@@ -51,6 +39,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.util.concurrent.Executors
 
 /**
  * Main SDL game activity.
@@ -569,15 +558,29 @@ class MainActivity : SDLActivity() {
         val category: String,
     )
 
-    private lateinit var drawerLayout: DrawerLayout
     private lateinit var overlayView: View
     private lateinit var inputOverlay: InputOverlay
+    private lateinit var pauseMenu: PauseMenuView
     private lateinit var doneControlConfigButton: Button
     private var currentDialog: AlertDialog? = null
 
-    // Track Start+Select combo for opening drawer (for gamepad users)
-    private var isStartPressed = false
-    private var isSelectPressed = false
+    // Pause menu state
+    private var wasPausedBeforeMenu = false
+    private var resumeAfterEdit = false
+    private var availableLanguages: List<String> = emptyList()
+    private var startupAudioFreq: Int? = null
+    private val configExecutor = Executors.newSingleThreadExecutor()
+    private val configDispatcher = configExecutor.asCoroutineDispatcher()
+
+    // Start+Select opens the pause menu: gamepad buttons, or N+B from keyboard and touch overlay
+    private val menuComboPartners =
+        mapOf(
+            KeyEvent.KEYCODE_BUTTON_START to KeyEvent.KEYCODE_BUTTON_SELECT,
+            KeyEvent.KEYCODE_BUTTON_SELECT to KeyEvent.KEYCODE_BUTTON_START,
+            KeyEvent.KEYCODE_N to KeyEvent.KEYCODE_B,
+            KeyEvent.KEYCODE_B to KeyEvent.KEYCODE_N,
+        )
+    private val heldComboKeys = mutableSetOf<Int>()
 
     // Bind dialog state management
     private var isBindDialogOpen = false
@@ -587,12 +590,6 @@ class MainActivity : SDLActivity() {
     private var bindDialogTimer: TextView? = null
     private var currentBindingCommandId: Int? = null // C command ID
     private var currentBindingCommandDisplay: String? = null
-
-    // Controller settings dialog state
-    private var controllerSettingsDialog: AlertDialog? = null // Keep reference to settings dialog
-    private var controllerSettingsRecyclerView: androidx.recyclerview.widget.RecyclerView? = null
-    private var controllerBindingAdapter: ControllerBindingAdapter? = null
-    private var savedScrollPosition: Int = 0
 
     private val prefs: SharedPreferences by lazy {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -626,7 +623,7 @@ class MainActivity : SDLActivity() {
         migrateSavesToExternalStorage()
 
         inflateOverlay()
-        setupDrawer()
+        setupPauseMenu()
     }
 
     @Suppress("DEPRECATION")
@@ -932,7 +929,7 @@ class MainActivity : SDLActivity() {
     }
 
     /**
-     * Inflates the overlay layout (DrawerLayout with InputOverlay).
+     * Inflates the overlay layout (InputOverlay with the pause menu above it).
      * CRITICAL: Must preserve exact layout structure for SDL compatibility.
      */
     fun inflateOverlay() {
@@ -956,9 +953,8 @@ class MainActivity : SDLActivity() {
             rootView.addView(overlayView)
         }
 
-        drawerLayout = overlayView as DrawerLayout
+        pauseMenu = overlayView.findViewById(R.id.pause_menu)
 
-        // Get FrameLayout (main content area) from DrawerLayout
         val inputContainer = overlayView.findViewById<ViewGroup>(R.id.input_container)
 
         // Create and add InputOverlay
@@ -977,259 +973,482 @@ class MainActivity : SDLActivity() {
         Log.d(TAG, "Done button initialized with onClick listener")
     }
 
+    // ========== Pause Menu ==========
+
     /**
-     * Sets up navigation drawer with menu item listeners and drawer open/close behavior.
+     * Wires the pause menu: opening pauses the game, closing resumes it (unless it was already
+     * paused) and offers a restart if a restart-only setting changed.
      */
-    private fun setupDrawer() {
-        Log.d(TAG, "setupDrawer() called")
-        val navigationView = drawerLayout.findViewById<NavigationView>(R.id.nav_view)
-        Log.d(TAG, "NavigationView found: ${navigationView != null}")
-
-        // Handle display cutouts and system bars (push drawer content below camera)
-        navigationView?.let { navView ->
-            ViewCompat.setOnApplyWindowInsetsListener(navView) { v, insets ->
-                val bars =
-                    insets.getInsets(
-                        WindowInsetsCompat.Type.systemBars() or
-                            WindowInsetsCompat.Type.displayCutout(),
-                    )
-
-                v.updatePadding(
-                    left = bars.left,
-                    top = bars.top,
-                    right = bars.right,
-                    bottom = bars.bottom,
-                )
-
-                WindowInsetsCompat.CONSUMED
-            }
+    private fun setupPauseMenu() {
+        pauseMenu.onOpened = {
+            wasPausedBeforeMenu = nativeIsPaused()
+            if (!wasPausedBeforeMenu) nativeTogglePause()
+            inputOverlay.setMenuOpen(true)
         }
+        pauseMenu.onClosed = { restartNeeded ->
+            inputOverlay.setMenuOpen(false)
+            if (!wasPausedBeforeMenu && nativeIsPaused()) nativeTogglePause()
+            mSurface?.requestFocus()
+            if (restartNeeded) showRestartDialog()
+        }
+        setMenuTabs()
 
-        // Drawer listener for touch event routing
-        drawerLayout.addDrawerListener(
-            object : DrawerLayout.DrawerListener {
-                override fun onDrawerOpened(drawerView: View) {
-                    Log.d(TAG, "onDrawerOpened - setting inputOverlay drawerOpen=true")
-                    inputOverlay.setDrawerOpen(true)
-                }
+        // The language row only appears when more than one dialogue language is available
+        Thread {
+            val externalDir = getExternalFilesDir(null)?.absolutePath ?: ""
+            val languages = nativeGetAvailableLanguages(externalDir) ?: return@Thread
+            Log.d(TAG, "setupPauseMenu: availableLanguages = ${languages.joinToString()}")
+            runOnUiThread { availableLanguages = languages.toList() }
+        }.start()
+    }
 
-                override fun onDrawerClosed(drawerView: View) {
-                    Log.d(TAG, "onDrawerClosed - setting inputOverlay drawerOpen=false")
-                    inputOverlay.setDrawerOpen(false)
-                }
+    private fun setMenuTabs() {
+        val hasTouchscreen = packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
+        pauseMenu.setTabs(
+            listOfNotNull(
+                MenuTab("Game") { gamePage() },
+                MenuTab("Gameplay") { gameplayPage() },
+                MenuTab("Graphics") { graphicsPage() },
+                MenuTab("Audio") { audioPage() },
+                MenuTab("Controls") { controlsPage() },
+                if (hasTouchscreen) MenuTab("Touch") { overlayPage() } else null,
+                MenuTab("System") { systemPage() },
+            ),
+        )
+    }
 
-                override fun onDrawerSlide(
-                    drawerView: View,
-                    slideOffset: Float,
-                ) {}
+    /** Writes zelda3.ini off the main thread, strictly in the order changes were made. */
+    private fun persist(block: suspend () -> Unit) {
+        configExecutor.execute { kotlinx.coroutines.runBlocking { block() } }
+    }
 
-                override fun onDrawerStateChanged(newState: Int) {}
+    /** Reads zelda3.ini after every pending [persist] has landed. */
+    private suspend fun <T> readConfig(block: suspend () -> T): T = withContext(configDispatcher) { kotlinx.coroutines.runBlocking { block() } }
+
+    /** A toggle backed by a boolean zelda3.ini key. Most of these only apply after a restart. */
+    private suspend fun configToggle(
+        label: String,
+        section: String,
+        key: String,
+        default: Boolean,
+        restart: Boolean = true,
+    ): MenuItem.Toggle {
+        var value = readConfig { ConfigManager.readBool(this, section, key, default) }
+        return MenuItem.Toggle(
+            label,
+            restart = restart,
+            get = { value },
+            set = {
+                value = it
+                persist { ConfigManager.writeBool(this@MainActivity, section, key, it) }
+            },
+        )
+    }
+
+    private fun gamePage(): List<MenuItem> =
+        listOf(
+            MenuItem.Action("Resume") { pauseMenu.close() },
+            MenuItem.Action("Save state", opensPage = true) { pauseMenu.push("Save state") { slotsPage(save = true) } },
+            MenuItem.Action("Load state", opensPage = true) { pauseMenu.push("Load state") { slotsPage(save = false) } },
+            MenuItem.Action("Exit game", destructive = true) {
+                finish()
+                android.os.Process.killProcess(android.os.Process.myPid())
             },
         )
 
-        // Check for multiple languages and show Language menu item if available
-        Thread {
-            val externalDir = getExternalFilesDir(null)?.absolutePath ?: ""
-            val availableLanguages = nativeGetAvailableLanguages(externalDir)
-            Log.d(
-                TAG,
-                "setupDrawer: availableLanguages = ${availableLanguages?.joinToString() ?: "null"}, count = ${availableLanguages?.size ?: 0}",
-            )
-
-            if (availableLanguages != null && availableLanguages.size > 1) {
-                runOnUiThread {
-                    val languageMenuItem = navigationView?.menu?.findItem(R.id.nav_language)
-                    languageMenuItem?.isVisible = true
-                    Log.d(TAG, "setupDrawer: Language menu item set to visible")
+    private suspend fun slotsPage(save: Boolean): List<MenuItem> {
+        val slots = withContext(Dispatchers.IO) { loadSaveSlots() }
+        return listOf(
+            MenuItem.Info({ if (save) "Choose a slot to save to" else "Choose a slot to load" }),
+            MenuItem.Slots(slots) { slot ->
+                if (save) {
+                    nativeSaveState(slot.slot)
+                    captureSaveThumbnail(slot.slot)
+                    showToast("Saved to ${slot.name}")
+                    pauseMenu.close()
+                } else if (slot.exists) {
+                    nativeLoadState(slot.slot)
+                    pauseMenu.close()
+                } else {
+                    showToast("Save slot is empty")
                 }
-            }
-        }.start()
+            },
+        )
+    }
 
-        navigationView?.setNavigationItemSelectedListener { item ->
-            val id = item.itemId
-            Log.d(TAG, "Menu item selected with ID: $id")
+    private suspend fun gameplayPage(): List<MenuItem> {
+        val swordLevels = listOf("Disabled", "Level 1 (Wooden)", "Level 2 (Master)", "Level 3 (Tempered)", "Level 4 (Golden)")
+        var breakPots = readConfig { ConfigManager.readInt(this, "Features", "BreakPotsWithSword", 0).coerceIn(0, 4) }
+        return listOf(
+            MenuItem.Header("Save"),
+            configToggle("Autosave on quit", "General", "Autosave", false),
+            MenuItem.Header("Controls"),
+            configToggle("Item switching with L/R", "Features", "ItemSwitchLR", false),
+            configToggle("Limit L/R to first 4 items", "Features", "ItemSwitchLRLimit", false),
+            configToggle("Turn while dashing", "Features", "TurnWhileDashing", false),
+            MenuItem.Header("Gameplay"),
+            configToggle("Skip intro on keypress", "Features", "SkipIntroOnKeypress", false),
+            configToggle("Mirror warps to Dark World", "Features", "MirrorToDarkworld", false),
+            configToggle("Collect items with sword", "Features", "CollectItemsWithSword", false),
+            MenuItem.Choice(
+                "Break pots with sword",
+                swordLevels,
+                restart = true,
+                get = { breakPots },
+                set = {
+                    breakPots = it
+                    persist { ConfigManager.writeInt(this@MainActivity, "Features", "BreakPotsWithSword", it) }
+                },
+            ),
+            configToggle("More active bombs (4)", "Features", "MoreActiveBombs", false),
+            configToggle("Carry more rupees (9999)", "Features", "CarryMoreRupees", false),
+            configToggle("Cancel bird travel with X", "Features", "CancelBirdTravel", false),
+            MenuItem.Header("Interface"),
+            configToggle("Show max items in yellow", "Features", "ShowMaxItemsInYellow", false),
+            MenuItem.Header("Bug fixes"),
+            configToggle("Miscellaneous bug fixes", "Features", "MiscBugFixes", false),
+            configToggle("Gameplay bug fixes", "Features", "GameChangingBugFixes", false),
+            MenuItem.Header("Experimental"),
+            configToggle("Pokemode", "Features", "Pokemode", false),
+            configToggle("Princess Zelda helps", "Features", "PrincessZeldaHelps", false),
+        )
+    }
 
-            when (id) {
-                R.id.nav_game -> {
-                    Log.d(TAG, "Return to game selected - closing drawer")
-                    drawerLayout.closeDrawers()
-                }
+    private suspend fun graphicsPage(): List<MenuItem> {
+        val renderers = listOf("SDL", "OpenGL ES", "Vulkan")
+        val aspectRatios = listOf("8:7", "4:3", "3:2", "16:9", "16:10", "18:9")
 
-                R.id.nav_pause -> {
-                    Log.d(TAG, "Pause button selected - toggling pause")
-                    nativeTogglePause()
-                    Log.d(TAG, "Game pause state: ${nativeIsPaused()}")
-                }
+        // Older configs say "OpenGL"
+        val storedRenderer = readConfig { readRendererSetting() }.let { if (it == "OpenGL") "OpenGL ES" else it }
+        var renderer = renderers.indexOf(storedRenderer).coerceAtLeast(0)
+        val aspect = readConfig { readExtendedAspectRatio() }
+        var aspectIndex = aspectRatios.indexOf(aspect.aspectRatio).let { if (it < 0) aspectRatios.indexOf("16:9") else it }
+        var extendY = aspect.extendY
+        var shader = readConfig { ConfigManager.readString(this, "Graphics", "Shader", "") }
 
-                R.id.nav_save_state -> {
-                    Log.d(TAG, "Save state selected - closing drawer and showing dialog")
-                    drawerLayout.closeDrawers()
-                    Handler(Looper.getMainLooper()).postDelayed({ showSaveStateDialog() }, 300)
-                }
-
-                R.id.nav_load_state -> {
-                    Log.d(TAG, "Load state selected - closing drawer and showing dialog")
-                    drawerLayout.closeDrawers()
-                    Handler(Looper.getMainLooper()).postDelayed({ showLoadStateDialog() }, 300)
-                }
-
-                R.id.nav_gameplay_settings -> {
-                    Log.d(TAG, "Gameplay settings selected - closing drawer and showing dialog")
-                    drawerLayout.closeDrawers()
-                    Handler(Looper.getMainLooper()).postDelayed({ showGameplaySettingsDialog() }, 300)
-                }
-
-                R.id.nav_controller_settings -> {
-                    Log.d(TAG, "Controller settings selected - closing drawer and showing dialog")
-                    drawerLayout.closeDrawers()
-                    Handler(Looper.getMainLooper()).postDelayed({ showControllerSettingsDialog() }, 300)
-                }
-
-                R.id.nav_graphics -> {
-                    Log.d(TAG, "Graphics options selected - closing drawer (game stays paused)")
-                    drawerLayout.closeDrawers()
-                    Handler(Looper.getMainLooper()).postDelayed({ showGraphicsOptionsDialog() }, 300)
-                }
-
-                R.id.nav_audio -> {
-                    Log.d(TAG, "Audio options selected - closing drawer (game stays paused)")
-                    drawerLayout.closeDrawers()
-                    Handler(Looper.getMainLooper()).postDelayed({ showAudioOptionsDialog() }, 300)
-                }
-
-                R.id.nav_language -> {
-                    Log.d(TAG, "Language selected - closing drawer and showing dialog")
-                    drawerLayout.closeDrawers()
-                    Handler(Looper.getMainLooper()).postDelayed({ showLanguageDialog() }, 300)
-                }
-
-                R.id.nav_overlay_options -> {
-                    Log.d(TAG, "Overlay options selected - closing drawer (game stays paused)")
-                    drawerLayout.closeDrawers()
-                    Handler(Looper.getMainLooper()).postDelayed({ showOverlayOptionsDialog() }, 300)
-                }
-
-                R.id.nav_reset_assets -> {
-                    Log.d(TAG, "Reset assets selected - closing drawer and scheduling dialog")
-                    drawerLayout.closeDrawers()
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        Log.d(TAG, "Delayed runnable executing - about to show reset assets dialog")
-                        showResetAssetsDialog()
-                    }, 300)
-                }
-
-                R.id.nav_exit -> {
-                    Log.d(TAG, "Exit selected - finishing activity and killing process")
-                    finish()
-                    android.os.Process.killProcess(android.os.Process.myPid())
-                }
-            }
-            true
-        } ?: run {
-            Log.e(TAG, "NavigationView is NULL! Cannot set item selected listener")
+        val isVulkan = { renderer == renderers.indexOf("Vulkan") }
+        val saveAspect = { persist { writeExtendedAspectRatio(aspectRatios[aspectIndex], extendY) } }
+        val saveShader = { path: String ->
+            shader = path
+            persist { ConfigManager.writeString(this@MainActivity, "Graphics", "Shader", path) }
+            pauseMenu.markRestartNeeded()
         }
 
-        Log.d(TAG, "setupDrawer() completed")
+        return listOf(
+            MenuItem.Header("Renderer"),
+            MenuItem.Choice(
+                "Renderer",
+                renderers,
+                restart = true,
+                get = { renderer },
+                set = {
+                    renderer = it
+                    persist { updateRendererSetting(renderers[it]) }
+                },
+            ),
+            MenuItem.Action(
+                "Shader",
+                value = { shader.substringAfterLast("/").ifEmpty { "None" } },
+                visible = isVulkan,
+            ) {
+                pickShader { path ->
+                    saveShader(path)
+                    pauseMenu.refresh()
+                }
+            },
+            MenuItem.Action("Clear shader", visible = { isVulkan() && shader.isNotEmpty() }) { saveShader("") },
+            MenuItem.Header("Display"),
+            MenuItem.Choice(
+                "Aspect ratio",
+                aspectRatios,
+                restart = true,
+                get = { aspectIndex },
+                set = {
+                    aspectIndex = it
+                    saveAspect()
+                },
+            ),
+            MenuItem.Toggle(
+                "Extended height (240 lines)",
+                restart = true,
+                get = { extendY },
+                set = {
+                    extendY = it
+                    saveAspect()
+                },
+            ),
+            configToggle("Disable frame delay (60hz only)", "General", "DisableFrameDelay", false),
+            configToggle("Optimized SNES PPU renderer", "Graphics", "NewRenderer", true),
+            configToggle("High resolution world map", "Graphics", "EnhancedMode7", true),
+            configToggle("Dim flashing effects", "Graphics", "DimFlashes", false),
+        )
+    }
+
+    private fun pickShader(onPicked: (String) -> Unit) {
+        pendingShaderCallback = { uri ->
+            if (uri != null) {
+                val relativePath = extractShaderRelativePath(uri)
+                if (relativePath != null) {
+                    onPicked(relativePath)
+                } else {
+                    showToast("Invalid shader location. Place shaders in your zelda3 folder under shaders/")
+                }
+            }
+        }
+        val intent =
+            Intent(Intent.ACTION_GET_CONTENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+            }
+        @Suppress("DEPRECATION")
+        startActivityForResult(Intent.createChooser(intent, "Select shader preset (.slangp)"), REQUEST_SHADER_FILE)
+    }
+
+    private suspend fun audioPage(): List<MenuItem> {
+        var disableBeep = readConfig { readLowHealthBeepSetting() }
+        val settings = readConfig { readMsuSettings() }
+        // The game keeps running at the rate it started with; changing it needs a restart
+        val runningAudioFreq = startupAudioFreq ?: settings.audioFreq.also { startupAudioFreq = it }
+        val msuScan = scanMsuFiles()
+        val msuInfo = detectMsuInfo()
+        val isDeluxe = msuScan.maxTrackNumber > 47 // The original game has tracks 1-47
+
+        var enableMsu = settings.enableMsu
+        var volume = settings.volume
+        var resumeMsu = settings.resumeMsu
+
+        val apply = {
+            applyAudioSettings(disableBeep, enableMsu, volume, resumeMsu, msuInfo, isDeluxe, runningAudioFreq)
+        }
+
+        val msuSummary =
+            if (msuScan.fileCount > 0) {
+                val formatName =
+                    when (msuInfo?.format) {
+                        "MSU1" -> if (isDeluxe) "PCM Deluxe" else "PCM"
+                        "OPUZ" -> if (isDeluxe) "Opuz Deluxe" else "Opuz"
+                        else -> "Unknown"
+                    }
+                "${msuScan.fileCount} MSU track${if (msuScan.fileCount != 1) "s" else ""} detected ($formatName)"
+            } else {
+                "No MSU files detected"
+            }
+
+        return listOf(
+            MenuItem.Header("Sound"),
+            MenuItem.Toggle(
+                "Disable low health beep",
+                get = { disableBeep },
+                set = {
+                    disableBeep = it
+                    apply()
+                },
+            ),
+            MenuItem.Header("MSU-1 soundtrack"),
+            MenuItem.Info({ msuSummary }),
+            MenuItem.Toggle(
+                "Enable MSU",
+                enabled = { msuScan.fileCount > 0 },
+                get = { enableMsu },
+                set = {
+                    enableMsu = it
+                    apply()
+                },
+            ),
+            MenuItem.Toggle(
+                "Resume MSU",
+                enabled = { enableMsu },
+                get = { resumeMsu },
+                set = {
+                    resumeMsu = it
+                    apply()
+                },
+            ),
+            MenuItem.Slider(
+                "MSU volume",
+                min = 0,
+                max = 100,
+                step = 5,
+                enabled = { enableMsu },
+                get = { volume },
+                set = {
+                    volume = it
+                    apply()
+                },
+            ),
+        )
     }
 
     /**
-     * Shows overlay options dialog with master enable/disable toggle and settings.
+     * Saves audio settings and hot-reloads them in the running game. Switching between PCM and
+     * Opuz changes the output sample rate, which only takes effect after a restart.
      */
-    private fun showOverlayOptionsDialog() {
-        Log.d(TAG, "showOverlayOptionsDialog() called")
-
-        try {
-            val dialogView = layoutInflater.inflate(R.layout.dialog_overlay_options, null)
-
-            // Get views
-            val switchEnableOverlay = dialogView.findViewById<SwitchMaterial>(R.id.switch_enable_overlay)
-            val optionEditOverlay = dialogView.findViewById<TextView>(R.id.option_edit_overlay)
-            val optionAdjustControls = dialogView.findViewById<TextView>(R.id.option_adjust_controls)
-            val optionToggleControls = dialogView.findViewById<TextView>(R.id.option_toggle_controls)
-            val optionResetOverlay = dialogView.findViewById<TextView>(R.id.option_reset_overlay)
-            val switchDpadSlide = dialogView.findViewById<SwitchMaterial>(R.id.switch_dpad_slide)
-            val switchHapticFeedback = dialogView.findViewById<SwitchMaterial>(R.id.switch_haptic_feedback)
-
-            // Set initial states
-            switchEnableOverlay.isChecked = inputOverlay.getOverlayEnabled()
-            switchDpadSlide.isChecked = inputOverlay.getDpadSlideEnabled()
-            switchHapticFeedback.isChecked = inputOverlay.getHapticFeedbackEnabled()
-
-            // Helper to update UI based on overlay enabled state
-            val updateOptionsState = {
-                val enabled = switchEnableOverlay.isChecked
-                val alpha = if (enabled) 1.0f else 0.38f
-
-                optionEditOverlay.isEnabled = enabled
-                optionAdjustControls.isEnabled = enabled
-                optionToggleControls.isEnabled = enabled
-                optionResetOverlay.isEnabled = enabled
-                switchDpadSlide.isEnabled = enabled
-                switchHapticFeedback.isEnabled = enabled
-
-                optionEditOverlay.alpha = alpha
-                optionAdjustControls.alpha = alpha
-                optionToggleControls.alpha = alpha
-                optionResetOverlay.alpha = alpha
-                switchDpadSlide.alpha = alpha
-                switchHapticFeedback.alpha = alpha
+    private fun applyAudioSettings(
+        disableBeep: Boolean,
+        enableMsu: Boolean,
+        volume: Int,
+        resumeMsu: Boolean,
+        msuInfo: MsuDetectionResult?,
+        isDeluxe: Boolean,
+        runningAudioFreq: Int,
+    ) {
+        val format = if (enableMsu) msuInfo?.format else null
+        val audioFreq =
+            when (format) {
+                "MSU1" -> 44100
+                "OPUZ" -> 48000
+                else -> runningAudioFreq
             }
-
-            updateOptionsState()
-
-            // Create dialog
-            val dialog =
-                MaterialAlertDialogBuilder(this)
-                    .setTitle("Overlay options")
-                    .setView(dialogView)
-                    .setNegativeButton("Done") { _, _ ->
-                        drawerLayout.openDrawer(Gravity.START)
-                    }.create()
-
-            // Click handlers for options
-            optionEditOverlay.setOnClickListener {
-                dialog.dismiss()
-                enterEditMode()
-                drawerLayout.openDrawer(Gravity.START)
-            }
-
-            optionAdjustControls.setOnClickListener {
-                dialog.dismiss()
-                showAdjustControlsDialog()
-            }
-
-            optionToggleControls.setOnClickListener {
-                dialog.dismiss()
-                showToggleControlsDialog()
-            }
-
-            optionResetOverlay.setOnClickListener {
-                dialog.dismiss()
-                resetOverlay()
-                drawerLayout.openDrawer(Gravity.START)
-            }
-
-            // Switch listeners (don't close dialog)
-            switchEnableOverlay.setOnCheckedChangeListener { _, checked ->
-                inputOverlay.setOverlayEnabled(checked)
-                updateOptionsState()
-            }
-
-            switchDpadSlide.setOnCheckedChangeListener { _, checked ->
-                inputOverlay.setDpadSlide(checked)
-            }
-
-            switchHapticFeedback.setOnCheckedChangeListener { _, checked ->
-                inputOverlay.setHapticFeedback(checked)
-            }
-
-            Log.d(TAG, "Showing dialog")
-            dialog.show()
-            Log.d(TAG, "Dialog shown successfully")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error showing overlay options dialog", e)
-            showToast("Error: ${e.message}", Toast.LENGTH_LONG)
+        // kMsuEnabled_Msu=1, kMsuEnabled_MsuDeluxe=2, kMsuEnabled_Opuz=4
+        var msuFlags = 0
+        if (enableMsu) {
+            msuFlags = 1
+            if (isDeluxe) msuFlags = msuFlags or 2
+            if (format == "OPUZ") msuFlags = msuFlags or 4
         }
+
+        persist {
+            updateLowHealthBeepSetting(disableBeep)
+            updateMsuSettings(enableMsu, volume, resumeMsu, audioFreq, if (enableMsu) msuInfo else null, isDeluxe)
+            runOnUiThread {
+                if (audioFreq != runningAudioFreq) {
+                    pauseMenu.markRestartNeeded()
+                } else {
+                    nativeReloadAudioConfig(msuFlags, volume, if (disableBeep) 1 else 0)
+                }
+            }
+        }
+    }
+
+    private fun controlsPage(): List<MenuItem> {
+        val items = mutableListOf<MenuItem>(MenuItem.Info({ "Select a command, then press the button or combination to bind" }))
+        var category: String? = null
+        for (binding in getAllBindableCommands()) {
+            if (binding.category != category) {
+                category = binding.category
+                items += MenuItem.Header(binding.category)
+            }
+            items +=
+                MenuItem.Action(binding.commandDisplayName, value = { binding.currentBinding ?: "Not bound" }) {
+                    showBindButtonDialog(binding.commandId, binding.commandDisplayName)
+                }
+        }
+        items += MenuItem.Header("Defaults")
+        items += MenuItem.Action("Reset to defaults", destructive = true) { confirmResetBindings() }
+        return items
+    }
+
+    private fun confirmResetBindings() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Reset to defaults?")
+            .setMessage("This will reset controller inputs to default.")
+            .setPositiveButton("Reset to default") { _, _ ->
+                nativeClearGamepadBindings()
+                nativeApplyDefaultGamepadBindings()
+                saveGamepadBindingsToConfig()
+                showToast("Default bindings restored")
+                pauseMenu.reload()
+            }.setNegativeButton("Cancel", null)
+            .show()
+            .stylePositiveAsDestructive()
+    }
+
+    private fun overlayPage(): List<MenuItem> {
+        val enabled = { inputOverlay.getOverlayEnabled() }
+        return listOf(
+            MenuItem.Toggle(
+                "Show touch controls",
+                get = enabled,
+                set = { inputOverlay.setOverlayEnabled(it) },
+            ),
+            MenuItem.Action("Edit layout", enabled = enabled) { editOverlayLayout() },
+            MenuItem.Action("Visible buttons", opensPage = true, enabled = enabled) {
+                pauseMenu.push("Visible buttons") { overlayButtonsPage() }
+            },
+            // Scale -50..100 is a (scale + 50) / 100 multiplier on the bitmaps; show it relative to
+            // the default (0 = 100%) and keep a floor so the controls never shrink to nothing
+            MenuItem.Slider(
+                "Size",
+                min = -40,
+                max = 100,
+                step = 5,
+                format = { "${(it + 50) * 2}%" },
+                enabled = enabled,
+                get = { inputOverlay.getOverlayScale() },
+                set = { inputOverlay.setOverlayScale(it) },
+            ),
+            MenuItem.Slider(
+                "Opacity",
+                min = 0,
+                max = 100,
+                step = 5,
+                enabled = enabled,
+                get = { inputOverlay.getOverlayOpacity() },
+                set = { inputOverlay.setOverlayOpacity(it) },
+            ),
+            MenuItem.Toggle(
+                "D-pad slide",
+                enabled = enabled,
+                get = { inputOverlay.getDpadSlideEnabled() },
+                set = { inputOverlay.setDpadSlide(it) },
+            ),
+            MenuItem.Toggle(
+                "Haptic feedback",
+                enabled = enabled,
+                get = { inputOverlay.getHapticFeedbackEnabled() },
+                set = { inputOverlay.setHapticFeedback(it) },
+            ),
+            MenuItem.Action("Reset touch controls", destructive = true, enabled = enabled) { resetOverlay() },
+        )
+    }
+
+    private fun overlayButtonsPage(): List<MenuItem> {
+        // Same order as OverlayControl, which setControlVisibility() indexes into
+        val labels = listOf("Button A", "Button B", "Button X", "Button Y", "Button L", "Button R", "Start", "Select", "D-pad")
+        val visibility = inputOverlay.getControlVisibility()
+        return labels.mapIndexed { index, label ->
+            MenuItem.Toggle(
+                label,
+                get = { visibility[index] },
+                set = {
+                    visibility[index] = it
+                    inputOverlay.setControlVisibility(index, it)
+                },
+            )
+        }
+    }
+
+    private suspend fun systemPage(): List<MenuItem> {
+        val items = mutableListOf<MenuItem>()
+        val languages = availableLanguages
+        if (languages.size > 1) {
+            // US first, then alphabetically by display name
+            val sorted = languages.sortedWith(compareBy({ it != "us" }, { getLanguageDisplayName(it) }))
+            var current = sorted.indexOf(readConfig { readLanguageSetting() }).coerceAtLeast(0)
+            items += MenuItem.Header("Language")
+            items +=
+                MenuItem.Choice(
+                    "Dialogue language",
+                    sorted.map { getLanguageDisplayName(it) },
+                    restart = true,
+                    get = { current },
+                    set = {
+                        current = it
+                        persist { updateLanguageSetting(sorted[it]) }
+                    },
+                )
+        }
+        items += MenuItem.Header("Assets")
+        items += MenuItem.Action("Delete assets file", destructive = true) { showResetAssetsDialog() }
+        return items
+    }
+
+    /** Leaves the menu with the game still paused so the touch layout can be edited. */
+    private fun editOverlayLayout() {
+        resumeAfterEdit = !wasPausedBeforeMenu
+        wasPausedBeforeMenu = true // stops onClosed from resuming
+        pauseMenu.close()
+        enterEditMode()
     }
 
     private fun enterEditMode() {
@@ -1242,795 +1461,83 @@ class MainActivity : SDLActivity() {
         doneControlConfigButton.visibility = View.GONE
         inputOverlay.setIsInEditMode(false)
         showToast("Changes saved")
-    }
-
-    private fun showAdjustControlsDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_overlay_adjust, null)
-
-        val scaleSlider = dialogView.findViewById<Slider>(R.id.input_scale_slider)
-        val scaleValue = dialogView.findViewById<TextView>(R.id.input_scale_value)
-        val opacitySlider = dialogView.findViewById<Slider>(R.id.input_opacity_slider)
-        val opacityValue = dialogView.findViewById<TextView>(R.id.input_opacity_value)
-
-        scaleSlider.value = 0f
-        opacitySlider.value = 100f
-        scaleValue.text = "100%"
-        opacityValue.text = "100%"
-
-        scaleSlider.addOnChangeListener { _, value, _ ->
-            val percent = (((value + 50) / 150) * 100).toInt()
-            scaleValue.text = "$percent%"
-            inputOverlay.setOverlayScale(value.toInt())
-        }
-
-        opacitySlider.addOnChangeListener { _, value, _ ->
-            opacityValue.text = "${value.toInt()}%"
-            inputOverlay.setOverlayOpacity(value.toInt())
-        }
-
-        currentDialog =
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Adjust controls")
-                .setView(dialogView)
-                .setPositiveButton("Close") { _, _ ->
-                    showOverlayOptionsDialog()
-                }.show()
-    }
-
-    private fun showToggleControlsDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_toggle_controls, null)
-
-        // Get all switches
-        val switches =
-            listOf(
-                dialogView.findViewById<SwitchMaterial>(R.id.switch_button_a),
-                dialogView.findViewById<SwitchMaterial>(R.id.switch_button_b),
-                dialogView.findViewById<SwitchMaterial>(R.id.switch_button_x),
-                dialogView.findViewById<SwitchMaterial>(R.id.switch_button_y),
-                dialogView.findViewById<SwitchMaterial>(R.id.switch_button_l),
-                dialogView.findViewById<SwitchMaterial>(R.id.switch_button_r),
-                dialogView.findViewById<SwitchMaterial>(R.id.switch_button_start),
-                dialogView.findViewById<SwitchMaterial>(R.id.switch_button_select),
-                dialogView.findViewById<SwitchMaterial>(R.id.switch_dpad),
-            )
-
-        // Get current visibility states
-        val visibility = inputOverlay.getControlVisibility()
-
-        // Set initial states and listeners
-        switches.forEachIndexed { index, switch ->
-            switch.isChecked = visibility[index]
-            switch.setOnCheckedChangeListener { _, checked ->
-                inputOverlay.setControlVisibility(index, checked)
-            }
-        }
-
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Toggle controls")
-            .setView(dialogView)
-            .setPositiveButton("Done") { _, _ ->
-                showOverlayOptionsDialog()
-            }.show()
+        if (resumeAfterEdit && nativeIsPaused()) nativeTogglePause()
+        resumeAfterEdit = false
     }
 
     private fun resetOverlay() {
         MaterialAlertDialogBuilder(this)
-            .setTitle("Reset overlay")
+            .setTitle("Reset touch controls")
             .setMessage("Reset all button positions, scales, and settings to defaults?")
             .setPositiveButton("Reset") { _, _ ->
                 inputOverlay.resetOverlay()
-                showToast("Overlay reset to defaults")
+                showToast("Touch controls reset to defaults")
+                pauseMenu.reload()
             }.setNegativeButton("Cancel", null)
             .show()
     }
 
     private fun showResetAssetsDialog() {
-        Log.d(TAG, "showResetAssetsDialog() called")
-        try {
-            Log.d(TAG, "Creating delete assets dialog")
-            val dialog =
-                MaterialAlertDialogBuilder(this)
-                    .setTitle("Delete Assets File")
-                    .setMessage(
-                        "This will delete zelda3_assets.dat and restart the app.\n\nYou will need to select the assets file again. Your saves and config will NOT be deleted.",
-                    ).setPositiveButton("Delete file") { _, _ ->
-                        getExternalFilesDir(null)?.let { externalDir ->
-                            val assetsFile = File(externalDir, "zelda3_assets.dat")
-                            if (assetsFile.exists()) {
-                                if (assetsFile.delete()) {
-                                    showToast("Assets file deleted. Restarting...")
-                                    val intent =
-                                        Intent(this, LauncherActivity::class.java).apply {
-                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                                        }
-                                    startActivity(intent)
-                                    finishAndRemoveTask()
-                                    System.exit(0)
-                                } else {
-                                    showToast("Failed to delete assets file", Toast.LENGTH_LONG)
-                                }
-                            } else {
-                                showToast("Assets file not found")
-                            }
-                        }
-                    }.setNegativeButton("Cancel", null)
-                    .show()
-
-            // Style positive button as filled red with trash icon
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
-                // Make button filled with error color (red for destructive action)
-                val errorColor = resources.getColorStateList(R.color.md_theme_error, theme)
-                val onErrorColor = resources.getColorStateList(R.color.md_theme_onError, theme)
-                backgroundTintList = errorColor
-                setTextColor(onErrorColor)
-
-                // Add trash icon with matching color
-                setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_delete, 0, 0, 0)
-                compoundDrawablePadding = resources.getDimensionPixelSize(android.R.dimen.app_icon_size) / 4
-                setCompoundDrawableTintList(onErrorColor)
-            }
-
-            Log.d(TAG, "Delete assets dialog shown successfully")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error showing delete assets dialog", e)
-            showToast("Error: ${e.message}", Toast.LENGTH_LONG)
-        }
-    }
-
-    /**
-     * Shows audio options dialog for MSU management and low health beep toggle.
-     */
-    private fun showAudioOptionsDialog() {
-        Log.d(TAG, "showAudioOptionsDialog() called")
-
-        try {
-            val dialogView = layoutInflater.inflate(R.layout.dialog_audio_options, null)
-
-            // Get views
-            val textMsuInfo = dialogView.findViewById<TextView>(R.id.text_msu_info)
-            val textRestartWarning = dialogView.findViewById<TextView>(R.id.text_restart_warning)
-            val switchDisableLowHealthBeep = dialogView.findViewById<SwitchMaterial>(R.id.switch_disable_low_health_beep)
-            val switchEnableMsu = dialogView.findViewById<SwitchMaterial>(R.id.switch_enable_msu)
-            val switchResumeMsu = dialogView.findViewById<SwitchMaterial>(R.id.switch_resume_msu)
-            val sliderMsuVolume = dialogView.findViewById<Slider>(R.id.slider_msu_volume)
-            val textVolumeValue = dialogView.findViewById<TextView>(R.id.text_volume_value)
-
-            // Read current settings in background thread
-            Thread {
-                val disableLowHealthBeep = kotlinx.coroutines.runBlocking { readLowHealthBeepSetting() }
-                val settings = kotlinx.coroutines.runBlocking { readMsuSettings() }
-                val msuScanResult = kotlinx.coroutines.runBlocking { scanMsuFiles() }
-                val format = kotlinx.coroutines.runBlocking { detectMsuFormat() }
-
-                // Store originals for restart detection
-                val originalDisableLowHealthBeep = disableLowHealthBeep
-                val originalSettings = settings.copy()
-
-                Log.d(TAG, "showAudioOptionsDialog: settings from readMsuSettings: $settings")
-                Log.d(TAG, "showAudioOptionsDialog: msuScanResult = $msuScanResult, format = $format")
-
-                // Update UI on main thread
-                runOnUiThread {
-                    // Update MSU info text
-                    textMsuInfo.text =
-                        if (msuScanResult.fileCount > 0) {
-                            // Detect Deluxe if max track > 47 (original game has tracks 1-47)
-                            val isDeluxe = msuScanResult.maxTrackNumber > 47
-                            val formatName =
-                                when {
-                                    format == "MSU1" && isDeluxe -> "PCM Deluxe"
-                                    format == "MSU1" -> "PCM"
-                                    format == "OPUZ" && isDeluxe -> "Opuz Deluxe"
-                                    format == "OPUZ" -> "Opuz"
-                                    else -> "Unknown"
-                                }
-                            "${msuScanResult.fileCount} MSU track${if (msuScanResult.fileCount != 1) "s" else ""} detected ($formatName)"
-                        } else {
-                            "No MSU files detected"
-                        }
-
-                    // Set initial states
-                    switchDisableLowHealthBeep.isChecked = disableLowHealthBeep
-                    switchEnableMsu.isChecked = settings.enableMsu
-                    switchEnableMsu.isEnabled = msuScanResult.fileCount > 0
-                    switchResumeMsu.isChecked = settings.resumeMsu
-                    sliderMsuVolume.value = settings.volume.toFloat()
-                    textVolumeValue.text = "${settings.volume}%"
-
-                    // Volume slider listener
-                    sliderMsuVolume.addOnChangeListener { _, value, _ ->
-                        textVolumeValue.text = "${value.toInt()}%"
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Delete Assets File")
+            .setMessage(
+                "This will delete zelda3_assets.dat and restart the app.\n\nYou will need to select the assets file again. Your saves and config will NOT be deleted.",
+            ).setPositiveButton("Delete file") { _, _ ->
+                val assetsFile = File(getExternalFilesDir(null), "zelda3_assets.dat")
+                when {
+                    !assetsFile.exists() -> {
+                        showToast("Assets file not found")
                     }
 
-                    // Create dialog
-                    val dialog =
-                        MaterialAlertDialogBuilder(this@MainActivity)
-                            .setTitle("Audio options")
-                            .setView(dialogView)
-                            .setNegativeButton("Done") { _, _ ->
-                                Thread {
-                                    // Save settings
-                                    val newDisableLowHealthBeep = switchDisableLowHealthBeep.isChecked
-                                    kotlinx.coroutines.runBlocking { updateLowHealthBeepSetting(newDisableLowHealthBeep) }
+                    assetsFile.delete() -> {
+                        showToast("Assets file deleted. Restarting...")
+                        restartApp()
+                    }
 
-                                    val newEnableMsu = switchEnableMsu.isChecked
-                                    val newVolume = sliderMsuVolume.value.toInt()
-                                    val newResumeMsu = switchResumeMsu.isChecked
-
-                                    // Determine AudioFreq and MSU flags based on format
-                                    var newAudioFreq = settings.audioFreq
-                                    var currentFormat: String? = null
-                                    var msuFlags = 0 // 0=disabled, 1=PCM, 3=PCM Deluxe, 5=Opuz, 7=Opuz Deluxe
-                                    if (newEnableMsu) {
-                                        currentFormat = kotlinx.coroutines.runBlocking { detectMsuFormat() }
-                                        val msuScan = kotlinx.coroutines.runBlocking { scanMsuFiles() }
-                                        val isDeluxe = msuScan.maxTrackNumber > 47
-                                        val isOpuz = currentFormat == "OPUZ"
-
-                                        currentFormat?.let {
-                                            newAudioFreq = if (it == "MSU1") 44100 else 48000
-                                        }
-
-                                        // Build flags: kMsuEnabled_Msu=1, kMsuEnabled_MsuDeluxe=2, kMsuEnabled_Opuz=4
-                                        msuFlags = 1 // kMsuEnabled_Msu
-                                        if (isDeluxe) msuFlags = msuFlags or 2 // kMsuEnabled_MsuDeluxe
-                                        if (isOpuz) msuFlags = msuFlags or 4 // kMsuEnabled_Opuz
-
-                                        Log.d(TAG, "MSU flags: $msuFlags (isDeluxe=$isDeluxe, isOpuz=$isOpuz)")
-                                    }
-
-                                    kotlinx.coroutines.runBlocking {
-                                        updateMsuSettings(newEnableMsu, newVolume, newResumeMsu, newAudioFreq, currentFormat)
-                                    }
-
-                                    // Check if AudioFreq changed (requires restart)
-                                    val audioFreqChanged = (originalSettings.audioFreq != newAudioFreq)
-
-                                    // Check if hot-reloadable settings changed
-                                    val hotReloadableChanged =
-                                        (originalDisableLowHealthBeep != newDisableLowHealthBeep) ||
-                                            (originalSettings.enableMsu != newEnableMsu) ||
-                                            (originalSettings.volume != newVolume) ||
-                                            (originalSettings.resumeMsu != newResumeMsu)
-
-                                    // Debug logging
-                                    Log.d(TAG, "=== HOT RELOAD DEBUG ===")
-                                    Log.d(
-                                        TAG,
-                                        "Original: enableMsu=${originalSettings.enableMsu}, volume=${originalSettings.volume}, resumeMsu=${originalSettings.resumeMsu}, audioFreq=${originalSettings.audioFreq}, beep=$originalDisableLowHealthBeep",
-                                    )
-                                    Log.d(
-                                        TAG,
-                                        "New: enableMsu=$newEnableMsu, volume=$newVolume, resumeMsu=$newResumeMsu, audioFreq=$newAudioFreq, msuFlags=$msuFlags, beep=$newDisableLowHealthBeep",
-                                    )
-                                    Log.d(TAG, "audioFreqChanged=$audioFreqChanged, hotReloadableChanged=$hotReloadableChanged")
-
-                                    runOnUiThread {
-                                        if (hotReloadableChanged && !audioFreqChanged) {
-                                            // Hot-reload settings immediately (no restart needed)
-                                            // Pass MSU flags directly (not just 0/1)
-                                            Log.d(TAG, ">>> CALLING HOT RELOAD with msuFlags=$msuFlags <<<")
-                                            nativeReloadAudioConfig(
-                                                enableMsu = msuFlags,
-                                                msuVolume = newVolume,
-                                                disableLowHealthBeep = if (newDisableLowHealthBeep) 1 else 0,
-                                            )
-                                            Log.d(TAG, "Audio settings hot-reloaded successfully")
-                                        } else if (audioFreqChanged) {
-                                            // AudioFreq change requires full restart
-                                            Log.d(TAG, ">>> AudioFreq changed, showing restart dialog <<<")
-                                            showRestartRequiredDialog()
-                                        } else {
-                                            Log.d(TAG, ">>> No changes detected, skipping reload <<<")
-                                        }
-
-                                        // Return to drawer
-                                        drawerLayout.openDrawer(Gravity.START)
-                                    }
-                                }.start()
-                            }.create()
-
-                    Log.d(TAG, "Showing audio options dialog")
-                    dialog.show()
-                    Log.d(TAG, "Audio options dialog shown successfully")
+                    else -> {
+                        showToast("Failed to delete assets file", Toast.LENGTH_LONG)
+                    }
                 }
-            }.start()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error showing audio options dialog", e)
-            showToast("Error: ${e.message}", Toast.LENGTH_LONG)
-        }
+            }.setNegativeButton("Cancel", null)
+            .show()
+            .styleConfirmButton(R.color.md_theme_error, R.color.md_theme_onError, R.drawable.ic_delete)
     }
 
-    private fun showRestartRequiredDialog() {
-        val dialog =
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Restart Required")
-                .setMessage("Audio settings have changed. Please restart the game for changes to take effect.")
-                .setNegativeButton("Later", null)
-                .setPositiveButton("Restart app") { _, _ ->
-                    // Restart the app
-                    val intent =
-                        Intent(this, LauncherActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                        }
-                    startActivity(intent)
-                    finishAndRemoveTask()
-                    System.exit(0)
-                }.show()
-
-        // Style positive button as filled with icon
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
-            // Make button filled (solid primary color background)
-            val primaryColor = resources.getColorStateList(R.color.md_theme_primary, theme)
-            val onPrimaryColor = resources.getColorStateList(R.color.md_theme_onPrimary, theme)
-            backgroundTintList = primaryColor
-            setTextColor(onPrimaryColor)
-
-            // Add restart icon with matching color
-            setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_restart, 0, 0, 0)
-            compoundDrawablePadding = resources.getDimensionPixelSize(android.R.dimen.app_icon_size) / 4
-            setCompoundDrawableTintList(onPrimaryColor)
-        }
+    private fun showRestartDialog() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("Restart Required")
+            .setMessage("Some of the settings you changed take effect after restarting the game.")
+            .setNegativeButton("Later", null)
+            .setPositiveButton("Restart app") { _, _ -> restartApp() }
+            .show()
+            .styleConfirmButton(R.color.md_theme_primary, R.color.md_theme_onPrimary, R.drawable.ic_restart)
     }
 
-    /**
-     * Shows language selection dialog with radio buttons.
-     */
-    private fun showLanguageSelectionDialog(
-        availableLanguages: Array<String>,
-        currentLanguage: String,
-        onLanguageSelected: (String) -> Unit,
+    private fun restartApp() {
+        val intent =
+            Intent(this, LauncherActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            }
+        startActivity(intent)
+        finishAndRemoveTask()
+        System.exit(0)
+    }
+
+    /** Fills the positive button so the confirming action stands out (optionally with an icon). */
+    private fun AlertDialog.styleConfirmButton(
+        background: Int,
+        foreground: Int,
+        icon: Int = 0,
     ) {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_language_selection, null)
-        val radioGroup = dialogView.findViewById<android.widget.RadioGroup>(R.id.radio_group_languages)
-
-        // Sort languages: US first, then alphabetically by display name
-        val sortedLanguages =
-            availableLanguages.sortedWith(
-                compareBy(
-                    { it != "us" }, // US comes first (false < true)
-                    { getLanguageDisplayName(it) }, // Then alphabetically
-                ),
-            )
-
-        // Create radio buttons
-        sortedLanguages.forEach { langCode ->
-            val radioButton =
-                android.widget.RadioButton(this).apply {
-                    id = View.generateViewId()
-                    text = getLanguageDisplayName(langCode)
-                    tag = langCode
-                    isChecked = (langCode == currentLanguage)
-                    val horizontalPadding = (24 * resources.displayMetrics.density).toInt()
-                    val verticalPadding = (16 * resources.displayMetrics.density).toInt()
-                    setPadding(horizontalPadding, verticalPadding, horizontalPadding, verticalPadding)
-                    textSize = 16f
-                }
-            radioGroup.addView(radioButton)
-        }
-
-        val dialog =
-            MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.language)
-                .setView(dialogView)
-                .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(R.string.done) { _, _ ->
-                    val selectedId = radioGroup.checkedRadioButtonId
-                    if (selectedId != -1) {
-                        val selectedButton = radioGroup.findViewById<android.widget.RadioButton>(selectedId)
-                        val selectedLanguage = selectedButton.tag as String
-                        if (selectedLanguage != currentLanguage) {
-                            onLanguageSelected(selectedLanguage)
-                        }
-                    }
-                }.create()
-
-        dialog.show()
-
-        // Style Done button as filled
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
-            val primaryColor = resources.getColorStateList(R.color.md_theme_primary, theme)
-            val onPrimaryColor = resources.getColorStateList(R.color.md_theme_onPrimary, theme)
-            backgroundTintList = primaryColor
-            setTextColor(onPrimaryColor)
-        }
-    }
-
-    /**
-     * Shows language dialog from navigation drawer.
-     * Fetches available languages and current setting, then shows selection dialog.
-     */
-    private fun showLanguageDialog() {
-        Log.d(TAG, "showLanguageDialog() called")
-
-        Thread {
-            val externalDir = getExternalFilesDir(null)?.absolutePath ?: ""
-            val availableLanguages = nativeGetAvailableLanguages(externalDir)
-            val currentLanguage = kotlinx.coroutines.runBlocking { readLanguageSetting() }
-
-            Log.d(TAG, "showLanguageDialog: availableLanguages = ${availableLanguages?.joinToString() ?: "null"}")
-            Log.d(TAG, "showLanguageDialog: currentLanguage = $currentLanguage")
-
-            if (availableLanguages == null || availableLanguages.size <= 1) {
-                runOnUiThread {
-                    Toast.makeText(this, "Only one language available", Toast.LENGTH_SHORT).show()
-                }
-                return@Thread
+        getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
+            val onColor = resources.getColorStateList(foreground, theme)
+            backgroundTintList = resources.getColorStateList(background, theme)
+            setTextColor(onColor)
+            if (icon != 0) {
+                setCompoundDrawablesWithIntrinsicBounds(icon, 0, 0, 0)
+                compoundDrawablePadding = resources.getDimensionPixelSize(android.R.dimen.app_icon_size) / 4
+                setCompoundDrawableTintList(onColor)
             }
-
-            runOnUiThread {
-                showLanguageSelectionDialog(availableLanguages, currentLanguage) { newLanguage ->
-                    // Save setting and show restart dialog
-                    Thread {
-                        kotlinx.coroutines.runBlocking { updateLanguageSetting(newLanguage) }
-                        runOnUiThread {
-                            showRestartRequiredDialog()
-                        }
-                    }.start()
-                }
-            }
-        }.start()
-    }
-
-    /**
-     * Shows graphics options dialog for renderer selection.
-     */
-    private fun showGraphicsOptionsDialog() {
-        Log.d(TAG, "showGraphicsOptionsDialog() called")
-
-        try {
-            val dialogView = layoutInflater.inflate(R.layout.dialog_graphics_options, null)
-
-            // Get views - Renderer
-            val textRestartWarning = dialogView.findViewById<TextView>(R.id.text_restart_warning)
-            val toggleRenderer = dialogView.findViewById<com.google.android.material.button.MaterialButtonToggleGroup>(R.id.toggle_renderer)
-            val buttonSdl = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.button_renderer_sdl)
-            val buttonOpenGlEs = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.button_renderer_opengl_es)
-            val buttonVulkan = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.button_renderer_vulkan)
-            val textRendererInfo = dialogView.findViewById<TextView>(R.id.text_renderer_info)
-
-            // Get views - Aspect ratio dropdown
-            val dropdownAspectRatio = dialogView.findViewById<AutoCompleteTextView>(R.id.dropdown_aspect_ratio)
-
-            // Get views - Display toggles
-            val switchExtendY = dialogView.findViewById<SwitchMaterial>(R.id.switch_extend_y)
-            val switchDisableFrameDelay = dialogView.findViewById<SwitchMaterial>(R.id.switch_disable_frame_delay)
-            val switchNewRenderer = dialogView.findViewById<SwitchMaterial>(R.id.switch_new_renderer)
-            val switchEnhancedMode7 = dialogView.findViewById<SwitchMaterial>(R.id.switch_enhanced_mode7)
-            val switchDimFlashes = dialogView.findViewById<SwitchMaterial>(R.id.switch_dim_flashes)
-
-            // Get views - Shader
-            val layoutShaderSection = dialogView.findViewById<android.widget.LinearLayout>(R.id.layout_shader_section)
-            val textShaderPath = dialogView.findViewById<TextView>(R.id.text_shader_path)
-            val buttonShaderBrowse = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.button_shader_browse)
-            val buttonShaderClear = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.button_shader_clear)
-
-            // Aspect ratio options
-            val aspectRatios = arrayOf("8:7", "4:3", "3:2", "16:9", "16:10", "18:9")
-            val adapter = ArrayAdapter(this, R.layout.list_item, aspectRatios)
-            dropdownAspectRatio.setAdapter(adapter)
-
-            // Read all settings in background thread
-            Thread {
-                val currentRenderer = kotlinx.coroutines.runBlocking { readRendererSetting() }
-                val originalRenderer = currentRenderer
-
-                // Read aspect ratio settings
-                val aspectSettings = kotlinx.coroutines.runBlocking { readExtendedAspectRatio() }
-                val originalAspectRatio = aspectSettings.aspectRatio
-                val originalExtendY = aspectSettings.extendY
-
-                // Read boolean settings using ConfigManager
-                val originalDisableFrameDelay =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "General", "DisableFrameDelay", false)
-                    }
-                val originalNewRenderer =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Graphics", "NewRenderer", true)
-                    }
-                val originalEnhancedMode7 =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Graphics", "EnhancedMode7", true)
-                    }
-                val originalDimFlashes =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Graphics", "DimFlashes", false)
-                    }
-                val originalShader =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readString(this@MainActivity, "Graphics", "Shader", "")
-                    }
-                var selectedShader = originalShader
-
-                Log.d(
-                    TAG,
-                    "showGraphicsOptionsDialog: renderer=$currentRenderer, aspectRatio=$originalAspectRatio, extendY=$originalExtendY, shader=$originalShader",
-                )
-                Log.d(
-                    TAG,
-                    "showGraphicsOptionsDialog: disableFrameDelay=$originalDisableFrameDelay, newRenderer=$originalNewRenderer, enhancedMode7=$originalEnhancedMode7, dimFlashes=$originalDimFlashes",
-                )
-
-                // Update UI on main thread
-                runOnUiThread {
-                    // Update info text based on selection
-                    val updateInfoText = { renderer: String ->
-                        textRendererInfo.text =
-                            when (renderer) {
-                                "SDL" -> "SDL: Software or hardware accelerated rendering (default)"
-                                "OpenGL ES" -> "OpenGL ES: Hardware accelerated 3D graphics API"
-                                "Vulkan" -> "Vulkan: Next-generation graphics API (requires compatible device)"
-                                else -> ""
-                            }
-                    }
-
-                    // Shader UI helpers
-                    val updateShaderUI = { path: String ->
-                        if (path.isNotEmpty()) {
-                            textShaderPath.text = path.substringAfterLast("/")
-                            buttonShaderClear.visibility = android.view.View.VISIBLE
-                        } else {
-                            textShaderPath.text = "None"
-                            buttonShaderClear.visibility = android.view.View.GONE
-                        }
-                    }
-
-                    val updateShaderVisibility = { renderer: String ->
-                        layoutShaderSection.visibility = if (renderer == "Vulkan") android.view.View.VISIBLE else android.view.View.GONE
-                    }
-
-                    // Shader browse button
-                    buttonShaderBrowse.setOnClickListener {
-                        pendingShaderCallback = { uri ->
-                            if (uri != null) {
-                                val relativePath = extractShaderRelativePath(uri)
-                                if (relativePath != null) {
-                                    selectedShader = relativePath
-                                    runOnUiThread { updateShaderUI(selectedShader) }
-                                } else {
-                                    runOnUiThread {
-                                        showToast("Invalid shader location. Place shaders in your zelda3 folder under shaders/")
-                                    }
-                                }
-                            }
-                        }
-                        val intent =
-                            android.content.Intent(android.content.Intent.ACTION_GET_CONTENT).apply {
-                                addCategory(android.content.Intent.CATEGORY_OPENABLE)
-                                type = "*/*"
-                            }
-                        @Suppress("DEPRECATION")
-                        startActivityForResult(
-                            android.content.Intent.createChooser(intent, "Select shader preset (.slangp)"),
-                            REQUEST_SHADER_FILE,
-                        )
-                    }
-
-                    // Shader clear button
-                    buttonShaderClear.setOnClickListener {
-                        selectedShader = ""
-                        updateShaderUI(selectedShader)
-                    }
-
-                    // Toggle listener - add BEFORE setting initial selection
-                    toggleRenderer.addOnButtonCheckedListener { _, checkedId, isChecked ->
-                        if (isChecked) {
-                            val rendererName =
-                                when (checkedId) {
-                                    R.id.button_renderer_sdl -> "SDL"
-                                    R.id.button_renderer_opengl_es -> "OpenGL ES"
-                                    R.id.button_renderer_vulkan -> "Vulkan"
-                                    else -> "SDL"
-                                }
-                            Log.d(TAG, "showGraphicsOptionsDialog: Button checked changed to $rendererName")
-                            updateInfoText(rendererName)
-                            updateShaderVisibility(rendererName)
-                        }
-                    }
-
-                    // Set initial checked button (handle both "OpenGL" and "OpenGL ES")
-                    val checkedButtonId =
-                        when (currentRenderer) {
-                            "SDL" -> {
-                                R.id.button_renderer_sdl
-                            }
-
-                            "OpenGL", "OpenGL ES" -> {
-                                R.id.button_renderer_opengl_es
-                            }
-
-                            "Vulkan" -> {
-                                R.id.button_renderer_vulkan
-                            }
-
-                            else -> {
-                                Log.w(TAG, "Unknown renderer value: '$currentRenderer', defaulting to SDL")
-                                R.id.button_renderer_sdl
-                            }
-                        }
-                    Log.d(
-                        TAG,
-                        "showGraphicsOptionsDialog: Setting initial selection to button ID $checkedButtonId for renderer '$currentRenderer'",
-                    )
-                    toggleRenderer.check(checkedButtonId)
-                    updateInfoText(currentRenderer)
-
-                    // Set initial aspect ratio - find matching value or default to 16:9
-                    val initialAspectRatio =
-                        if (aspectRatios.contains(originalAspectRatio)) {
-                            originalAspectRatio
-                        } else {
-                            "16:9"
-                        }
-                    dropdownAspectRatio.setText(initialAspectRatio, false)
-
-                    // Set initial toggle states
-                    switchExtendY.isChecked = originalExtendY
-                    switchDisableFrameDelay.isChecked = originalDisableFrameDelay
-                    switchNewRenderer.isChecked = originalNewRenderer
-                    switchEnhancedMode7.isChecked = originalEnhancedMode7
-                    switchDimFlashes.isChecked = originalDimFlashes
-
-                    // Set initial shader state
-                    updateShaderUI(selectedShader)
-                    updateShaderVisibility(currentRenderer)
-
-                    // Create dialog
-                    val dialog =
-                        MaterialAlertDialogBuilder(this@MainActivity)
-                            .setTitle("Graphics options")
-                            .setView(dialogView)
-                            .setNegativeButton("Done") { _, _ ->
-                                // Get selected renderer on UI thread
-                                val selectedRenderer =
-                                    when (toggleRenderer.checkedButtonId) {
-                                        R.id.button_renderer_sdl -> {
-                                            "SDL"
-                                        }
-
-                                        R.id.button_renderer_opengl_es -> {
-                                            "OpenGL ES"
-                                        }
-
-                                        R.id.button_renderer_vulkan -> {
-                                            "Vulkan"
-                                        }
-
-                                        else -> {
-                                            Log.e(TAG, "Unknown button ID: ${toggleRenderer.checkedButtonId}, defaulting to SDL")
-                                            "SDL"
-                                        }
-                                    }
-
-                                // Get all new values
-                                val selectedAspectRatio = dropdownAspectRatio.text.toString()
-                                val selectedExtendY = switchExtendY.isChecked
-                                val selectedDisableFrameDelay = switchDisableFrameDelay.isChecked
-                                val selectedNewRenderer = switchNewRenderer.isChecked
-                                val selectedEnhancedMode7 = switchEnhancedMode7.isChecked
-                                val selectedDimFlashes = switchDimFlashes.isChecked
-
-                                Log.d(TAG, "showGraphicsOptionsDialog: Done clicked")
-                                Log.d(
-                                    TAG,
-                                    "showGraphicsOptionsDialog: renderer=$selectedRenderer, aspectRatio=$selectedAspectRatio, extendY=$selectedExtendY",
-                                )
-
-                                Thread {
-                                    // Check if any setting changed
-                                    val normalizedOriginal = if (originalRenderer == "OpenGL") "OpenGL ES" else originalRenderer
-                                    val rendererChanged = selectedRenderer != normalizedOriginal
-                                    val aspectRatioChanged = selectedAspectRatio != originalAspectRatio
-                                    val extendYChanged = selectedExtendY != originalExtendY
-                                    val disableFrameDelayChanged = selectedDisableFrameDelay != originalDisableFrameDelay
-                                    val newRendererChanged = selectedNewRenderer != originalNewRenderer
-                                    val enhancedMode7Changed = selectedEnhancedMode7 != originalEnhancedMode7
-                                    val dimFlashesChanged = selectedDimFlashes != originalDimFlashes
-                                    val shaderChanged = selectedShader != originalShader
-
-                                    val anyChanged =
-                                        rendererChanged || aspectRatioChanged || extendYChanged ||
-                                            disableFrameDelayChanged || newRendererChanged ||
-                                            enhancedMode7Changed || dimFlashesChanged || shaderChanged
-
-                                    Log.d(TAG, "showGraphicsOptionsDialog: anyChanged=$anyChanged")
-
-                                    if (anyChanged) {
-                                        kotlinx.coroutines.runBlocking {
-                                            // Save renderer if changed
-                                            if (rendererChanged) {
-                                                updateRendererSetting(selectedRenderer)
-                                            }
-
-                                            // Save aspect ratio and extend_y if changed
-                                            if (aspectRatioChanged || extendYChanged) {
-                                                writeExtendedAspectRatio(selectedAspectRatio, selectedExtendY)
-                                            }
-
-                                            // Save boolean settings if changed
-                                            if (disableFrameDelayChanged) {
-                                                ConfigManager.writeBool(
-                                                    this@MainActivity,
-                                                    "General",
-                                                    "DisableFrameDelay",
-                                                    selectedDisableFrameDelay,
-                                                )
-                                            }
-                                            if (newRendererChanged) {
-                                                ConfigManager.writeBool(this@MainActivity, "Graphics", "NewRenderer", selectedNewRenderer)
-                                            }
-                                            if (enhancedMode7Changed) {
-                                                ConfigManager.writeBool(
-                                                    this@MainActivity,
-                                                    "Graphics",
-                                                    "EnhancedMode7",
-                                                    selectedEnhancedMode7,
-                                                )
-                                            }
-                                            if (dimFlashesChanged) {
-                                                ConfigManager.writeBool(this@MainActivity, "Graphics", "DimFlashes", selectedDimFlashes)
-                                            }
-                                            if (shaderChanged) {
-                                                ConfigManager.writeString(this@MainActivity, "Graphics", "Shader", selectedShader)
-                                            }
-                                        }
-
-                                        // Show restart dialog
-                                        runOnUiThread {
-                                            showRendererRestartDialog()
-                                        }
-                                    } else {
-                                        Log.d(TAG, "No graphics settings changed, no restart needed")
-                                    }
-
-                                    // Return to drawer
-                                    runOnUiThread {
-                                        drawerLayout.openDrawer(Gravity.START)
-                                    }
-                                }.start()
-                            }.create()
-
-                    Log.d(TAG, "Showing graphics options dialog")
-                    dialog.show()
-                    Log.d(TAG, "Graphics options dialog shown successfully")
-                }
-            }.start()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error showing graphics options dialog", e)
-            showToast("Error: ${e.message}", Toast.LENGTH_LONG)
-        }
-    }
-
-    private fun showRendererRestartDialog() {
-        val dialog =
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Restart Required")
-                .setMessage("Graphics renderer has been changed. Please restart the game for changes to take effect.")
-                .setNegativeButton("Later", null)
-                .setPositiveButton("Restart app") { _, _ ->
-                    // Restart the app
-                    val intent =
-                        Intent(this, LauncherActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                        }
-                    startActivity(intent)
-                    finishAndRemoveTask()
-                    System.exit(0)
-                }.show()
-
-        // Style positive button as filled with icon
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
-            // Make button filled (solid primary color background)
-            val primaryColor = resources.getColorStateList(R.color.md_theme_primary, theme)
-            val onPrimaryColor = resources.getColorStateList(R.color.md_theme_onPrimary, theme)
-            backgroundTintList = primaryColor
-            setTextColor(onPrimaryColor)
-
-            // Add restart icon with matching color
-            setCompoundDrawablesWithIntrinsicBounds(R.drawable.ic_restart, 0, 0, 0)
-            compoundDrawablePadding = resources.getDimensionPixelSize(android.R.dimen.app_icon_size) / 4
-            setCompoundDrawableTintList(onPrimaryColor)
         }
     }
 
@@ -2060,285 +1567,6 @@ class MainActivity : SDLActivity() {
         return null
     }
 
-    /**
-     * Shows gameplay settings dialog with feature toggles.
-     */
-    private fun showGameplaySettingsDialog() {
-        Log.d(TAG, "showGameplaySettingsDialog() called")
-
-        try {
-            val dialogView = layoutInflater.inflate(R.layout.dialog_gameplay_settings, null)
-
-            // Get all switch references
-            val switchAutosave = dialogView.findViewById<SwitchMaterial>(R.id.switch_autosave)
-            val switchItemSwitchLR = dialogView.findViewById<SwitchMaterial>(R.id.switch_item_switch_lr)
-            val switchItemSwitchLRLimit = dialogView.findViewById<SwitchMaterial>(R.id.switch_item_switch_lr_limit)
-            val switchTurnWhileDashing = dialogView.findViewById<SwitchMaterial>(R.id.switch_turn_while_dashing)
-            val switchSkipIntro = dialogView.findViewById<SwitchMaterial>(R.id.switch_skip_intro)
-            val switchMirrorToDarkworld = dialogView.findViewById<SwitchMaterial>(R.id.switch_mirror_to_darkworld)
-            val switchCollectItemsSword = dialogView.findViewById<SwitchMaterial>(R.id.switch_collect_items_sword)
-            val spinnerBreakPotsSword = dialogView.findViewById<Spinner>(R.id.spinner_break_pots_sword)
-            val swordLevels = arrayOf("Disabled", "Level 1 (Wooden)", "Level 2 (Master)", "Level 3 (Tempered)", "Level 4 (Golden)")
-            spinnerBreakPotsSword.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, swordLevels)
-            val switchMoreBombs = dialogView.findViewById<SwitchMaterial>(R.id.switch_more_bombs)
-            val switchMoreRupees = dialogView.findViewById<SwitchMaterial>(R.id.switch_more_rupees)
-            val switchCancelBird = dialogView.findViewById<SwitchMaterial>(R.id.switch_cancel_bird)
-            val switchYellowItems = dialogView.findViewById<SwitchMaterial>(R.id.switch_yellow_items)
-            val switchMiscBugs = dialogView.findViewById<SwitchMaterial>(R.id.switch_misc_bugs)
-            val switchGameplayBugs = dialogView.findViewById<SwitchMaterial>(R.id.switch_gameplay_bugs)
-            val switchPokemode = dialogView.findViewById<SwitchMaterial>(R.id.switch_pokemode)
-            val switchZeldaHelps = dialogView.findViewById<SwitchMaterial>(R.id.switch_zelda_helps)
-
-            // Read all settings in background thread
-            Thread {
-                // Read all settings
-                val origAutosave =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "General", "Autosave", false)
-                    }
-                val origItemSwitchLR =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "ItemSwitchLR", false)
-                    }
-                val origItemSwitchLRLimit =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "ItemSwitchLRLimit", false)
-                    }
-                val origTurnWhileDashing =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "TurnWhileDashing", false)
-                    }
-                val origSkipIntro =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "SkipIntroOnKeypress", false)
-                    }
-                val origMirrorToDarkworld =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "MirrorToDarkworld", false)
-                    }
-                val origCollectItemsSword =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "CollectItemsWithSword", false)
-                    }
-                val origBreakPotsSword =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readInt(this@MainActivity, "Features", "BreakPotsWithSword", 0).coerceIn(0, 4)
-                    }
-                val origMoreBombs =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "MoreActiveBombs", false)
-                    }
-                val origMoreRupees =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "CarryMoreRupees", false)
-                    }
-                val origCancelBird =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "CancelBirdTravel", false)
-                    }
-                val origYellowItems =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "ShowMaxItemsInYellow", false)
-                    }
-                val origMiscBugs =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "MiscBugFixes", false)
-                    }
-                val origGameplayBugs =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "GameChangingBugFixes", false)
-                    }
-                val origPokemode =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "Pokemode", false)
-                    }
-                val origZeldaHelps =
-                    kotlinx.coroutines.runBlocking {
-                        ConfigManager.readBool(this@MainActivity, "Features", "PrincessZeldaHelps", false)
-                    }
-
-                Log.d(TAG, "showGameplaySettingsDialog: Read all settings")
-
-                // Update UI on main thread
-                runOnUiThread {
-                    // Set initial toggle states
-                    switchAutosave.isChecked = origAutosave
-                    switchItemSwitchLR.isChecked = origItemSwitchLR
-                    switchItemSwitchLRLimit.isChecked = origItemSwitchLRLimit
-                    switchTurnWhileDashing.isChecked = origTurnWhileDashing
-                    switchSkipIntro.isChecked = origSkipIntro
-                    switchMirrorToDarkworld.isChecked = origMirrorToDarkworld
-                    switchCollectItemsSword.isChecked = origCollectItemsSword
-                    spinnerBreakPotsSword.setSelection(origBreakPotsSword)
-                    switchMoreBombs.isChecked = origMoreBombs
-                    switchMoreRupees.isChecked = origMoreRupees
-                    switchCancelBird.isChecked = origCancelBird
-                    switchYellowItems.isChecked = origYellowItems
-                    switchMiscBugs.isChecked = origMiscBugs
-                    switchGameplayBugs.isChecked = origGameplayBugs
-                    switchPokemode.isChecked = origPokemode
-                    switchZeldaHelps.isChecked = origZeldaHelps
-
-                    // Create dialog
-                    val dialog =
-                        MaterialAlertDialogBuilder(this@MainActivity)
-                            .setTitle("Gameplay settings")
-                            .setView(dialogView)
-                            .setNegativeButton("Done") { _, _ ->
-                                Thread {
-                                    // Get all new values
-                                    val newAutosave = switchAutosave.isChecked
-                                    val newItemSwitchLR = switchItemSwitchLR.isChecked
-                                    val newItemSwitchLRLimit = switchItemSwitchLRLimit.isChecked
-                                    val newTurnWhileDashing = switchTurnWhileDashing.isChecked
-                                    val newSkipIntro = switchSkipIntro.isChecked
-                                    val newMirrorToDarkworld = switchMirrorToDarkworld.isChecked
-                                    val newCollectItemsSword = switchCollectItemsSword.isChecked
-                                    val newBreakPotsSword = spinnerBreakPotsSword.selectedItemPosition
-                                    val newMoreBombs = switchMoreBombs.isChecked
-                                    val newMoreRupees = switchMoreRupees.isChecked
-                                    val newCancelBird = switchCancelBird.isChecked
-                                    val newYellowItems = switchYellowItems.isChecked
-                                    val newMiscBugs = switchMiscBugs.isChecked
-                                    val newGameplayBugs = switchGameplayBugs.isChecked
-                                    val newPokemode = switchPokemode.isChecked
-                                    val newZeldaHelps = switchZeldaHelps.isChecked
-
-                                    // Check if any setting changed
-                                    val anyChanged =
-                                        (newAutosave != origAutosave) ||
-                                            (newItemSwitchLR != origItemSwitchLR) ||
-                                            (newItemSwitchLRLimit != origItemSwitchLRLimit) ||
-                                            (newTurnWhileDashing != origTurnWhileDashing) ||
-                                            (newSkipIntro != origSkipIntro) ||
-                                            (newMirrorToDarkworld != origMirrorToDarkworld) ||
-                                            (newCollectItemsSword != origCollectItemsSword) ||
-                                            (newBreakPotsSword != origBreakPotsSword) ||
-                                            (newMoreBombs != origMoreBombs) ||
-                                            (newMoreRupees != origMoreRupees) ||
-                                            (newCancelBird != origCancelBird) ||
-                                            (newYellowItems != origYellowItems) ||
-                                            (newMiscBugs != origMiscBugs) ||
-                                            (newGameplayBugs != origGameplayBugs) ||
-                                            (newPokemode != origPokemode) ||
-                                            (newZeldaHelps != origZeldaHelps)
-
-                                    Log.d(TAG, "showGameplaySettingsDialog: anyChanged=$anyChanged")
-
-                                    if (anyChanged) {
-                                        kotlinx.coroutines.runBlocking {
-                                            // Save changed settings
-                                            if (newAutosave != origAutosave) {
-                                                ConfigManager.writeBool(this@MainActivity, "General", "Autosave", newAutosave)
-                                            }
-                                            if (newItemSwitchLR != origItemSwitchLR) {
-                                                ConfigManager.writeBool(this@MainActivity, "Features", "ItemSwitchLR", newItemSwitchLR)
-                                            }
-                                            if (newItemSwitchLRLimit != origItemSwitchLRLimit) {
-                                                ConfigManager.writeBool(
-                                                    this@MainActivity,
-                                                    "Features",
-                                                    "ItemSwitchLRLimit",
-                                                    newItemSwitchLRLimit,
-                                                )
-                                            }
-                                            if (newTurnWhileDashing != origTurnWhileDashing) {
-                                                ConfigManager.writeBool(
-                                                    this@MainActivity,
-                                                    "Features",
-                                                    "TurnWhileDashing",
-                                                    newTurnWhileDashing,
-                                                )
-                                            }
-                                            if (newSkipIntro != origSkipIntro) {
-                                                ConfigManager.writeBool(this@MainActivity, "Features", "SkipIntroOnKeypress", newSkipIntro)
-                                            }
-                                            if (newMirrorToDarkworld != origMirrorToDarkworld) {
-                                                ConfigManager.writeBool(
-                                                    this@MainActivity,
-                                                    "Features",
-                                                    "MirrorToDarkworld",
-                                                    newMirrorToDarkworld,
-                                                )
-                                            }
-                                            if (newCollectItemsSword != origCollectItemsSword) {
-                                                ConfigManager.writeBool(
-                                                    this@MainActivity,
-                                                    "Features",
-                                                    "CollectItemsWithSword",
-                                                    newCollectItemsSword,
-                                                )
-                                            }
-                                            if (newBreakPotsSword != origBreakPotsSword) {
-                                                ConfigManager.writeInt(
-                                                    this@MainActivity,
-                                                    "Features",
-                                                    "BreakPotsWithSword",
-                                                    newBreakPotsSword,
-                                                )
-                                            }
-                                            if (newMoreBombs != origMoreBombs) {
-                                                ConfigManager.writeBool(this@MainActivity, "Features", "MoreActiveBombs", newMoreBombs)
-                                            }
-                                            if (newMoreRupees != origMoreRupees) {
-                                                ConfigManager.writeBool(this@MainActivity, "Features", "CarryMoreRupees", newMoreRupees)
-                                            }
-                                            if (newCancelBird != origCancelBird) {
-                                                ConfigManager.writeBool(this@MainActivity, "Features", "CancelBirdTravel", newCancelBird)
-                                            }
-                                            if (newYellowItems != origYellowItems) {
-                                                ConfigManager.writeBool(
-                                                    this@MainActivity,
-                                                    "Features",
-                                                    "ShowMaxItemsInYellow",
-                                                    newYellowItems,
-                                                )
-                                            }
-                                            if (newMiscBugs != origMiscBugs) {
-                                                ConfigManager.writeBool(this@MainActivity, "Features", "MiscBugFixes", newMiscBugs)
-                                            }
-                                            if (newGameplayBugs != origGameplayBugs) {
-                                                ConfigManager.writeBool(
-                                                    this@MainActivity,
-                                                    "Features",
-                                                    "GameChangingBugFixes",
-                                                    newGameplayBugs,
-                                                )
-                                            }
-                                            if (newPokemode != origPokemode) {
-                                                ConfigManager.writeBool(this@MainActivity, "Features", "Pokemode", newPokemode)
-                                            }
-                                            if (newZeldaHelps != origZeldaHelps) {
-                                                ConfigManager.writeBool(this@MainActivity, "Features", "PrincessZeldaHelps", newZeldaHelps)
-                                            }
-                                        }
-
-                                        // Show restart dialog
-                                        runOnUiThread {
-                                            showRendererRestartDialog()
-                                        }
-                                    } else {
-                                        Log.d(TAG, "No gameplay settings changed, no restart needed")
-                                    }
-
-                                    // Return to drawer
-                                    runOnUiThread {
-                                        drawerLayout.openDrawer(Gravity.START)
-                                    }
-                                }.start()
-                            }.create()
-
-                    Log.d(TAG, "Showing gameplay settings dialog")
-                    dialog.show()
-                    Log.d(TAG, "Gameplay settings dialog shown successfully")
-                }
-            }.start()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error showing gameplay settings dialog", e)
-            showToast("Error: ${e.message}", Toast.LENGTH_LONG)
-        }
-    }
-
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
 
@@ -2359,73 +1587,8 @@ class MainActivity : SDLActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        // CRITICAL: Intercept back button BEFORE SDL processes it
-        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_DOWN) {
-            Log.d(TAG, "BACK key intercepted in dispatchKeyEvent")
-            val isOpen = drawerLayout.isDrawerOpen(Gravity.START)
-            Log.d(TAG, "Drawer is currently: ${if (isOpen) "OPEN" else "CLOSED"}")
-
-            if (isOpen) {
-                Log.d(TAG, "Closing drawer")
-                drawerLayout.closeDrawers()
-            } else {
-                Log.d(TAG, "Opening drawer")
-                drawerLayout.openDrawer(Gravity.START)
-            }
-            return true // Consume event - don't let SDL process it
-        }
-
-        // Track Start+Select combo for opening drawer (gamepad support)
-        // Start = KEYCODE_N, Select = KEYCODE_B (from OverlayControl.kt)
         val keyCode = event.keyCode
         val isDown = event.action == KeyEvent.ACTION_DOWN
-        val isUp = event.action == KeyEvent.ACTION_UP
-
-        when (keyCode) {
-            KeyEvent.KEYCODE_N -> { // Start button
-                if (isDown && !isStartPressed) {
-                    isStartPressed = true
-                    if (isSelectPressed) {
-                        // Both pressed - toggle drawer
-                        val isOpen = drawerLayout.isDrawerOpen(Gravity.START)
-                        if (isOpen) {
-                            drawerLayout.closeDrawers()
-                        } else {
-                            drawerLayout.openDrawer(Gravity.START)
-                        }
-                        Log.d(TAG, "Start+Select combo detected - drawer toggled")
-                    }
-                } else if (isUp) {
-                    isStartPressed = false
-                }
-                // Consume event if both buttons are pressed to prevent game input
-                if (isStartPressed && isSelectPressed) {
-                    return true
-                }
-            }
-
-            KeyEvent.KEYCODE_B -> { // Select button
-                if (isDown && !isSelectPressed) {
-                    isSelectPressed = true
-                    if (isStartPressed) {
-                        // Both pressed - toggle drawer
-                        val isOpen = drawerLayout.isDrawerOpen(Gravity.START)
-                        if (isOpen) {
-                            drawerLayout.closeDrawers()
-                        } else {
-                            drawerLayout.openDrawer(Gravity.START)
-                        }
-                        Log.d(TAG, "Start+Select combo detected - drawer toggled")
-                    }
-                } else if (isUp) {
-                    isSelectPressed = false
-                }
-                // Consume event if both buttons are pressed to prevent game input
-                if (isStartPressed && isSelectPressed) {
-                    return true
-                }
-            }
-        }
 
         // Bind dialog input interception - capture gamepad buttons for binding
         if (isBindDialogOpen && isGamepadButton(keyCode)) {
@@ -2433,31 +1596,62 @@ class MainActivity : SDLActivity() {
             return true // Consume event to block SDL
         }
 
+        if (trackMenuCombo(keyCode, isDown, event.repeatCount)) return true
+
+        if (pauseMenu.isOpen) {
+            // Keys held when the menu opened (e.g. Start of Start+Select) must still be released
+            // in the game, or they stay stuck after resuming
+            if (event.action == KeyEvent.ACTION_UP) handleKeyEvent(null, keyCode, event, null)
+            return pauseMenu.handleKey(event) || super.dispatchKeyEvent(event)
+        }
+
+        // CRITICAL: Intercept back button BEFORE SDL processes it
+        if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_BUTTON_MODE) {
+            if (isDown && event.repeatCount == 0) pauseMenu.open()
+            return true // Consume event - don't let SDL process it
+        }
+
         return super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * Start+Select toggles the pause menu, from a gamepad, a keyboard (N+B, the zelda3.ini
+     * defaults) or the touch overlay. Returns true when the combo fired and the key is consumed.
+     */
+    private fun trackMenuCombo(
+        keyCode: Int,
+        isDown: Boolean,
+        repeatCount: Int = 0,
+    ): Boolean {
+        val partner = menuComboPartners[keyCode] ?: return false
+        if (!isDown) {
+            heldComboKeys.remove(keyCode)
+            return false
+        }
+        heldComboKeys.add(keyCode)
+        if (repeatCount > 0 || partner !in heldComboKeys) return false
+        if (pauseMenu.isOpen) pauseMenu.close() else pauseMenu.open()
+        return true
     }
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        Log.d(TAG, "onBackPressed() called")
-        val isOpen = drawerLayout.isDrawerOpen(Gravity.START)
-        Log.d(TAG, "Drawer is currently: ${if (isOpen) "OPEN" else "CLOSED"}")
-
-        if (isOpen) {
-            Log.d(TAG, "Closing drawer")
-            drawerLayout.closeDrawers()
+        if (pauseMenu.isOpen) {
+            pauseMenu.handleKey(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK))
         } else {
-            Log.d(TAG, "Opening drawer")
-            drawerLayout.openDrawer(Gravity.START)
+            pauseMenu.open()
         }
     }
 
     // CRITICAL: Public wrappers for SDL key events (called from InputOverlay)
     // These methods MUST remain for JNI integration
     fun sendKeyDown(keycode: Int) {
+        if (trackMenuCombo(keycode, isDown = true)) return
         onNativeKeyDown(keycode)
     }
 
     fun sendKeyUp(keycode: Int) {
+        trackMenuCombo(keycode, isDown = false)
         onNativeKeyUp(keycode)
     }
 
@@ -2614,12 +1808,6 @@ class MainActivity : SDLActivity() {
         }
 
     /**
-     * Detects MSU format from first valid file (legacy wrapper).
-     * @return "MSU1" for PCM, "OPUZ" for Opus, null if no files found
-     */
-    private suspend fun detectMsuFormat(): String? = detectMsuInfo()?.format
-
-    /**
      * Reads MSU settings from zelda3.ini [Sound] section.
      */
     private suspend fun readMsuSettings(): MsuSettings =
@@ -2689,13 +1877,15 @@ class MainActivity : SDLActivity() {
 
     /**
      * Updates MSU settings in zelda3.ini [Sound] section.
+     * [msuInfo] and [isDeluxe] come from [detectMsuInfo]/[scanMsuFiles], done once by the caller.
      */
     private suspend fun updateMsuSettings(
         enableMsu: Boolean,
         volume: Int,
         resumeMsu: Boolean,
         audioFreq: Int,
-        format: String?,
+        msuInfo: MsuDetectionResult?,
+        isDeluxe: Boolean,
     ): Boolean =
         withContext(Dispatchers.IO) {
             val externalDir = getExternalFilesDir(null) ?: return@withContext false
@@ -2704,12 +1894,8 @@ class MainActivity : SDLActivity() {
             if (!configFile.exists()) return@withContext false
 
             try {
-                // Detect MSU info (format and file prefix path) if enabling
-                val msuInfo = if (enableMsu) detectMsuInfo() else null
-                val msuScan = if (enableMsu) scanMsuFiles() else MsuScanResult(0, 0)
-                val detectedFormat = msuInfo?.format ?: format
+                val detectedFormat = msuInfo?.format
                 val detectedPath = msuInfo?.filePrefix
-                val isDeluxe = msuScan.maxTrackNumber > 47
 
                 if (enableMsu && detectedPath != null) {
                     Log.d(TAG, "updateMsuSettings: Will update MSUPath to: $detectedPath, isDeluxe=$isDeluxe")
@@ -3169,30 +2355,20 @@ class MainActivity : SDLActivity() {
         return rootDir.findFile("saves")
     }
 
-    /**
-     * Checks if a save slot exists in SAF external storage.
-     */
-    private fun saveSlotExists(slot: Int): Boolean {
-        val savesDir = getSafSavesDir() ?: return false
-        val file = savesDir.findFile("save$slot.sav")
-        return file != null && file.isFile
-    }
-
-    /**
-     * Gets the thumbnail for a save slot from SAF external storage.
-     * Returns null if thumbnail doesn't exist.
-     */
-    private fun getSaveSlotThumbnail(slot: Int): Bitmap? {
-        val savesDir = getSafSavesDir() ?: return null
-        val thumbnailFile = savesDir.findFile("save$slot.png") ?: return null
-
-        return try {
-            contentResolver.openInputStream(thumbnailFile.uri)?.use { input ->
-                android.graphics.BitmapFactory.decodeStream(input)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "getSaveSlotThumbnail: Error loading thumbnail for slot $slot", e)
-            null
+    /** Lists all save slots with a single SAF directory listing (findFile per slot is slow). */
+    private fun loadSaveSlots(): List<SaveSlot> {
+        val files = getSafSavesDir()?.listFiles()?.associateBy { it.name } ?: emptyMap()
+        return (0..9).map { slot ->
+            val thumbnail =
+                files["save$slot.png"]?.let { file ->
+                    try {
+                        contentResolver.openInputStream(file.uri)?.use { android.graphics.BitmapFactory.decodeStream(it) }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "loadSaveSlots: Error loading thumbnail for slot $slot", e)
+                        null
+                    }
+                }
+            SaveSlot(slot, files["save$slot.sav"]?.isFile == true, thumbnail)
         }
     }
 
@@ -3253,197 +2429,7 @@ class MainActivity : SDLActivity() {
         }
     }
 
-    private fun showSaveStateDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_save_load_state, null)
-        val recyclerView = dialogView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.recycler_save_slots)
-
-        recyclerView.layoutManager = androidx.recyclerview.widget.GridLayoutManager(this, 5) // 5 columns
-        recyclerView.adapter =
-            SaveStateAdapter(
-                slots = (0..9).toList(),
-                isSaveMode = true,
-            ) { slot ->
-                nativeSaveState(slot)
-                captureSaveThumbnail(slot)
-                currentDialog?.dismiss()
-                drawerLayout.openDrawer(android.view.Gravity.START)
-            }
-
-        currentDialog =
-            com.google.android.material.dialog
-                .MaterialAlertDialogBuilder(this)
-                .setTitle("Save State")
-                .setView(dialogView)
-                .setNegativeButton("Cancel") { _, _ ->
-                    drawerLayout.openDrawer(android.view.Gravity.START)
-                }.create()
-
-        currentDialog?.show()
-    }
-
-    private fun showLoadStateDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_save_load_state, null)
-        val recyclerView = dialogView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.recycler_save_slots)
-
-        recyclerView.layoutManager = androidx.recyclerview.widget.GridLayoutManager(this, 5) // 5 columns
-        recyclerView.adapter =
-            SaveStateAdapter(
-                slots = (0..9).toList(),
-                isSaveMode = false,
-            ) { slot ->
-                if (saveSlotExists(slot)) {
-                    nativeLoadState(slot)
-                    currentDialog?.dismiss()
-                    drawerLayout.openDrawer(android.view.Gravity.START)
-                } else {
-                    Toast.makeText(this, "Save slot is empty", Toast.LENGTH_SHORT).show()
-                }
-            }
-
-        currentDialog =
-            com.google.android.material.dialog
-                .MaterialAlertDialogBuilder(this)
-                .setTitle("Load State")
-                .setView(dialogView)
-                .setNegativeButton("Cancel") { _, _ ->
-                    drawerLayout.openDrawer(android.view.Gravity.START)
-                }.create()
-
-        currentDialog?.show()
-    }
-
-    // ========== SaveStateAdapter Inner Class ==========
-
-    inner class SaveStateAdapter(
-        private val slots: List<Int>,
-        private val isSaveMode: Boolean,
-        private val onSlotClick: (Int) -> Unit,
-    ) : androidx.recyclerview.widget.RecyclerView.Adapter<SaveStateAdapter.ViewHolder>() {
-        inner class ViewHolder(
-            view: View,
-        ) : androidx.recyclerview.widget.RecyclerView.ViewHolder(view) {
-            val thumbnail: ImageView = view.findViewById(R.id.thumbnail)
-            val slotName: TextView = view.findViewById(R.id.slot_name)
-            val emptyIndicator: TextView = view.findViewById(R.id.empty_indicator)
-        }
-
-        override fun onCreateViewHolder(
-            parent: android.view.ViewGroup,
-            viewType: Int,
-        ): ViewHolder {
-            val view = layoutInflater.inflate(R.layout.item_save_slot, parent, false)
-            return ViewHolder(view)
-        }
-
-        override fun onBindViewHolder(
-            holder: ViewHolder,
-            position: Int,
-        ) {
-            val slot = slots[position]
-            holder.slotName.text = if (slot == 0) "Quick Save" else "Slot $slot"
-
-            val saveExists = saveSlotExists(slot)
-            holder.emptyIndicator.visibility = if (saveExists) View.GONE else View.VISIBLE
-
-            // Load thumbnail from SAF if exists
-            val thumbnail = getSaveSlotThumbnail(slot)
-            if (thumbnail != null) {
-                holder.thumbnail.setImageBitmap(thumbnail)
-            } else {
-                holder.thumbnail.setImageResource(R.drawable.ic_placeholder_snes)
-            }
-
-            holder.itemView.setOnClickListener {
-                onSlotClick(slot)
-            }
-        }
-
-        override fun getItemCount() = slots.size
-    }
-
-    // ========== Controller Settings Dialog ==========
-
-    private fun showControllerSettingsDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_controller_settings, null)
-        val recyclerView = dialogView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.recycler_bindings)
-        val buttonResetDefaults = dialogView.findViewById<Button>(R.id.button_reset_defaults)
-        val buttonDone = dialogView.findViewById<Button>(R.id.button_done)
-
-        // Load all bindable commands (38 commands from our final list)
-        val bindings = getAllBindableCommands()
-
-        // Set up RecyclerView
-        recyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
-        val adapter =
-            ControllerBindingAdapter(bindings) { binding ->
-                showBindButtonDialog(binding.commandId, binding.commandDisplayName)
-            }
-        recyclerView.adapter = adapter
-
-        // Store references for later refresh
-        controllerSettingsRecyclerView = recyclerView
-        controllerBindingAdapter = adapter
-
-        // Create dialog
-        val dialog =
-            MaterialAlertDialogBuilder(this)
-                .setTitle("Controller Settings")
-                .setView(dialogView)
-                .setCancelable(true)
-                .setOnDismissListener {
-                    // Clean up references when dialog is dismissed
-                    controllerSettingsDialog = null
-                    controllerSettingsRecyclerView = null
-                    controllerBindingAdapter = null
-                    savedScrollPosition = 0
-                }.create()
-
-        // Reset defaults button
-        buttonResetDefaults.setOnClickListener {
-            val resetDialog =
-                MaterialAlertDialogBuilder(this)
-                    .setTitle("Reset to defaults?")
-                    .setMessage("This will reset controller inputs to default.")
-                    .setPositiveButton("Reset to default") { _, _ ->
-                        nativeClearGamepadBindings()
-                        nativeApplyDefaultGamepadBindings()
-                        showToast("Default bindings restored")
-
-                        // Persist defaults to config file
-                        saveGamepadBindingsToConfig()
-
-                        // Refresh adapter in place (don't dismiss and reopen dialog)
-                        val updatedBindings = getAllBindableCommands()
-                        val newAdapter =
-                            ControllerBindingAdapter(updatedBindings) { binding ->
-                                showBindButtonDialog(binding.commandId, binding.commandDisplayName)
-                            }
-                        recyclerView.adapter = newAdapter
-                        controllerBindingAdapter = newAdapter
-                        recyclerView.scrollToPosition(0) // Reset to top after reset
-                    }.setNegativeButton("Cancel", null)
-                    .show()
-
-            // Style positive button as filled red (destructive action)
-            resetDialog.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
-                val errorColor = resources.getColorStateList(R.color.md_theme_error, theme)
-                val onErrorColor = resources.getColorStateList(R.color.md_theme_onError, theme)
-                backgroundTintList = errorColor
-                setTextColor(onErrorColor)
-            }
-        }
-
-        // Done button
-        buttonDone.setOnClickListener {
-            dialog.dismiss()
-            drawerLayout.openDrawer(GravityCompat.START)
-        }
-
-        // Store dialog references (both currentDialog for orientation handling and dedicated reference)
-        currentDialog = dialog
-        controllerSettingsDialog = dialog
-        dialog.show()
-    }
+    // ========== Controller Bindings ==========
 
     private fun getAllBindableCommands(): List<ControllerBinding> {
         // Command ID constants from config.h (calculated from enum)
@@ -3661,29 +2647,10 @@ class MainActivity : SDLActivity() {
             Log.e(TAG, "finalizeBind: JNI binding failed for commandId=$commandId")
         }
 
-        // Close bind dialog (but NOT the controller settings dialog)
+        // Close bind dialog and show the new binding in the menu
         currentDialog?.dismiss()
         cleanupBindDialogState()
-
-        // Restore reference to controller settings dialog after bind dialog closes
-        currentDialog = controllerSettingsDialog
-
-        // Refresh the controller settings adapter in place (don't reopen dialog)
-        controllerSettingsRecyclerView?.let { recyclerView ->
-            // Reload bindings data
-            val updatedBindings = getAllBindableCommands()
-
-            // Create new adapter with updated data
-            val newAdapter =
-                ControllerBindingAdapter(updatedBindings) { binding ->
-                    showBindButtonDialog(binding.commandId, binding.commandDisplayName)
-                }
-            recyclerView.adapter = newAdapter
-            controllerBindingAdapter = newAdapter
-
-            // Restore scroll position immediately (RecyclerView handles this efficiently)
-            recyclerView.scrollToPosition(savedScrollPosition)
-        }
+        pauseMenu.reload()
 
         // Persist bindings to zelda3.ini
         saveGamepadBindingsToConfig()
@@ -3852,12 +2819,6 @@ class MainActivity : SDLActivity() {
         commandId: Int,
         commandDisplayName: String,
     ) {
-        // Save current scroll position before opening bind dialog
-        controllerSettingsRecyclerView?.let { recyclerView ->
-            val layoutManager = recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
-            savedScrollPosition = layoutManager?.findFirstVisibleItemPosition() ?: 0
-        }
-
         val dialogView = layoutInflater.inflate(R.layout.dialog_bind_button, null)
         val textInstruction = dialogView.findViewById<TextView>(R.id.text_instruction)
         val chipGroup = dialogView.findViewById<com.google.android.material.chip.ChipGroup>(R.id.chip_group_buttons)
@@ -3902,58 +2863,6 @@ class MainActivity : SDLActivity() {
                 false // Let dialog handle non-gamepad keys (back button)
             }
         }
-    }
-
-    // RecyclerView Adapter for controller bindings
-    private inner class ControllerBindingAdapter(
-        private val bindings: List<ControllerBinding>,
-        private val onEditClick: (ControllerBinding) -> Unit,
-    ) : androidx.recyclerview.widget.RecyclerView.Adapter<ControllerBindingAdapter.ViewHolder>() {
-        private var lastCategory: String? = null
-
-        inner class ViewHolder(
-            view: View,
-        ) : androidx.recyclerview.widget.RecyclerView.ViewHolder(view) {
-            val textCommandName: TextView = view.findViewById(R.id.text_command_name)
-            val textCurrentBinding: TextView = view.findViewById(R.id.text_current_binding)
-            val buttonEdit: com.google.android.material.button.MaterialButton = view.findViewById(R.id.button_edit)
-            val buttonDelete: com.google.android.material.button.MaterialButton = view.findViewById(R.id.button_delete)
-        }
-
-        override fun onCreateViewHolder(
-            parent: ViewGroup,
-            viewType: Int,
-        ): ViewHolder {
-            val view =
-                LayoutInflater
-                    .from(parent.context)
-                    .inflate(R.layout.item_controller_binding, parent, false)
-            return ViewHolder(view)
-        }
-
-        override fun onBindViewHolder(
-            holder: ViewHolder,
-            position: Int,
-        ) {
-            val binding = bindings[position]
-
-            holder.textCommandName.text = binding.commandDisplayName
-            holder.textCurrentBinding.text = binding.currentBinding ?: "Not bound"
-
-            // Show/hide delete button based on whether it's bound
-            holder.buttonDelete.visibility = if (binding.currentBinding != null) View.VISIBLE else View.GONE
-
-            holder.buttonEdit.setOnClickListener {
-                onEditClick(binding)
-            }
-
-            holder.buttonDelete.setOnClickListener {
-                // TODO: Implement unbind logic
-                Log.d(TAG, "Delete binding for command ID: ${binding.commandId}")
-            }
-        }
-
-        override fun getItemCount() = bindings.size
     }
 
     /**

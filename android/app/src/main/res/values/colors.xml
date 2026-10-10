@@ -141,4 +141,16 @@
     <color name="md_theme_surfaceContainerHigh_highContrast">#D4D5CA</color>
     <color name="md_theme_surfaceContainerHighest_highContrast">#C6C7BD</color>
     <color name="bright_green">#2FFF00</color>
+
+    <!-- Pause menu (always dark: drawn over the game frame) -->
+    <color name="menu_scrim">#E60C0F0A</color>
+    <color name="menu_text">#ECEEE4</color>
+    <color name="menu_text_dim">#9EA394</color>
+    <color name="menu_focus_bg">#CDEDA3</color>
+    <color name="menu_focus_text">#1A1C16</color>
+    <color name="menu_pressed_bg">#26FFFFFF</color>
+    <color name="menu_divider">#33FFFFFF</color>
+    <color name="menu_on">#B1D18A</color>
+    <color name="menu_warning">#FFB86B</color>
+    <color name="menu_destructive">#FFB4AB</color>
 </resources>

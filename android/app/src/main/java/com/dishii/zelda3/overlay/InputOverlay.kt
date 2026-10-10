@@ -61,8 +61,8 @@ class InputOverlay(
     private var hasMoved = false
     private val moveThreshold = 20f
 
-    // Track drawer state to allow touches to pass through when drawer is open
-    private var isDrawerOpen = false
+    // Track pause menu state to allow touches to pass through while it is open
+    private var isMenuOpen = false
 
     var layout = OverlayLayout.Landscape
 
@@ -162,9 +162,13 @@ class InputOverlay(
         v: View,
         event: MotionEvent,
     ): Boolean {
-        // Pass through touches when drawer is open so NavigationView can receive them
-        if (isDrawerOpen) {
-            android.util.Log.d("InputOverlay", "Drawer is open, passing touch through: ${event.action} at (${event.x}, ${event.y})")
+        // Ignore new touches while the pause menu is open, but still process releases: a button
+        // held when the menu opened (Start+Select) would otherwise stay pressed in the game
+        val isRelease =
+            event.actionMasked == MotionEvent.ACTION_UP ||
+                event.actionMasked == MotionEvent.ACTION_POINTER_UP ||
+                event.actionMasked == MotionEvent.ACTION_CANCEL
+        if (isMenuOpen && !isRelease) {
             return false
         }
 
@@ -575,12 +579,12 @@ class InputOverlay(
         }
     }
 
-    fun setDrawerOpen(open: Boolean) {
-        isDrawerOpen = open
-        // Make the overlay completely pass through touches when drawer is open
+    fun setMenuOpen(open: Boolean) {
+        isMenuOpen = open
+        // Make the overlay completely pass through touches when the menu is open
         isClickable = !open
         isFocusable = !open
-        android.util.Log.d("InputOverlay", "setDrawerOpen($open) - clickable=${!open}, focusable=${!open}")
+        android.util.Log.d("InputOverlay", "setMenuOpen($open) - clickable=${!open}, focusable=${!open}")
     }
 
     private fun showScaleDialog(
@@ -754,6 +758,10 @@ class InputOverlay(
         saveSettings()
         refreshControls()
     }
+
+    fun getOverlayScale(): Int = overlayScale
+
+    fun getOverlayOpacity(): Int = overlayOpacity
 
     fun setOverlayOpacity(opacity: Int) {
         overlayOpacity = opacity

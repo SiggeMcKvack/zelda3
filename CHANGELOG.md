@@ -4,6 +4,18 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## October 2026
 
+### Android: Controller-Friendly Pause Menu
+
+The Android side drawer and its settings dialogs have been replaced by a full-screen pause menu, laid out like a game console's, that works well on a TV with a gamepad.
+
+- Tabs across the top (Game, Gameplay, Graphics, Audio, Controls, Touch, System), switched with L/R. B goes back and Start resumes.
+- One row style for every setting. A toggles, D-pad left/right cycles choices and moves sliders, and there are no dropdowns or modal dialogs to get stuck in.
+- Opening the menu pauses the game and closing it resumes, so the separate "Pause" entry is gone. Pausing from the app never actually worked before: `android_jni.c` toggled its own `g_paused` instead of the one the main loop checks.
+- Settings apply immediately. Restart-only settings are marked, and you get one restart prompt when the menu closes.
+- Start + Select now opens the menu from a physical gamepad and from the touch overlay. Before, only a keyboard's N + B triggered it. The Guide button opens it too.
+- Save/load slots open in a grid of thumbnails that you navigate with the D-pad. They are listed with one storage query instead of two per slot.
+- The Touch tab only appears on devices with a touchscreen.
+
 ### Widescreen Camera Stops Before Area Edges
 
 With an extended aspect ratio, the overworld camera used the 4:3 bounds. At an area edge, the extra width showed black bars (up to 96px on the side, plus 16px at the bottom with `extend_y`). Now the camera stops early enough that the wider view stays inside the area, including after area transitions, dungeon exits and flute travel.

@@ -16,8 +16,8 @@
 #define LOG_TAG "Zelda3JNI"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
-// Android-specific global state (desktop has these in main.c)
-uint8_t g_paused = 0;
+// Pause flag checked by the main loop in main.c
+extern uint8 g_paused;
 
 // External function declarations
 void ParseConfigFile(const char *filename);

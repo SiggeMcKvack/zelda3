@@ -88,7 +88,8 @@ static const char kWindowTitle[] = "The Legend of Zelda: A Link to the Past";
 static uint32 g_win_flags = SDL_WINDOW_RESIZABLE;
 static SDL_Window *g_window;
 
-static uint8 g_paused, g_turbo, g_replay_turbo = true, g_cursor = true;
+uint8 g_paused;  // Not static: Android's pause menu toggles it via JNI (android_jni.c)
+static uint8 g_turbo, g_replay_turbo = true, g_cursor = true;
 static uint8 g_current_window_scale;
 static uint8 g_gamepad_buttons;
 static int g_input1_state;

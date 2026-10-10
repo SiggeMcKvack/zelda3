@@ -232,23 +232,32 @@ adb shell ls -lh /sdcard/Android/data/com.dishii.zelda3/files/zelda3_assets.dat
 
 **Android uses an in-app Settings UI instead of manual zelda3.ini editing.**
 
-**To access Settings:**
-1. Launch the app
-2. Swipe from the left edge or tap the **menu button** during gameplay
-3. The navigation drawer appears with all options
-4. Configure options through the UI dialogs
+**To open the pause menu** during gameplay, use any of:
+- **Start + Select** on a gamepad or the touch overlay (N + B on a keyboard)
+- The gamepad's **Guide/Home** button (where the system passes it to apps)
+- **Back** (TV remote back, or the system back gesture on phones)
 
-**Navigation Drawer Options:**
-- **Return to game** - Resume gameplay
-- **Pause** - Pause/unpause the game
-- **Save state / Load state** - Quick save and load with thumbnails
-- **Gameplay settings** - Feature toggles (see below)
-- **Controller settings** - Button mapping for physical gamepads
-- **Graphics options** - Renderer, aspect ratio, display settings
-- **Audio options** - MSU audio, volume, low health beep
-- **Overlay options** - Touch control customization
-- **Language** - Select from available language packs
-- **Exit** - Close the app
+The game pauses while the menu is open and resumes when it closes. The menu is built for controllers and TV remotes but works by touch too:
+
+| Input | Action |
+|-------|--------|
+| D-pad up/down | Move between rows |
+| D-pad left/right | Change the value (toggles, choices, sliders) |
+| A | Select / toggle |
+| B | Back one page, or resume from the top level |
+| L / R | Previous / next tab |
+| Start | Resume |
+
+Settings apply as soon as you change them. Rows with a ⟳ icon only take effect after a restart. If you changed any of them, the app offers to restart when you close the menu.
+
+**Tabs:**
+- **Game** - Resume, save state / load state (slots with thumbnails), exit
+- **Gameplay** - Feature toggles (see below)
+- **Graphics** - Renderer, shader (Vulkan), aspect ratio, display settings
+- **Audio** - MSU audio, volume, low health beep
+- **Controls** - Button mapping for physical gamepads
+- **Touch** - Touch overlay customization (only on devices with a touchscreen)
+- **System** - Dialogue language (when more than one is available), delete assets file
 
 **Graphics Options:**
 - **Renderer:** SDL, OpenGL ES, or Vulkan
