@@ -95,6 +95,7 @@ Output files created in `assets/`:
 - `dialogue_pl.txt` (Polish)
 - `dialogue_pt.txt` (Portuguese)
 - `dialogue_pt_cbt.txt` (Portuguese, CBT)
+- `dialogue_it.txt` (Italian)
 - `dialogue_nl.txt` (Dutch)
 - `dialogue_sv.txt` (Swedish)
 
@@ -247,6 +248,7 @@ The tool validates ROMs using SHA1 hashing. Only these versions are supported:
 | Polish | `pl` | `3c4d605eefda1d76f101965138f238476655b11d` | [romhacking.net/5760](https://www.romhacking.net/translations/5760/) |
 | Portuguese | `pt` | `d0d09ed41f9c373fe6afdccafbf0da8c88d3d90d` | [romhacking.net/6530](https://www.romhacking.net/translations/6530/) |
 | Portuguese (CBT) | `pt-cbt` | `3b3feb7d34aa7ef3a544157a584131a07d99b98a` | `Legend of Zelda, The - A Link to the Past (USA) (Pt) (v1.1) (CBT).sfc` |
+| Italian | `it` | `ab839464566b2fadb8c5748c4df49b71bef065f4` | `The Legend of Zelda - A Link to the Past (U) [ITA v1.1].ips` applied to the US ROM with a 512-byte header |
 | Dutch | `nl` | `fa8adfdba2697c9a54d583a1284a22ac764c7637` | [romhacking.net/1124](https://www.romhacking.net/translations/1124/) |
 | Swedish | `sv` | `43cd3438469b2c3fe879ea2f410b3ef3cb3f1ca4` | [romhacking.net/982](https://www.romhacking.net/translations/982/) |
 | English Redux (v1) | `en-redux` | `b2a07a59e64c498bc1b2f28728f9bf4014c8d582` | [romhacking.net/6657](https://www.romhacking.net/translations/6657/) |
@@ -405,6 +407,7 @@ All 11 languages produce byte-perfect output matching the Python tool:
 | Polish | pl | 99 chars | 97 entries |
 | Portuguese | pt | 121 chars | 97 entries |
 | Portuguese (CBT) | pt-cbt | 98 chars (US with accents in unused symbol slots) | (uses US) |
+| Italian | it | 98 chars (US plus 0x5F-0x61; 0x61 is a wide `[!]`) | (uses US) |
 | Spanish | es | 99 chars | 97 entries |
 | Dutch | nl | 94 chars | 97 entries |
 | Redux | en-redux | (uses US) | (uses US) |
@@ -430,7 +433,7 @@ Once dialogue files are extracted, the game will select the language based on yo
 
 ```ini
 [General]
-Language=de  # Options: us, de, fr, fr-c, en, es, pl, pt, pt-cbt, nl, sv, en-redux, en-kal, en-gn
+Language=de  # Options: us, de, fr, fr-c, en, es, pl, pt, pt-cbt, it, nl, sv, en-redux, en-kal, en-gn
 ```
 
 ## Troubleshooting

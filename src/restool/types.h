@@ -23,6 +23,7 @@ typedef enum {
   ROM_LANG_RETRANS_KAL,  // Kaleidoscope retranslation
   ROM_LANG_EN_GN,   // English, gender neutral
   ROM_LANG_PT_CBT,  // Portuguese translation by CBT
+  ROM_LANG_IT,      // Italian translation
 } RomLanguage;
 
 // ROM structure

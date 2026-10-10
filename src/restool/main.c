@@ -808,7 +808,7 @@ static bool ExtractDialogueFontFromROM(Rom *rom, const char *lang,
   if (strcmp(lang, "us") != 0 && strcmp(lang, "en-redux") != 0 &&
       strcmp(lang, "en-kal") != 0 && strcmp(lang, "en-gn") != 0 && strcmp(lang, "es") != 0 &&
       strcmp(lang, "pl") != 0 && strcmp(lang, "nl") != 0 &&
-      strcmp(lang, "sv") != 0 && strcmp(lang, "pt") != 0) {
+      strcmp(lang, "sv") != 0 && strcmp(lang, "pt") != 0 && strcmp(lang, "it") != 0) {
     // Non-US languages (de, fr, en, fr-c) have different character sets
     // They require font extraction from their respective ROMs
     return false;  // Silently fail - caller will try other sources
@@ -957,6 +957,7 @@ static bool ExtractDialogueFontFromPNG(Rom *rom, const char *lang, uint8_t **out
     { "pl", "font_pl.png", 99 },
     { "pt", "font_pt.png", 121 },
     { "pt-cbt", "font_pt_cbt.png", 99 },  // Font comes from the CBT ROM (font_pt_cbt.bin)
+    { "it", "font.png", 99 },          // Italian uses US font
     { "nl", "font_nl.png", 99 },       // Dutch
     { "en-redux", "font.png", 99 },       // Redux uses US font
     { "en-kal", "font.png", 99 }, // Kaleidoscope uses US font
@@ -3851,6 +3852,7 @@ static const FontRomConfig kFontRomConfigs[] = {
   { "pl",         0x8E8000, 0x8ECADF, 99 },
   { "pt",         0x8E8000, 0x8ECADF, 121 },
   { "pt-cbt",     0x8E8000, 0x8ECADF, 99 },
+  { "it",         0x8E8000, 0x8ECADF, 99 },
   { "nl",         0x8E8000, 0x8ECADF, 99 },
   { "sv",         0x8E8000, 0x8ECADF, 99 },
   { "en-redux",      0x8E8000, 0x8ECADF, 99 },

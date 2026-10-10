@@ -263,7 +263,7 @@ The configuration file `zelda3.ini` is created automatically on first run. It co
 ```ini
 [General]
 # Language selection (requires appropriate asset file)
-# Options: us, en, de, fr, fr-c, es, pl, pt, pt-cbt, nl, sv, en-redux, en-kal, en-gn
+# Options: us, en, de, fr, fr-c, es, pl, pt, pt-cbt, it, nl, sv, en-redux, en-kal, en-gn
 Language = de
 
 # Automatically save state on quit and reload on start
@@ -496,6 +496,7 @@ Zelda3 supports multiple languages through ROM extraction:
 - `pl` - Polish
 - `pt` - Portuguese
 - `pt-cbt` - Portuguese (Brazil), CBT translation v1.1
+- `it` - Italian translation v1.1
 - `nl` - Dutch
 - `sv` - Swedish
 - `en-redux` - English Redux (ROM hack; `redux` in older asset files)

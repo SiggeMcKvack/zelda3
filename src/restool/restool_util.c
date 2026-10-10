@@ -572,6 +572,7 @@ static const RomLanguageEntry kRomLanguages[] = {
   { ROM_SHA1_REDUX9, ROM_LANG_REDUX, "English Retranslation 1.01 (Translation Quest)", "en-redux" },
   { ROM_SHA1_EN_GN,  ROM_LANG_EN_GN, "English (Gender Neutral)", "en-gn" },
   { ROM_SHA1_PT_CBT, ROM_LANG_PT_CBT, "Portuguese (CBT) v1.1", "pt-cbt" },
+  { ROM_SHA1_IT,     ROM_LANG_IT,    "Italian v1.1", "it" },
   { ROM_SHA1_NL,     ROM_LANG_NL,    "Dutch - https://www.romhacking.net/translations/1124/", "nl" },
   { ROM_SHA1_SV,     ROM_LANG_SV,    "Swedish - https://www.romhacking.net/translations/982/", "sv" },
   { ROM_SHA1_SV_NOHDR, ROM_LANG_SV,  "Swedish - https://www.romhacking.net/translations/982/", "sv" },

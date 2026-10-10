@@ -163,6 +163,7 @@ static const struct {
   { ROM_SHA1_PL,     "pl",    "Polish" },
   { ROM_SHA1_PT,     "pt",    "Portuguese" },
   { ROM_SHA1_PT_CBT, "pt-cbt", "Portuguese (CBT)" },
+  { ROM_SHA1_IT,     "it",    "Italian" },
   { ROM_SHA1_REDUX1, "en-redux", "English Retranslation 1.0" },
   { ROM_SHA1_REDUX2, "en-redux", "English Redux" },
   { ROM_SHA1_REDUX3, "en-redux", "English Redux v10.2.3" },
