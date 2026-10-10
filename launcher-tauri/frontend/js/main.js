@@ -687,6 +687,11 @@ async function createDat() {
     if (result.ok) {
       setStatus("DAT created (" + (result.languages.join(", ") || "us") + ").", "ok");
       refreshDatStatus();
+      // Start over; kept on failure so the user can retry. The click handler re-renders the base ROM.
+      baseRom = null;
+      languageRoms = [];
+      document.getElementById("base-rom-info").replaceChildren();
+      renderLangList();
     } else {
       setStatus("DAT creation failed: " + (result.error || "unknown"), "err");
     }
