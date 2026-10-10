@@ -144,6 +144,7 @@ body {
   background-position: right 10px center;
 }
 .row input:focus,
+#language-select { width: calc(var(--control-w) * 1.1); }  /* fits "English (Gender Neutral) (en-gn)" */
 .row select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .row input[type="checkbox"] { width: 18px; height: 18px; margin: 0; }
 
