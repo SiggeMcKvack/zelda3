@@ -372,7 +372,7 @@ function renderGeneralPanel(panel) {
     </div>
     <div id="base-rom-info" class="muted assets-info"></div>
     <div class="row">
-      <label class="field-label">Language ROMs (optional)</label>
+      <label class="field-label">Language ROMs or .ips patches (optional)</label>
       <button id="add-lang" class="btn">Browse…</button>
     </div>
     <ul id="lang-rom-list" class="lang-list"></ul>
@@ -610,12 +610,20 @@ async function pickBaseRom() {
 }
 
 async function addLanguageRom() {
-  const path = await pickRom();
+  const path = await invoke("pick_file", {
+    filterName: "SNES ROM or IPS patch", extensions: ["sfc", "smc", "fig", "bin", "ips"],
+  });
   if (!path) return;
+  const isPatch = path.toLowerCase().endsWith(".ips");
+  if (isPatch && !baseRom) {
+    setStatus("Select the base US ROM first; .ips patches are applied to it.", "err");
+    return;
+  }
   let lang = "";
   try {
-    const id = JSON.parse(await invoke("identify_rom", { path }));
+    const id = JSON.parse(await invoke("identify_rom", { path, baseRom: isPatch ? baseRom : null }));
     if (id.valid) lang = id.lang_code;
+    else if (isPatch) setStatus("That patch does not produce a known translation from the base ROM.", "err");
   } catch (_) { /* ignore identify errors; backend re-validates */ }
   languageRoms.push({ path, lang });
   renderLangList();

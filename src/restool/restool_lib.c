@@ -28,9 +28,28 @@ const char *Restool_GetDialogueDir(void) {
 }
 
 bool Restool_IdentifyRom(const char *rom_path, RestoolRomInfo *out_info) {
+    return Restool_IdentifyRomEx(rom_path, NULL, out_info);
+}
+
+bool Restool_IdentifyRomEx(const char *rom_path, const char *base_rom_path, RestoolRomInfo *out_info) {
     if (!out_info) return false;
 
     memset(out_info, 0, sizeof(*out_info));
+
+    if (Rom_IsIpsPath(rom_path)) {
+        // Patches are identified by the ROM they produce from the base ROM
+        Rom *rom = Rom_LoadIpsPatched(rom_path, base_rom_path);
+        if (rom) {
+            strncpy(out_info->lang_code, Rom_GetLanguageCode(rom->language), sizeof(out_info->lang_code) - 1);
+            strncpy(out_info->lang_name, rom->language_name, sizeof(out_info->lang_name) - 1);
+            out_info->valid = true;
+            Rom_Free(rom);
+        } else {
+            strcpy(out_info->lang_code, "unknown");
+            strcpy(out_info->lang_name, "Unknown patch");
+        }
+        return true;
+    }
 
     RomIdentification id;
     if (!RomSha1_ValidateFile(rom_path, &id)) {
@@ -44,8 +63,13 @@ bool Restool_IdentifyRom(const char *rom_path, RestoolRomInfo *out_info) {
 }
 
 int Restool_ExtractDialogue(const char *rom_path, const char *output_dir) {
-    // Load ROM
-    Rom *rom = Rom_Load(rom_path);
+    return Restool_ExtractDialogueEx(rom_path, NULL, output_dir);
+}
+
+int Restool_ExtractDialogueEx(const char *rom_path, const char *base_rom_path, const char *output_dir) {
+    // Load ROM, or apply an IPS patch to the base ROM
+    Rom *rom = Rom_IsIpsPath(rom_path) ? Rom_LoadIpsPatched(rom_path, base_rom_path)
+                                       : Rom_Load(rom_path);
     if (!rom) {
         return RESTOOL_ERR_ROM_LOAD;
     }

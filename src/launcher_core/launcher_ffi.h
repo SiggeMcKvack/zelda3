@@ -27,7 +27,9 @@ char *LauncherFfi_ValidateConfigJson(const char *config_json);
 char *LauncherFfi_ResetDefaults(const char *ini_path);
 
 // Identify a ROM file. Returns {"read":bool,"valid":bool,"lang_code":str,"lang_name":str}.
-char *LauncherFfi_IdentifyRom(const char *rom_path);
+// rom_path may be an .ips translation patch; it is then applied to the US ROM at
+// base_rom_path (may be NULL for plain ROMs).
+char *LauncherFfi_IdentifyRom(const char *rom_path, const char *base_rom_path);
 
 // Create zelda3_assets.dat from a US ROM (+ optional language ROMs).
 // options_json: {"us_rom_path":str,"output_dir":str,"language_roms":[path,...]}

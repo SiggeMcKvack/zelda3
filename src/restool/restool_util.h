@@ -16,6 +16,17 @@
 // Returns NULL on error
 Rom* Rom_Load(const char *path);
 
+// Same as Rom_Load, but from a malloc'd buffer (takes ownership)
+Rom* Rom_LoadFromData(uint8_t *data, size_t size);
+
+// True if path ends in .ips
+bool Rom_IsIpsPath(const char *path);
+
+// Apply an IPS translation patch to the US ROM at base_rom_path.
+// Works for patches made for headerless or headered (512-byte) ROMs.
+// Returns NULL unless the result is a known non-US ROM.
+Rom* Rom_LoadIpsPatched(const char *ips_path, const char *base_rom_path);
+
 // Free ROM memory
 void Rom_Free(Rom *rom);
 

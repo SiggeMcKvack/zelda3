@@ -29,11 +29,19 @@ typedef struct {
 // Returns: true if ROM was read successfully (even if unknown)
 bool Restool_IdentifyRom(const char *rom_path, RestoolRomInfo *out_info);
 
+// Same, but rom_path may also be an .ips translation patch; it is applied to
+// the US ROM at base_rom_path and identified by the resulting ROM.
+bool Restool_IdentifyRomEx(const char *rom_path, const char *base_rom_path, RestoolRomInfo *out_info);
+
 // Extract dialogue from a single ROM file to text file
 // rom_path: Path to ROM file (any language)
 // output_dir: Directory to write dialogue_{lang}.txt (or dialogue.txt for US)
 // Returns: RESTOOL_OK on success, error code on failure
 int Restool_ExtractDialogue(const char *rom_path, const char *output_dir);
+
+// Same, but rom_path may also be an .ips translation patch applied to the
+// US ROM at base_rom_path.
+int Restool_ExtractDialogueEx(const char *rom_path, const char *base_rom_path, const char *output_dir);
 
 // Options for asset compilation
 typedef struct {

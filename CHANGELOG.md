@@ -54,6 +54,14 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 Every overworld hole (Pyramid, Hyrule Castle secret passage, Kakariko well, Lost Woods, etc.) dropped Link into Chris Houlihan's room. Since the December 2025 switch to the C restool, `kFallHole_Pos` was extracted with an extra `+0x400`. The Python pipeline added it when extracting but removed it again when compiling. Now the raw ROM values are used.
 
+### Launcher: Translation .ips Patches
+
+The launcher's language list now accepts `.ips` translation patches as well as translated ROMs. The patch is applied to the base US ROM in memory. Patches made for a headered ROM (512-byte copier header) or a headerless ROM both work; the result must be a known translated ROM. Tested with the Dutch and Swedish patches.
+
+- The Swedish ROM is also recognized when patched onto the headerless US ROM.
+- `restool_lib`: new `Restool_IdentifyRomEx()` / `Restool_ExtractDialogueEx()` take the base ROM for patches. The existing functions are unchanged.
+- `LauncherFfi_IdentifyRom()` now takes a base ROM path (may be NULL).
+
 ### Fixed: C Restool Output Now Matches the Python Restool
 
 A full asset-by-asset diff against the old Python pipeline found more differences:

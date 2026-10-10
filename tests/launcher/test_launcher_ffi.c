@@ -111,16 +111,22 @@ static void test_ffi_save_is_idempotent(void) {
 // (a full ROM-based test needs a copyrighted ROM, so isn't run here).
 static void test_restool_ffi_shapes(void) {
     // Identifying this source file (not a ROM) must not crash and report invalid.
-    char *id = LauncherFfi_IdentifyRom(kInputIni);
+    char *id = LauncherFfi_IdentifyRom(kInputIni, NULL);
     TEST_ASSERT_NOT_NULL(id);
     TEST_ASSERT_NOT_NULL_MESSAGE(strstr(id, "\"valid\":false"), "non-ROM reported valid");
     LauncherFfi_FreeString(id);
 
     // NULL path is handled.
-    char *id_null = LauncherFfi_IdentifyRom(NULL);
+    char *id_null = LauncherFfi_IdentifyRom(NULL, NULL);
     TEST_ASSERT_NOT_NULL(id_null);
     TEST_ASSERT_NOT_NULL(strstr(id_null, "\"read\":false"));
     LauncherFfi_FreeString(id_null);
+
+    // An .ips without a usable base ROM is read but not valid.
+    char *id_ips = LauncherFfi_IdentifyRom("missing.ips", NULL);
+    TEST_ASSERT_NOT_NULL(id_ips);
+    TEST_ASSERT_NOT_NULL(strstr(id_ips, "\"valid\":false"));
+    LauncherFfi_FreeString(id_ips);
 
     // No DAT in /tmp -> exists:false with an (empty) languages array.
     char *st = LauncherFfi_DatStatus("/tmp");

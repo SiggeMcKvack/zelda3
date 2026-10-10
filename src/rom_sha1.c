@@ -168,6 +168,7 @@ static const struct {
   { ROM_SHA1_REDUX5, "redux", "English Redux v10.2.3" },
   { ROM_SHA1_NL,     "nl",    "Dutch" },
   { ROM_SHA1_SV,     "sv",    "Swedish" },
+  { ROM_SHA1_SV_NOHDR, "sv", "Swedish" },
   { ROM_SHA1_RETRANS_KAL, "retrans-kal", "English (Kaleidoscope)" },
   { NULL, NULL, NULL }
 };

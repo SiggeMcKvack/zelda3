@@ -21,7 +21,8 @@
 #define ROM_SHA1_REDUX4 "92db633bc1fad0d865794eb437ebc81ec076fdc7"
 #define ROM_SHA1_REDUX5 "d9786698ea43e5688aeeaaec92502a4bf16c3eb5"
 #define ROM_SHA1_NL     "fa8adfdba2697c9a54d583a1284a22ac764c7637"
-#define ROM_SHA1_SV     "43cd3438469b2c3fe879ea2f410b3ef3cb3f1ca4"
+#define ROM_SHA1_SV     "43cd3438469b2c3fe879ea2f410b3ef3cb3f1ca4"  // patched with a 512-byte header
+#define ROM_SHA1_SV_NOHDR "d45f706334fd346a08538c8933d63b4da665525a"  // same, headerless
 #define ROM_SHA1_RETRANS_KAL "ebf8d301ffaf5d412a8c3c832c0f0a92cfa2f16b"
 
 // ROM identification result

@@ -67,10 +67,16 @@ pub fn reset_config_defaults(ini_path: &str) -> Option<String> {
 }
 
 /// Identify a ROM. Returns `{"read":bool,"valid":bool,"lang_code":str,"lang_name":str}`.
-pub fn identify_rom(rom_path: &str) -> Option<String> {
+/// `rom_path` may be an `.ips` translation patch, applied to the US ROM `base_rom_path`.
+pub fn identify_rom(rom_path: &str, base_rom_path: Option<&str>) -> Option<String> {
     let c_path = CString::new(rom_path).ok()?;
+    let c_base = match base_rom_path {
+        Some(b) => Some(CString::new(b).ok()?),
+        None => None,
+    };
+    let base_ptr = c_base.as_ref().map_or(std::ptr::null(), |b| b.as_ptr());
     let _guard = ASSET_LOCK.lock().unwrap();
-    unsafe { take_c_string(ffi::LauncherFfi_IdentifyRom(c_path.as_ptr())) }
+    unsafe { take_c_string(ffi::LauncherFfi_IdentifyRom(c_path.as_ptr(), base_ptr)) }
 }
 
 /// Create zelda3_assets.dat. `options_json` = `{us_rom_path, output_dir, language_roms[]}`.

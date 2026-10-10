@@ -40,19 +40,24 @@ uint32_t SnesAddrToRomOffset(uint32_t snes_addr) {
 // ============================================================================
 
 Rom* Rom_Load(const char *path) {
+  size_t size;
+  uint8_t *data = Platform_ReadWholeFile(path, &size);
+  if (!data) {
+    LogError("Failed to read ROM file: %s", path);
+    return NULL;
+  }
+  return Rom_LoadFromData(data, size);
+}
+
+Rom* Rom_LoadFromData(uint8_t *data, size_t size) {
   Rom *rom = calloc(1, sizeof(Rom));
   if (!rom) {
     LogError("Failed to allocate ROM structure");
+    free(data);
     return NULL;
   }
-
-  // Read entire ROM file
-  rom->data = Platform_ReadWholeFile(path, &rom->size);
-  if (!rom->data) {
-    LogError("Failed to read ROM file: %s", path);
-    free(rom);
-    return NULL;
-  }
+  rom->data = data;
+  rom->size = size;
 
   // Check for SMC header (512 bytes)
   if (rom->size % 1024 == 512) {
@@ -89,6 +94,114 @@ Rom* Rom_Load(const char *path) {
   }
 
   return rom;
+}
+
+bool Rom_IsIpsPath(const char *path) {
+  size_t n = path ? strlen(path) : 0;
+  return n >= 4 && strcasecmp(path + n - 4, ".ips") == 0;
+}
+
+// Applies an IPS patch to `base`. Patch offsets are reduced by `shift`; data
+// that would land before offset 0 is dropped (it targets a copier header).
+// Returns a malloc'd buffer, or NULL if the patch is malformed.
+static uint8_t *ApplyIps(const uint8_t *base, size_t base_size, const uint8_t *ips,
+                         size_t ips_size, size_t shift, size_t *out_size) {
+  enum { kMaxRomSize = 16 * 1024 * 1024 };
+  if (ips_size < 8 || memcmp(ips, "PATCH", 5) != 0)
+    return NULL;
+  uint8_t *out = malloc(kMaxRomSize);
+  if (!out)
+    return NULL;
+  memcpy(out, base, base_size);
+  size_t size = base_size, i = 5;
+  for (;;) {
+    if (i + 3 > ips_size)
+      goto fail;
+    size_t ofs = ips[i] << 16 | ips[i + 1] << 8 | ips[i + 2];
+    i += 3;
+    if (ofs == 0x454F46)  // "EOF"
+      break;
+    if (i + 2 > ips_size)
+      goto fail;
+    size_t len = ips[i] << 8 | ips[i + 1];
+    i += 2;
+    const uint8_t *src = NULL;
+    uint8_t fill = 0;
+    if (len == 0) {  // RLE record
+      if (i + 3 > ips_size)
+        goto fail;
+      len = ips[i] << 8 | ips[i + 1];
+      fill = ips[i + 2];
+      i += 3;
+    } else {
+      if (i + len > ips_size)
+        goto fail;
+      src = ips + i;
+      i += len;
+    }
+    size_t skip = ofs < shift ? shift - ofs : 0;
+    if (skip >= len)
+      continue;
+    size_t dst = ofs + skip - shift, n = len - skip;
+    if (dst + n > kMaxRomSize)
+      goto fail;
+    if (dst > size)
+      memset(out + size, 0, dst - size);
+    if (src)
+      memcpy(out + dst, src + skip, n);
+    else
+      memset(out + dst, fill, n);
+    if (dst + n > size)
+      size = dst + n;
+  }
+  if (i + 3 <= ips_size) {  // Optional truncation extension
+    size_t trunc = ips[i] << 16 | ips[i + 1] << 8 | ips[i + 2];
+    if (trunc >= shift && trunc - shift < size)
+      size = trunc - shift;
+  }
+  *out_size = size;
+  return out;
+fail:
+  free(out);
+  return NULL;
+}
+
+Rom* Rom_LoadIpsPatched(const char *ips_path, const char *base_rom_path) {
+  Rom *base = base_rom_path ? Rom_Load(base_rom_path) : NULL;
+  if (!base || base->language != ROM_LANG_US) {
+    LogError("IPS patch needs the US ROM as base: %s", base_rom_path ? base_rom_path : "(none)");
+    Rom_Free(base);
+    return NULL;
+  }
+  size_t ips_size;
+  uint8_t *ips = Platform_ReadWholeFile(ips_path, &ips_size);
+  if (!ips) {
+    LogError("Failed to read IPS patch: %s", ips_path);
+    Rom_Free(base);
+    return NULL;
+  }
+  // Patches are made for either the headerless ROM or one with a 512-byte
+  // copier header. Try both and keep the result that is a known ROM.
+  Rom *result = NULL;
+  static const size_t kShifts[] = { 0, 512 };
+  for (int k = 0; k < 2 && !result; k++) {
+    size_t size;
+    uint8_t *data = ApplyIps(base->data, base->size, ips, ips_size, kShifts[k], &size);
+    if (!data) {
+      LogError("Malformed IPS patch: %s", ips_path);
+      break;
+    }
+    Rom *rom = Rom_LoadFromData(data, size);
+    if (rom && rom->language != ROM_LANG_UNKNOWN && rom->language != ROM_LANG_US)
+      result = rom;
+    else
+      Rom_Free(rom);
+  }
+  if (!result)
+    LogError("IPS patch does not produce a known translated ROM: %s", ips_path);
+  free(ips);
+  Rom_Free(base);
+  return result;
 }
 
 void Rom_Free(Rom *rom) {
@@ -164,6 +277,7 @@ static const RomLanguageEntry kRomLanguages[] = {
   { ROM_SHA1_REDUX5, ROM_LANG_REDUX, "English Redux v10.2.3 - https://www.romhacking.net/hacks/2594/", "redux" },
   { ROM_SHA1_NL,     ROM_LANG_NL,    "Dutch - https://www.romhacking.net/translations/1124/", "nl" },
   { ROM_SHA1_SV,     ROM_LANG_SV,    "Swedish - https://www.romhacking.net/translations/982/", "sv" },
+  { ROM_SHA1_SV_NOHDR, ROM_LANG_SV,  "Swedish - https://www.romhacking.net/translations/982/", "sv" },
   { ROM_SHA1_RETRANS_KAL, ROM_LANG_RETRANS_KAL, "English Retranslation (Kaleidoscope v1.0) - https://www.romhacking.net/hacks/5526/", "retrans-kal" },
   { NULL, ROM_LANG_UNKNOWN, NULL, NULL }  // Terminator
 };

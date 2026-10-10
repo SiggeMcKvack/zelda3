@@ -136,10 +136,11 @@ pub fn scan_msu_folder(folder: String) -> String {
     crate::scan_msu_folder(&folder)
 }
 
-/// Identify a ROM file. Returns `{"read","valid","lang_code","lang_name"}`.
+/// Identify a ROM file or `.ips` translation patch (applied to `base_rom`).
+/// Returns `{"read","valid","lang_code","lang_name"}`.
 #[tauri::command]
-pub async fn identify_rom(path: String) -> Result<String, String> {
-    blocking(move || ok_or_err(crate::identify_rom(&path), "identify")).await?
+pub async fn identify_rom(path: String, base_rom: Option<String>) -> Result<String, String> {
+    blocking(move || ok_or_err(crate::identify_rom(&path, base_rom.as_deref()), "identify")).await?
 }
 
 /// Encode MSU `.pcm` files in `folder` (matching `prefix`; relative = data dir)

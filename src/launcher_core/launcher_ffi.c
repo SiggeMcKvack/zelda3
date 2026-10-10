@@ -343,11 +343,11 @@ static const char *restool_err_string(int rc) {
     }
 }
 
-char *LauncherFfi_IdentifyRom(const char *rom_path) {
+char *LauncherFfi_IdentifyRom(const char *rom_path, const char *base_rom_path) {
     cJSON *r = cJSON_CreateObject();
     RestoolRomInfo info;
     memset(&info, 0, sizeof(info));
-    bool read = rom_path && Restool_IdentifyRom(rom_path, &info);
+    bool read = rom_path && Restool_IdentifyRomEx(rom_path, base_rom_path, &info);
     cJSON_AddBoolToObject(r, "read", read);
     cJSON_AddBoolToObject(r, "valid", read && info.valid);
     cJSON_AddStringToObject(r, "lang_code", read ? info.lang_code : "");
@@ -358,6 +358,7 @@ char *LauncherFfi_IdentifyRom(const char *rom_path) {
 }
 
 // options_json: { "us_rom_path": str, "output_dir": str, "language_roms": [path,...] }
+// language_roms may also be .ips translation patches; they are applied to the US ROM.
 // Mirrors the GTK launcher workflow: extract dialogue from each non-US language
 // ROM into output_dir, compile assets (US + languages) to output_dir/zelda3_assets.dat,
 // then remove the temporary dialogue_{lang}.txt files.
@@ -397,10 +398,10 @@ char *LauncherFfi_CreateDat(const char *options_json) {
 
             RestoolRomInfo li;
             memset(&li, 0, sizeof(li));
-            if (!Restool_IdentifyRom(item->valuestring, &li) || !li.valid) continue;
+            if (!Restool_IdentifyRomEx(item->valuestring, us_rom, &li) || !li.valid) continue;
             if (strcmp(li.lang_code, "us") == 0) continue;
 
-            int rc = Restool_ExtractDialogue(item->valuestring, out_dir);
+            int rc = Restool_ExtractDialogueEx(item->valuestring, us_rom, out_dir);
             if (rc != RESTOOL_OK) { err = restool_err_string(rc); break; }
 
             if (extracted_count < 16) {
