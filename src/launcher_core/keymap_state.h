@@ -11,6 +11,7 @@
 // Array size constants
 #define NUM_SNES_BUTTONS        12
 #define NUM_SAVE_SLOTS          10
+#define NUM_REF_SLOTS           13  // reference saves (saves/ref chapters)
 
 // Control mappings (12 SNES controls: Up, Down, Left, Right, Select, Start, A, B, X, Y, L, R)
 // Stored separately from Config since they're just pass-through strings to INI.
@@ -21,6 +22,8 @@ extern char *g_gamepad_controls[12];
 extern char *g_kbd_load[10];
 extern char *g_kbd_save[10];
 extern char *g_kbd_replay[10];
+extern char *g_kbd_load_ref[13];
+extern char *g_kbd_replay_ref[13];
 
 // Keyboard cheats
 extern char *g_kbd_cheat_life;
@@ -47,6 +50,8 @@ extern char *g_kbd_toggle_renderer;
 extern char *g_gamepad_load[10];
 extern char *g_gamepad_save[10];
 extern char *g_gamepad_replay[10];
+extern char *g_gamepad_load_ref[13];
+extern char *g_gamepad_replay_ref[13];
 
 // Gamepad cheats
 extern char *g_gamepad_cheat_life;

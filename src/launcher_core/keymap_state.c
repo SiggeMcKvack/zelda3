@@ -12,6 +12,8 @@ char *g_gamepad_controls[12] = {NULL};
 char *g_kbd_load[10] = {NULL};
 char *g_kbd_save[10] = {NULL};
 char *g_kbd_replay[10] = {NULL};
+char *g_kbd_load_ref[13] = {NULL};
+char *g_kbd_replay_ref[13] = {NULL};
 
 // Keyboard cheats
 char *g_kbd_cheat_life = NULL;
@@ -38,6 +40,8 @@ char *g_kbd_toggle_renderer = NULL;
 char *g_gamepad_load[10] = {NULL};
 char *g_gamepad_save[10] = {NULL};
 char *g_gamepad_replay[10] = {NULL};
+char *g_gamepad_load_ref[13] = {NULL};
+char *g_gamepad_replay_ref[13] = {NULL};
 
 // Gamepad cheats
 char *g_gamepad_cheat_life = NULL;

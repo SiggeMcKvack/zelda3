@@ -107,6 +107,32 @@ static void test_ffi_save_is_idempotent(void) {
     LauncherFfi_FreeString(json1);
 }
 
+// Reference save bindings must survive a load/save cycle instead of being reset
+// to the commented example, which stays when nothing is bound.
+static void test_ref_bindings_survive_save(void) {
+    size_t n = 0;
+    char *ref = read_file(kRefIni, &n);
+    TEST_ASSERT_NOT_NULL(ref);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(ref, "\n#ReplayRef = Ctrl+1,"), "unbound ReplayRef lost its example");
+    free(ref);
+
+    FILE *f = fopen("ffi_ref_in.ini", "wb");
+    TEST_ASSERT_NOT_NULL(f);
+    fputs("[KeyMap]\nReplayRef = Ctrl+1,Ctrl+2\n[GamepadMap]\nLoadRef = L2+A\n", f);
+    fclose(f);
+    char *json = LauncherFfi_LoadConfigJson("ffi_ref_in.ini");
+    TEST_ASSERT_NOT_NULL(json);
+    char *res = LauncherFfi_SaveConfigJson("ffi_ref_out.ini", json);
+    TEST_ASSERT_NOT_NULL(strstr(res, "\"ok\":true"));
+    char *out = read_file("ffi_ref_out.ini", &n);
+    TEST_ASSERT_NOT_NULL(out);
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(out, "\nReplayRef = Ctrl+1, Ctrl+2, , "), "keyboard ReplayRef not written");
+    TEST_ASSERT_NOT_NULL_MESSAGE(strstr(out, "\nLoadRef = L2+A, , "), "gamepad LoadRef not written");
+    free(out);
+    LauncherFfi_FreeString(json);
+    LauncherFfi_FreeString(res);
+}
+
 // The restool wrappers must return well-formed JSON and not crash on bad input
 // (a full ROM-based test needs a copyrighted ROM, so isn't run here).
 static void test_restool_ffi_shapes(void) {
@@ -160,6 +186,7 @@ int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_ffi_roundtrip_matches_direct);
     RUN_TEST(test_ffi_save_is_idempotent);
+    RUN_TEST(test_ref_bindings_survive_save);
     RUN_TEST(test_restool_ffi_shapes);
     RUN_TEST(test_opus_ffi_shape);
     return UNITY_END();

@@ -269,13 +269,19 @@ bool ConfigReader_Read(const char *path, Config *config) {
                 LauncherUI_ParseControlString(value, g_kbd_controls);
             }
             else if (str_ieq(key, "Load")) {
-                LauncherUI_ParseControlString(value, g_kbd_load);
+                LauncherUI_ParseControlArray(value, g_kbd_load, NUM_SAVE_SLOTS);
             }
             else if (str_ieq(key, "Save")) {
-                LauncherUI_ParseControlString(value, g_kbd_save);
+                LauncherUI_ParseControlArray(value, g_kbd_save, NUM_SAVE_SLOTS);
             }
             else if (str_ieq(key, "Replay")) {
-                LauncherUI_ParseControlString(value, g_kbd_replay);
+                LauncherUI_ParseControlArray(value, g_kbd_replay, NUM_SAVE_SLOTS);
+            }
+            else if (str_ieq(key, "LoadRef")) {
+                LauncherUI_ParseControlArray(value, g_kbd_load_ref, NUM_REF_SLOTS);
+            }
+            else if (str_ieq(key, "ReplayRef")) {
+                LauncherUI_ParseControlArray(value, g_kbd_replay_ref, NUM_REF_SLOTS);
             }
             else if (str_ieq(key, "CheatLife")) update_string(&g_kbd_cheat_life, value);
             else if (str_ieq(key, "CheatKeys")) update_string(&g_kbd_cheat_keys, value);
@@ -301,13 +307,19 @@ bool ConfigReader_Read(const char *path, Config *config) {
                 LauncherUI_ParseGamepadControlString(value, g_gamepad_controls);
             }
             else if (str_ieq(key, "Load")) {
-                LauncherUI_ParseGamepadControlString(value, g_gamepad_load);
+                LauncherUI_ParseControlArray(value, g_gamepad_load, NUM_SAVE_SLOTS);
             }
             else if (str_ieq(key, "Save")) {
-                LauncherUI_ParseGamepadControlString(value, g_gamepad_save);
+                LauncherUI_ParseControlArray(value, g_gamepad_save, NUM_SAVE_SLOTS);
             }
             else if (str_ieq(key, "Replay")) {
-                LauncherUI_ParseGamepadControlString(value, g_gamepad_replay);
+                LauncherUI_ParseControlArray(value, g_gamepad_replay, NUM_SAVE_SLOTS);
+            }
+            else if (str_ieq(key, "LoadRef")) {
+                LauncherUI_ParseControlArray(value, g_gamepad_load_ref, NUM_REF_SLOTS);
+            }
+            else if (str_ieq(key, "ReplayRef")) {
+                LauncherUI_ParseControlArray(value, g_gamepad_replay_ref, NUM_REF_SLOTS);
             }
             else if (str_ieq(key, "CheatLife")) update_string(&g_gamepad_cheat_life, value);
             else if (str_ieq(key, "CheatKeys")) update_string(&g_gamepad_cheat_keys, value);

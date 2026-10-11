@@ -468,6 +468,20 @@ static bool WriteFeaturesSection(FILE *f, const Config *config) {
   return true;
 }
 
+// Write a reference save binding line. When no slot is bound, write the unbound
+// form instead: the commented example, or an empty value without one.
+static bool WriteRefLine(FILE *f, const char *key, char **slots, const char *example) {
+  bool any = false;
+  for (int i = 0; i < NUM_REF_SLOTS; i++)
+    any |= slots[i] && *slots[i];
+  if (!any)
+    return example ? WriteLine(f, "#%s = %s\n\n", key, example) : WriteLine(f, "%s =\n\n", key);
+  char *str = LauncherUI_FormatControlString(slots, NUM_REF_SLOTS);
+  bool ok = str && WriteLine(f, "%s = %s\n\n", key, str);
+  free(str);
+  return ok;
+}
+
 // Write [KeyMap] section
 static bool WriteKeyMapSection(FILE *f, const Config *config) {
   (void)config;
@@ -521,10 +535,10 @@ static bool WriteKeyMapSection(FILE *f, const Config *config) {
   free(replay_str);
 
   if (!WriteLine(f, "# Load reference saves (uncomment to enable)\n")) return false;
-  if (!WriteLine(f, "#LoadRef = 1,2,3,4,5,6,7,8,9,0,-,=,Backspace\n\n")) return false;
+  if (!WriteRefLine(f, "LoadRef", g_kbd_load_ref, "1,2,3,4,5,6,7,8,9,0,-,=,Backspace")) return false;
 
   if (!WriteLine(f, "# Replay reference saves (uncomment to enable)\n")) return false;
-  if (!WriteLine(f, "#ReplayRef = Ctrl+1,Ctrl+2,Ctrl+3,Ctrl+4,Ctrl+5,Ctrl+6,Ctrl+7,Ctrl+8,Ctrl+9,Ctrl+0,Ctrl+-,Ctrl+=,Ctrl+Backspace\n\n")) return false;
+  if (!WriteRefLine(f, "ReplayRef", g_kbd_replay_ref, "Ctrl+1,Ctrl+2,Ctrl+3,Ctrl+4,Ctrl+5,Ctrl+6,Ctrl+7,Ctrl+8,Ctrl+9,Ctrl+0,Ctrl+-,Ctrl+=,Ctrl+Backspace")) return false;
 
   if (!WriteLine(f, "# ------------------------------------------------------------------------------\n")) return false;
   if (!WriteLine(f, "# Cheat Keys (Development/Testing)\n")) return false;
@@ -681,10 +695,10 @@ static bool WriteGamepadMapSection(FILE *f, const Config *config) {
 
   // LoadRef and ReplayRef
   if (!WriteLine(f, "# Load reference saves (13 slots, advanced feature)\n")) return false;
-  if (!WriteLine(f, "LoadRef =\n\n")) return false;
+  if (!WriteRefLine(f, "LoadRef", g_gamepad_load_ref, NULL)) return false;
 
   if (!WriteLine(f, "# Replay reference saves (13 slots, advanced feature)\n")) return false;
-  if (!WriteLine(f, "ReplayRef =\n\n")) return false;
+  if (!WriteRefLine(f, "ReplayRef", g_gamepad_replay_ref, NULL)) return false;
 
   if (!WriteLine(f, "# ------------------------------------------------------------------------------\n")) return false;
   if (!WriteLine(f, "# Cheat Keys (Development/Testing)\n")) return false;

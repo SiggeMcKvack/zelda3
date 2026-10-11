@@ -55,6 +55,8 @@ static const ArrayDef kArrays[] = {
     {"load",     g_kbd_load,     g_gamepad_load,     NUM_SAVE_SLOTS},
     {"save",     g_kbd_save,     g_gamepad_save,     NUM_SAVE_SLOTS},
     {"replay",   g_kbd_replay,   g_gamepad_replay,   NUM_SAVE_SLOTS},
+    {"load_ref",   g_kbd_load_ref,   g_gamepad_load_ref,   NUM_REF_SLOTS},
+    {"replay_ref", g_kbd_replay_ref, g_gamepad_replay_ref, NUM_REF_SLOTS},
 };
 static const int kNumArrays = (int)(sizeof(kArrays) / sizeof(kArrays[0]));
 

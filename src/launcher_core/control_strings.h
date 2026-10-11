@@ -11,5 +11,8 @@ void LauncherUI_ParseControlString(const char *str, char **controls);
 // Parse a comma-separated control string into an array (gamepad defaults).
 void LauncherUI_ParseGamepadControlString(const char *str, char **controls);
 
+// Parse comma-separated slot bindings into count entries, empty when not given.
+void LauncherUI_ParseControlArray(const char *str, char **controls, int count);
+
 // Format a control array into a comma-separated string. Caller frees the result.
 char* LauncherUI_FormatControlString(char **controls, int count);

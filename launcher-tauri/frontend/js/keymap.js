@@ -9,6 +9,14 @@
 window.CONTROL_NAMES = ["Up", "Down", "Left", "Right", "Select", "Start", "A", "B", "X", "Y", "L", "R"];
 
 const slots = (n) => Array.from({ length: n }, (_, i) => "Slot " + (i + 1));
+// Reference saves in saves/ref, in kReferenceSaves order (zelda_rtl.c)
+const chapters = [
+  "Ch 1 Zelda's Rescue", "Ch 2 After Eastern Palace", "Ch 3 After Desert Palace",
+  "Ch 4 After Tower of Hera", "Ch 5 After Hyrule Castle Tower", "Ch 6 After Dark Palace",
+  "Ch 7 After Swamp Palace", "Ch 8 After Skull Woods", "Ch 9 After Gargoyle's Domain",
+  "Ch 10 After Ice Palace", "Ch 11 After Misery Mire", "Ch 12 After Turtle Rock",
+  "Ch 13 After Ganon's Tower",
+];
 
 // Groups rendered for each device. kind=array -> indexed array key; kind=scalars
 // -> individual string keys. Keys match the kbd/gamepad JSON objects.
@@ -17,6 +25,8 @@ window.KEYMAP_GROUPS = [
   { title: "Load state", kind: "array", key: "load", labels: slots(10) },
   { title: "Save state", kind: "array", key: "save", labels: slots(10) },
   { title: "Replay", kind: "array", key: "replay", labels: slots(10) },
+  { title: "Load reference save", kind: "array", key: "load_ref", labels: chapters },
+  { title: "Replay reference save", kind: "array", key: "replay_ref", labels: chapters },
   { title: "Cheats", kind: "scalars", items: [
     ["cheat_life", "Life / Magic"],
     ["cheat_keys", "Keys"],

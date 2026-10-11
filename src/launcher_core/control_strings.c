@@ -6,15 +6,13 @@
 #include <string.h>
 #include <ctype.h>
 
-// Internal: Parse comma-separated control string into array with given defaults
-static void parse_control_string_internal(const char *str, char **controls,
+// Internal: Parse comma-separated control string into an array of count entries.
+// An empty string gives the defaults, or all empty entries when defaults is NULL.
+static void parse_control_string_internal(const char *str, char **controls, int count,
                                           const char **defaults) {
     if (!str || !*str) {
-        // Use defaults if no string provided
-        for (int i = 0; i < NUM_SNES_BUTTONS; i++) {
-            controls[i] = strdup(defaults[i]);
-            if (!controls[i]) controls[i] = strdup("");
-        }
+        for (int i = 0; i < count; i++)
+            controls[i] = strdup(defaults ? defaults[i] : "");
         return;
     }
 
@@ -22,7 +20,7 @@ static void parse_control_string_internal(const char *str, char **controls,
     const char *p = str;
     int i = 0;
 
-    while (*p && i < NUM_SNES_BUTTONS) {
+    while (*p && i < count) {
         // Find next comma or end of string
         const char *comma = strchr(p, ',');
         const char *end = comma ? comma : p + strlen(p);
@@ -56,7 +54,7 @@ static void parse_control_string_internal(const char *str, char **controls,
     }
 
     // Fill remaining with empty strings
-    while (i < NUM_SNES_BUTTONS) {
+    while (i < count) {
         controls[i++] = strdup("");
     }
 }
@@ -75,12 +73,17 @@ static const char *kDefaultGamepadControls[NUM_SNES_BUTTONS] = {
 
 // Parse comma-separated control string into array (keyboard controls)
 void LauncherUI_ParseControlString(const char *str, char **controls) {
-    parse_control_string_internal(str, controls, kDefaultKeyboardControls);
+    parse_control_string_internal(str, controls, NUM_SNES_BUTTONS, kDefaultKeyboardControls);
 }
 
 // Parse comma-separated control string into array (gamepad controls)
 void LauncherUI_ParseGamepadControlString(const char *str, char **controls) {
-    parse_control_string_internal(str, controls, kDefaultGamepadControls);
+    parse_control_string_internal(str, controls, NUM_SNES_BUTTONS, kDefaultGamepadControls);
+}
+
+// Parse comma-separated slot bindings (save states, replays) into count entries
+void LauncherUI_ParseControlArray(const char *str, char **controls, int count) {
+    parse_control_string_internal(str, controls, count, NULL);
 }
 
 // Format control array into comma-separated string

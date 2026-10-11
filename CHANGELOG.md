@@ -4,6 +4,12 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## October 2026
 
+### Fixed: Launcher Kept Resetting Reference Save Keys
+
+The launcher rewrites `zelda3.ini` on Save & Launch, and always wrote `LoadRef` and `ReplayRef` as commented-out examples, so binding the reference saves by hand never stuck. Both are now kept, and the Keyboard and Gamepad tabs have "Load reference save" and "Replay reference save" groups with one row per chapter. With nothing bound, the INI keeps the commented example as before.
+
+- Reading the Load, Save and Replay bindings wrote 12 entries into their 10 slots, and an empty value filled them with the SNES button defaults. They are now read with the right count and stay empty when unset.
+
 ### Widescreen: Dungeon Floor Pattern at the Sides
 
 Dungeon rooms locked to 256px, like Ganon's room, showed black sides because the floor pattern around the walls (the dotted background) has more than one color. Now the extended width beyond the room repeats that pattern, taken from the room's top left corner, including the extend_y lines below it.
