@@ -29,7 +29,7 @@ With extend_y, the 16 extra lines at the bottom went black when the camera moved
 
 ### Widescreen: Ending Credits
 
-The ending scenes, like Sahasrahla's homecoming in Kakariko, now use the extended width instead of being pillarboxed. Overworld scenes are limited to the area like regular play, and the dungeon scenes to the room. The closing triangles and "The End" stay 4:3, and the scene captions stay centered.
+The ending scenes, like Sahasrahla's homecoming in Kakariko, now use the extended width instead of being pillarboxed. Overworld scenes are limited to the area like regular play, and the dungeon scenes to the room. The staff roll after them shows its sky background across the full width too. Scene captions and the names stay centered.
 
 - The widescreen camera no longer moves the credits camera when a scene loads. Four scenes (5, 7, 8 and 12) started from a different spot than the original, even when pillarboxed, so their pans were shorter and one ended 9px off.
 

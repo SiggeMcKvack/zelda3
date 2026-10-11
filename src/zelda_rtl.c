@@ -236,7 +236,8 @@ static void ConfigurePpuSideSpace() {
     // of room below a 224 line view, so show those too.
     if (enhanced_features0 & kFeatures0_WidescreenCamera)
       extra_bottom = IntMax((int16)room_bounds_y.b1 + 16 - (int16)BG2VOFS_copy2, 0);
-  } else if (mod == 20 || mod == 0 || mod == 1 || mod == 2 || mod == 3 || mod == 4) {
+  } else if (mod == 20 || mod == 0 || mod == 1 || mod == 2 || mod == 3 || mod == 4 ||
+             mod == 26) {  // the staff roll's background is 512 pixels wide
     extra_left = kPpuExtraLeftRight, extra_right = kPpuExtraLeftRight;
     extra_bottom = 16;
   }
