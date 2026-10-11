@@ -197,8 +197,9 @@ static void ConfigurePpuSideSpace() {
   int mod = main_module_index;
   if (mod == 14)
     mod = saved_module_for_menu;
-  // Credits scenes are plain overworld or dungeon views until the closing triangles
-  if (mod == 26 && submodule_index < 32)
+  // Credits scenes are plain overworld or dungeon views until the closing triangles,
+  // and boss victories (pendant, Agahnim's warp to the pyramid, crystal) stay in them
+  if ((mod == 26 && submodule_index < 32) || mod == 19 || mod == 21 || mod == 22)
     mod = player_is_indoors ? 7 : 9;
   if (mod == 9) {
     if (main_module_index == 14 && submodule_index == 7 && overworld_map_state >= 4) {

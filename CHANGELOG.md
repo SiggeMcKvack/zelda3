@@ -4,6 +4,10 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## October 2026
 
+### Fixed: Widescreen Sides During Boss Victories
+
+After defeating Agahnim, the sides went black for his death animation and the following scene on top of the pyramid with Sahasrahla's message. The pendant and crystal victory sequences had the same gap. They now keep the side space of the room or area they play in.
+
 ### Fixed: Launcher Kept Resetting Reference Save Keys
 
 The launcher rewrites `zelda3.ini` on Save & Launch, and always wrote `LoadRef` and `ReplayRef` as commented-out examples, so binding the reference saves by hand never stuck. Both are now kept, and the Keyboard and Gamepad tabs have "Load reference save" and "Replay reference save" groups with one row per chapter. With nothing bound, the INI keeps the commented example as before.
