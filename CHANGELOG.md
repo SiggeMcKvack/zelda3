@@ -15,6 +15,7 @@ The launcher rewrites `zelda3.ini` on Save & Launch, and always wrote `LoadRef` 
 Dungeon rooms locked to 256px, like Ganon's room, showed black sides because the floor pattern around the walls (the dotted background) has more than one color. Now the extended width beyond the room repeats that pattern, taken from the room's top left corner, including the extend_y lines below it.
 
 - Applies to all dungeon rooms except 14 where it looked wrong in the reference replays, mostly rooms with moving or effect layers. Those keep the previous side fill.
+- Agahnim's room in Hyrule Castle Tower fills its sides with the blue around it.
 - A side where the room continues into the next one through an opening instead of a doorway (floor, water, holes or ledges at its edge) is not filled, since the neighboring room isn't loaded there.
 - Needs the new renderer (`NewRenderer = 1`).
 

@@ -148,8 +148,8 @@ static void SimpleHdma_DoLine(SimpleHdma *c) {
 // Rooms where the floor pattern at the sides looks wrong, mostly ones with moving or
 // effect layers. Picked by eye from the reference replays.
 static const uint16 kNoSidePatternRooms[] = {
-  0x00d, 0x020, 0x031, 0x03a, 0x065, 0x081, 0x082, 0x099, 0x0a7, 0x0c3, 0x0e1, 0x0e3,
-  0x0fa, 0x11b,
+  0x00d, 0x031, 0x03a, 0x065, 0x081, 0x082, 0x099, 0x0a7, 0x0c3, 0x0e1, 0x0e3, 0x0fa,
+  0x11b,
 };
 
 static bool Dungeon_WantsSidePattern() {
@@ -241,9 +241,17 @@ static void ConfigurePpuSideSpace() {
   }
   PpuSetExtraSideSpace(g_zenv.ppu, extra_left, extra_right, extra_bottom);
   // The floor filler around a room's walls continues past them; the room's top left
-  // corner is filler.
-  if (side_pattern)
-    PpuSetSidePattern(g_zenv.ppu, Dungeon_ClosedSides(extra_left, extra_right, extra_bottom), 0, 0);
+  // corner is filler. Agahnim's room is surrounded by a transparent area showing the
+  // backdrop, which only the corner of the camera's own quadrant has, and which has floor
+  // collision, so it fills both sides (not the bottom lines).
+  if (side_pattern) {
+    if (dungeon_room_index == 0x20) {
+      PpuSetSidePattern(g_zenv.ppu, kPpuSide_Left | kPpuSide_Right,
+                        (BG2HOFS_copy2 + 128) & 0x100, ((int16)BG2VOFS_copy2 + 112) & 0x100);
+    } else {
+      PpuSetSidePattern(g_zenv.ppu, Dungeon_ClosedSides(extra_left, extra_right, extra_bottom), 0, 0);
+    }
+  }
 }
 
 void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
