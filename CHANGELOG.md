@@ -4,6 +4,10 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## October 2026
 
+### Fixed: Widescreen Bottom Lines Above a Room
+
+With extend_y, the 16 extra lines at the bottom went black when the camera moved above the top of the dungeon map, e.g. when walking north out of Ganon's room after the fight. The bottom space was computed with the unsigned camera position, which wrapped around. It is now signed, so the room shows there as usual.
+
 ### Widescreen: Ending Credits
 
 The ending scenes, like Sahasrahla's homecoming in Kakariko, now use the extended width instead of being pillarboxed. Overworld scenes are limited to the area like regular play, and the dungeon scenes to the room. The closing triangles and "The End" stay 4:3, and the scene captions stay centered.

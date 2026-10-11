@@ -183,11 +183,12 @@ static void ConfigurePpuSideSpace() {
     }
 
     int qy = quadrant_fullsize_y >> 1;
-    extra_bottom = IntMax(room_bounds_y.v[qy + 2] - BG2VOFS_copy2, 0);
+    // Signed, since the camera goes above 0 when walking out the top of some rooms (Ganon's)
+    extra_bottom = IntMax((int16)room_bounds_y.v[qy + 2] - (int16)BG2VOFS_copy2, 0);
     // The whole room is in VRAM and its lowest camera position still leaves 16 lines
     // of room below a 224 line view, so show those too.
     if (enhanced_features0 & kFeatures0_WidescreenCamera)
-      extra_bottom = IntMax(room_bounds_y.b1 + 16 - BG2VOFS_copy2, 0);
+      extra_bottom = IntMax((int16)room_bounds_y.b1 + 16 - (int16)BG2VOFS_copy2, 0);
   } else if (mod == 20 || mod == 0 || mod == 1 || mod == 2 || mod == 3 || mod == 4) {
     extra_left = kPpuExtraLeftRight, extra_right = kPpuExtraLeftRight;
     extra_bottom = 16;
