@@ -50,6 +50,8 @@ void ppu_reset(Ppu* ppu) {
   ppu->extraLeftCur = 0;
   ppu->extraRightCur = 0;
   ppu->extraBottomCur = 0;
+  ppu->bgExtraLeftCur = ppu->bgExtraRightCur = ppu->bgExtraBottomCur = 0;
+  ppu->sidePattern = false;
   memset(ppu->sideFillColor, 0, sizeof(ppu->sideFillColor));
   ppu->vramPointer = 0;
   ppu->vramIncrementOnHigh = false;
@@ -202,9 +204,18 @@ typedef struct PpuWindows {
   uint8 bits;
 } PpuWindows;
 
+// BG3 stays within 256 pixels, BG1/BG2 can be limited further than sprites and color math
+static int PpuLayerExtraLeft(Ppu *ppu, uint layer) {
+  return layer == 2 ? 0 : layer < 2 ? ppu->bgExtraLeftCur : ppu->extraLeftCur;
+}
+
+static int PpuLayerExtraRight(Ppu *ppu, uint layer) {
+  return layer == 2 ? 0 : layer < 2 ? ppu->bgExtraRightCur : ppu->extraRightCur;
+}
+
 static void PpuWindows_Clear(PpuWindows *win, Ppu *ppu, uint layer) {
-  win->edges[0] = -(layer != 2 ? ppu->extraLeftCur : 0);
-  win->edges[1] = 256 + (layer != 2 ? ppu->extraRightCur : 0);
+  win->edges[0] = -PpuLayerExtraLeft(ppu, layer);
+  win->edges[1] = 256 + PpuLayerExtraRight(ppu, layer);
   win->nr = 1;
   win->bits = 0;
 }
@@ -215,8 +226,8 @@ static void PpuWindows_Calc(PpuWindows *win, Ppu *ppu, uint layer) {
   // Algorithm from Snes9x
   uint32 winflags = GET_WINDOW_FLAGS(ppu, layer);
   uint nr = 1;
-  int window_right = 256 + (layer != 2 ? ppu->extraRightCur : 0);
-  win->edges[0] = - (layer != 2 ? ppu->extraLeftCur : 0);
+  int window_right = 256 + PpuLayerExtraRight(ppu, layer);
+  win->edges[0] = -PpuLayerExtraLeft(ppu, layer);
   win->edges[1] = window_right;
   uint i, j;
   int t;
@@ -271,6 +282,44 @@ static void PpuWindows_Calc(PpuWindows *win, Ppu *ppu, uint layer) {
 }
 
 // Draw a whole line of a 4bpp background layer into bgBuffers
+static uint16 PpuTilemapEntry(Ppu *ppu, BgLayer *bglayer, int col, int row) {
+  int adr = bglayer->tilemapAdr + ((row & 0x1f) << 5) + (col & 0x1f);
+  if ((row & 0x20) && bglayer->tilemapHigher)
+    adr += bglayer->tilemapWider ? 0x800 : 0x400;
+  if ((col & 0x20) && bglayer->tilemapWider)
+    adr += 0x400;
+  return ppu->vram[adr & 0x7fff];
+}
+
+// The parts of the extra space beyond the BG extent, or the whole line below it
+static void PpuSidePatternSpans(PpuWindows *win, Ppu *ppu, bool whole_line) {
+  win->nr = 0;
+  win->bits = 0;
+  win->edges[0] = -ppu->extraLeftRight;
+  if (whole_line) {
+    win->edges[++win->nr] = 256 + ppu->extraLeftRight;
+    return;
+  }
+  if (ppu->bgExtraLeftCur < ppu->extraLeftRight)
+    win->edges[++win->nr] = -ppu->bgExtraLeftCur;
+  if (ppu->bgExtraRightCur < ppu->extraLeftRight) {
+    win->edges[win->nr + 1] = 256 + ppu->bgExtraRightCur;
+    win->edges[win->nr + 2] = 256 + ppu->extraLeftRight;
+    win->bits = 1 << win->nr;  // skip the part between the sides
+    win->nr += 2;
+  }
+}
+
+// One tilemap row of the 16x16 pattern for tilemap line y, aligned to the pattern's columns
+static void PpuSidePatternRow(Ppu *ppu, BgLayer *bglayer, uint y, uint16 row[32]) {
+  int col = ppu->sidePatternX >> 3;
+  int r = (ppu->sidePatternY >> 3) + (((y - ppu->sidePatternY) >> 3) & 1);
+  uint16 e0 = PpuTilemapEntry(ppu, bglayer, col, r);
+  uint16 e1 = PpuTilemapEntry(ppu, bglayer, col + 1, r);
+  for (int i = 0; i < 32; i++)
+    row[i] = ((i - col) & 1) ? e1 : e0;
+}
+
 static void PpuDrawBackground_4bpp(Ppu *ppu, uint y, bool sub, uint layer, PpuZbufType zhi, PpuZbufType zlo) {
 #define DO_PIXEL(i) do { \
   pixel = (bits >> i) & 1 | (bits >> (7 + i)) & 2 | (bits >> (14 + i)) & 4 | (bits >> (21 + i)) & 8; \
@@ -285,6 +334,7 @@ static void PpuDrawBackground_4bpp(Ppu *ppu, uint y, bool sub, uint layer, PpuZb
   PpuWindows win;
   IS_SCREEN_WINDOWED(ppu, sub, layer) ? PpuWindows_Calc(&win, ppu, layer) : PpuWindows_Clear(&win, ppu, layer);
   BgLayer *bglayer = &ppu->bgLayer[layer];
+  bool below_bg = y >= 225 + ppu->bgExtraBottomCur;
   y += bglayer->vScroll;
   int sc_offs = bglayer->tilemapAdr + (((y >> 3) & 0x1f) << 5);
   if ((y & 0x100) && bglayer->tilemapHigher)
@@ -296,12 +346,24 @@ static void PpuDrawBackground_4bpp(Ppu *ppu, uint y, bool sub, uint layer, PpuZb
   int tileadr = ppu->bgLayer[layer].tileAdr, pixel;
   int tileadr1 = tileadr + 7 - (y & 0x7), tileadr0 = tileadr + (y & 0x7);
   const uint16 *addr;
-  for (size_t windex = 0; windex < win.nr; windex++) {
-    if (win.bits & (1 << windex))
+  // The second pass draws the side pattern beyond the BG extent
+  uint16 pattern[32];
+  PpuWindows pwin;
+  int passes = (ppu->sidePattern && layer < 2) ? 2 : 1;
+  if (passes == 2) {
+    PpuSidePatternSpans(&pwin, ppu, below_bg);
+    PpuSidePatternRow(ppu, bglayer, y, pattern);
+  }
+  for (int pass = (passes == 2 && below_bg); pass < passes; pass++) {
+  PpuWindows *cw = pass ? &pwin : &win;
+  if (pass)
+    tps[0] = tps[1] = pattern;
+  for (size_t windex = 0; windex < cw->nr; windex++) {
+    if (cw->bits & (1 << windex))
       continue;  // layer is disabled for this window part
-    uint x = win.edges[windex] + bglayer->hScroll;
-    uint w = win.edges[windex + 1] - win.edges[windex];
-    PpuZbufType *dstz = ppu->bgBuffers[sub].data + win.edges[windex] + kPpuExtraLeftRight;
+    uint x = cw->edges[windex] + bglayer->hScroll;
+    uint w = cw->edges[windex + 1] - cw->edges[windex];
+    PpuZbufType *dstz = ppu->bgBuffers[sub].data + cw->edges[windex] + kPpuExtraLeftRight;
     const uint16 *tp = tps[x >> 8 & 1] + ((x >> 3) & 0x1f);
     const uint16 *tp_last = tps[x >> 8 & 1] + 31;
     const uint16 *tp_next = tps[(x >> 8 & 1) ^ 1];
@@ -362,6 +424,7 @@ static void PpuDrawBackground_4bpp(Ppu *ppu, uint y, bool sub, uint layer, PpuZb
         }
       }
     }
+  }
   }
 #undef READ_BITS
 #undef DO_PIXEL
@@ -700,9 +763,22 @@ void PpuSetMode7PerspectiveCorrection(Ppu *ppu, int low, int high) {
 }
 
 void PpuSetExtraSideSpace(Ppu *ppu, int left, int right, int bottom) {
-  ppu->extraLeftCur = UintMin(left, ppu->extraLeftRight);
-  ppu->extraRightCur = UintMin(right, ppu->extraLeftRight);
-  ppu->extraBottomCur = UintMin(bottom, 16);
+  ppu->extraLeftCur = ppu->bgExtraLeftCur = UintMin(left, ppu->extraLeftRight);
+  ppu->extraRightCur = ppu->bgExtraRightCur = UintMin(right, ppu->extraLeftRight);
+  ppu->extraBottomCur = ppu->bgExtraBottomCur = UintMin(bottom, 16);
+  ppu->sidePattern = false;
+}
+
+// Fill the extra space beyond BG1/BG2 with the 16x16 block of their tilemaps at x, y
+// (tilemap pixels) instead of black. Call after PpuSetExtraSideSpace.
+void PpuSetSidePattern(Ppu *ppu, int x, int y) {
+  if (!(ppu->renderFlags & kPpuRenderFlags_NewRenderer))
+    return;
+  ppu->sidePattern = true;
+  ppu->sidePatternX = x;
+  ppu->sidePatternY = y;
+  ppu->extraLeftCur = ppu->extraRightCur = ppu->extraLeftRight;
+  ppu->extraBottomCur = 16;
 }
 
 // Fills an unused side with the color of its outermost drawn column if that column

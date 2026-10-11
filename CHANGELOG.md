@@ -4,6 +4,13 @@ Notable changes, improvements, and additions to the Zelda3 project.
 
 ## October 2026
 
+### Widescreen: Dungeon Floor Pattern at the Sides
+
+Dungeon rooms locked to 256px, like Ganon's room, showed black sides because the floor pattern around the walls (the dotted background) has more than one color. Now the extended width beyond the room repeats that pattern, taken from the room's top left corner, including the extend_y lines below it.
+
+- Applies to rooms with a plain BG1 layer, about 200 rooms, plus Ganon's room. Rooms with water, fog or moving floor layers keep the previous side fill.
+- Needs the new renderer (`NewRenderer = 1`).
+
 ### Fixed: Widescreen Bottom Lines Above a Room
 
 With extend_y, the 16 extra lines at the bottom went black when the camera moved above the top of the dungeon map, e.g. when walking north out of Ganon's room after the fight. The bottom space was computed with the unsigned camera position, which wrapped around. It is now signed, so the room shows there as usual.

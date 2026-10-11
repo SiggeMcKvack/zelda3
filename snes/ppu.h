@@ -54,6 +54,11 @@ struct Ppu {
   uint8_t *renderBuffer;
   uint8_t extraLeftCur, extraRightCur, extraLeftRight, extraBottomCur;
   uint32_t sideFillColor[2];
+  // Extent of BG1/BG2 in the extra space. With sidePattern, the rest of the extra space,
+  // including the bottom lines, shows the 16x16 tilemap block at sidePatternX/Y repeated.
+  uint8_t bgExtraLeftCur, bgExtraRightCur, bgExtraBottomCur;
+  bool sidePattern;
+  uint16_t sidePatternX, sidePatternY;
   float mode7PerspectiveLow, mode7PerspectiveHigh;
 
   // TMW / TSW etc
@@ -144,6 +149,7 @@ int PpuGetCurrentRenderScale(Ppu *ppu, uint32_t render_flags);
 void PpuSetMode7PerspectiveCorrection(Ppu *ppu, int low, int high);
 void PpuSetExtraSideSpace(Ppu *ppu, int left, int right, int bottom);
 void PpuFillUnusedSides(Ppu *ppu, bool hold_color);
+void PpuSetSidePattern(Ppu *ppu, int x, int y);
 
 // Get current frame buffer as RGBA data (256x224 resolution)
 // Returns pointer to render buffer if available, NULL otherwise

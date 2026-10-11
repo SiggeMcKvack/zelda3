@@ -148,6 +148,7 @@ static void SimpleHdma_DoLine(SimpleHdma *c) {
 static void ConfigurePpuSideSpace() {
   // Let PPU impl know about the maximum allowed extra space on the sides and bottom
   int extra_right = 0, extra_left = 0, extra_bottom = 0;
+  bool side_pattern = false;
 //  printf("main %d, sub %d  (%d, %d, %d)\n", main_module_index, submodule_index, BG2HOFS_copy2, room_bounds_x.v[2 | (quadrant_fullsize_x >> 1)], quadrant_fullsize_x >> 1);
   int mod = main_module_index;
   if (mod == 14)
@@ -175,6 +176,9 @@ static void ConfigurePpuSideSpace() {
       int qm = quadrant_fullsize_x >> 1;
       extra_left = IntMax(BG2HOFS_copy2 - room_bounds_x.v[qm], 0);
       extra_right = IntMax(room_bounds_x.v[qm + 2] - BG2HOFS_copy2, 0);
+      // The floor filler around the walls also fills the sides. Only rooms with a plain
+      // BG1, since overlays (water, fog, moving floors) may not repeat well, plus Ganon's.
+      side_pattern = (dung_hdr_bg2_properties == 0 || dungeon_room_index == 0);
       int lo, hi;
       if (Dungeon_WidescreenTransitionWindow(&lo, &hi)) {
         extra_left = IntMax(BG2HOFS_copy2 - lo, 0);
@@ -194,6 +198,8 @@ static void ConfigurePpuSideSpace() {
     extra_bottom = 16;
   }
   PpuSetExtraSideSpace(g_zenv.ppu, extra_left, extra_right, extra_bottom);
+  if (side_pattern)
+    PpuSetSidePattern(g_zenv.ppu, 0, 0);  // the room's top left corner is filler
 }
 
 void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
