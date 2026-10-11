@@ -145,6 +145,50 @@ static void SimpleHdma_DoLine(SimpleHdma *c) {
   c->rep_count--;
 }
 
+// Rooms where the floor pattern at the sides looks wrong, mostly ones with moving or
+// effect layers. Picked by eye from the reference replays.
+static const uint16 kNoSidePatternRooms[] = {
+  0x00d, 0x020, 0x031, 0x03a, 0x065, 0x081, 0x082, 0x099, 0x0a7, 0x0c3, 0x0e1, 0x0e3,
+  0x0fa, 0x11b,
+};
+
+static bool Dungeon_WantsSidePattern() {
+  for (size_t i = 0; i < countof(kNoSidePatternRooms); i++)
+    if (dungeon_room_index == kNoSidePatternRooms[i])
+      return false;
+  return true;
+}
+
+// True if a tile in the rectangle (8x8 tile units, inclusive) is floor, water, a hole or
+// a ledge, meaning the room continues there instead of ending at a wall. Only the lower
+// floor's attributes, since the upper floor's are all floor in many rooms.
+static bool Dungeon_HasOpening(int c0, int r0, int c1, int r1) {
+  for (int r = r0; r <= r1; r++) {
+    for (int c = c0; c <= c1; c++) {
+      uint8 a = dung_bg2_attr_table[(r & 63) * 64 + (c & 63)];
+      if (a < 0x30 && !(a >= 1 && a <= 3))
+        return true;
+    }
+  }
+  return false;
+}
+
+// The sides of the extended view where the room ends at its walls, so the floor filler
+// pattern can continue past them. An opening to the next room keeps the side unfilled.
+static int Dungeon_ClosedSides(int extra_left, int extra_right, int extra_bottom) {
+  int x0 = BG2HOFS_copy2 - IntMin(extra_left, g_zenv.ppu->extraLeftRight);
+  int x1 = BG2HOFS_copy2 + 255 + IntMin(extra_right, g_zenv.ppu->extraLeftRight);
+  int y0 = (int16)BG2VOFS_copy2, y1 = y0 + 223 + IntMin(extra_bottom, 16);
+  int sides = 0;
+  if (!Dungeon_HasOpening(x0 >> 3, y0 >> 3, x0 >> 3, y1 >> 3))
+    sides |= kPpuSide_Left;
+  if (!Dungeon_HasOpening(x1 >> 3, y0 >> 3, x1 >> 3, y1 >> 3))
+    sides |= kPpuSide_Right;
+  if (!Dungeon_HasOpening(x0 >> 3, y1 >> 3, x1 >> 3, y1 >> 3))
+    sides |= kPpuSide_Bottom;
+  return sides;
+}
+
 static void ConfigurePpuSideSpace() {
   // Let PPU impl know about the maximum allowed extra space on the sides and bottom
   int extra_right = 0, extra_left = 0, extra_bottom = 0;
@@ -176,9 +220,7 @@ static void ConfigurePpuSideSpace() {
       int qm = quadrant_fullsize_x >> 1;
       extra_left = IntMax(BG2HOFS_copy2 - room_bounds_x.v[qm], 0);
       extra_right = IntMax(room_bounds_x.v[qm + 2] - BG2HOFS_copy2, 0);
-      // The floor filler around the walls also fills the sides. Only rooms with a plain
-      // BG1, since overlays (water, fog, moving floors) may not repeat well, plus Ganon's.
-      side_pattern = (dung_hdr_bg2_properties == 0 || dungeon_room_index == 0);
+      side_pattern = Dungeon_WantsSidePattern();
       int lo, hi;
       if (Dungeon_WidescreenTransitionWindow(&lo, &hi)) {
         extra_left = IntMax(BG2HOFS_copy2 - lo, 0);
@@ -198,8 +240,10 @@ static void ConfigurePpuSideSpace() {
     extra_bottom = 16;
   }
   PpuSetExtraSideSpace(g_zenv.ppu, extra_left, extra_right, extra_bottom);
+  // The floor filler around a room's walls continues past them; the room's top left
+  // corner is filler.
   if (side_pattern)
-    PpuSetSidePattern(g_zenv.ppu, 0, 0);  // the room's top left corner is filler
+    PpuSetSidePattern(g_zenv.ppu, Dungeon_ClosedSides(extra_left, extra_right, extra_bottom), 0, 0);
 }
 
 void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {

@@ -295,16 +295,16 @@ static uint16 PpuTilemapEntry(Ppu *ppu, BgLayer *bglayer, int col, int row) {
 static void PpuSidePatternSpans(PpuWindows *win, Ppu *ppu, bool whole_line) {
   win->nr = 0;
   win->bits = 0;
-  win->edges[0] = -ppu->extraLeftRight;
+  win->edges[0] = -ppu->extraLeftCur;
   if (whole_line) {
-    win->edges[++win->nr] = 256 + ppu->extraLeftRight;
+    win->edges[++win->nr] = 256 + ppu->extraRightCur;
     return;
   }
-  if (ppu->bgExtraLeftCur < ppu->extraLeftRight)
+  if (ppu->bgExtraLeftCur < ppu->extraLeftCur)
     win->edges[++win->nr] = -ppu->bgExtraLeftCur;
-  if (ppu->bgExtraRightCur < ppu->extraLeftRight) {
+  if (ppu->bgExtraRightCur < ppu->extraRightCur) {
     win->edges[win->nr + 1] = 256 + ppu->bgExtraRightCur;
-    win->edges[win->nr + 2] = 256 + ppu->extraLeftRight;
+    win->edges[win->nr + 2] = 256 + ppu->extraRightCur;
     win->bits = 1 << win->nr;  // skip the part between the sides
     win->nr += 2;
   }
@@ -769,16 +769,21 @@ void PpuSetExtraSideSpace(Ppu *ppu, int left, int right, int bottom) {
   ppu->sidePattern = false;
 }
 
-// Fill the extra space beyond BG1/BG2 with the 16x16 block of their tilemaps at x, y
-// (tilemap pixels) instead of black. Call after PpuSetExtraSideSpace.
-void PpuSetSidePattern(Ppu *ppu, int x, int y) {
-  if (!(ppu->renderFlags & kPpuRenderFlags_NewRenderer))
+// Fill the extra space beyond BG1/BG2 on the given sides (kPpuSide_*) with the 16x16
+// block of their tilemaps at x, y (tilemap pixels) instead of black. Call after
+// PpuSetExtraSideSpace.
+void PpuSetSidePattern(Ppu *ppu, int sides, int x, int y) {
+  if (!(ppu->renderFlags & kPpuRenderFlags_NewRenderer) || !sides)
     return;
   ppu->sidePattern = true;
   ppu->sidePatternX = x;
   ppu->sidePatternY = y;
-  ppu->extraLeftCur = ppu->extraRightCur = ppu->extraLeftRight;
-  ppu->extraBottomCur = 16;
+  if (sides & kPpuSide_Left)
+    ppu->extraLeftCur = ppu->extraLeftRight;
+  if (sides & kPpuSide_Right)
+    ppu->extraRightCur = ppu->extraLeftRight;
+  if (sides & kPpuSide_Bottom)
+    ppu->extraBottomCur = 16;
 }
 
 // Fills an unused side with the color of its outermost drawn column if that column
